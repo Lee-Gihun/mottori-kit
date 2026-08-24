@@ -7,6 +7,15 @@
 인스턴스 고유 규약(이 워크스페이스에서만 참인 것)은 `system/instance-rules.md`에 있다.
 없으면 아직 안 쓴 것이다 — `templates/instance-rules.md`를 복사해서 채워라.
 
+**엔진 파일과 인스턴스 파일은 쌍을 이룬다.** 왼쪽은 `git pull`이 덮으므로 고치지 않는다.
+오른쪽은 git 밖이라 안전하다. 왼쪽에 뭔가 쓰고 싶으면 오른쪽에 써라.
+
+| 엔진 (업스트림 소유) | 인스턴스 (여기서 쓴다) |
+|---|---|
+| `CLAUDE.md` 상시 코어 7 | `system/instance-rules.md` |
+| `system/rituals.md` | `system/rituals.local.md` |
+| `system/kit-decisions.md` | `system/decisions.md` |
+
 ## 상시 코어 (이 7개만 항상 유효 — 근거 없는 규칙은 두지 않는다)
 
 1. **불가침.** 동결 구역은 재구성·삭제·추가 금지, 읽기만 한다. 외부 발송은 사람 손으로만.

@@ -36,6 +36,11 @@
 # 인스턴스 설정 (템플릿은 templates/에 추적된다)
 /system/memory-config.json
 /system/instance-rules.md
+# 인스턴스 소유 규약 — 업스트림 파일과 쌍을 이룬다 (KIT-DR-004)
+#   system/rituals.md      (엔진) ↔ system/rituals.local.md (인스턴스)
+#   system/kit-decisions.md(엔진) ↔ system/decisions.md     (인스턴스)
+/system/rituals.local.md
+/system/decisions.md
 # 생성물
 /system/memory-map.html
 /system/build-log.md
