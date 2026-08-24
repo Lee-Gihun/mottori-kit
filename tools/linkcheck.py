@@ -67,4 +67,5 @@ if __name__ == "__main__":
     for rel, t in sorted(broken):
         print(f"BROKEN {rel} -> {t}")
     print(f"[linkcheck] broken: {len(broken)}")
+    M.log_run('linkcheck', f'broken={len(broken)}')
     sys.exit(1 if broken else 0)
