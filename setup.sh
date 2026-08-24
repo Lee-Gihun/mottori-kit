@@ -102,10 +102,18 @@ if [ -n "$ORIGIN" ] && [ "$CONTEXT" = "work" ]; then
 EOF
 fi
 
-# --- 3. 인스턴스 규약 ---
+# --- 3. 인스턴스 소유 문서 (업스트림 파일과 쌍을 이룬다) ---
 if [ ! -f "$RULES" ]; then
   cp templates/instance-rules.md "$RULES"
   echo "  $RULES  (아직 비어 있다 — 국경 선언을 채워라)"
+fi
+if [ ! -f system/decisions.md ]; then
+  cp templates/decisions.md system/decisions.md
+  echo "  system/decisions.md  (인스턴스 DR. 킷 설계 DR은 system/kit-decisions.md)"
+fi
+if [ ! -f system/rituals.local.md ]; then
+  cp templates/rituals.local.md system/rituals.local.md
+  echo "  system/rituals.local.md  (rituals.md의 확장점. 빈 채로 시작)"
 fi
 
 # --- 4. 상태 초기화 ---
