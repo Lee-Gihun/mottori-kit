@@ -129,8 +129,11 @@ def c_now():
 
 # ------------------------------------------------------------------- 훅
 
-def _hook_cmds():
-    p = os.path.join(ROOT, ".claude", "settings.json")
+HOOK_FILES = {"claude": (".claude", "settings.json"), "codex": (".codex", "hooks.json")}
+
+
+def _hook_cmds(runtime="claude"):
+    p = os.path.join(ROOT, *HOOK_FILES[runtime])
     if not os.path.exists(p):
         return None
     cfg = json.load(open(p, encoding="utf-8"))
@@ -142,11 +145,11 @@ def _hook_cmds():
     return out
 
 
-def c_hook_wiring():
+def _wiring(runtime):
     """훅 명령줄에 절대경로가 박혀 있으면 이식 즉시 죽는다 — 그게 이번 작업의 발단이다."""
-    cmds = _hook_cmds()
+    cmds = _hook_cmds(runtime)
     if cmds is None:
-        return FAIL, ".claude/settings.json 없음 — 훅 미설치"
+        return (WARN, f"{'/'.join(HOOK_FILES[runtime])} 없음 — 이 런타임은 훅 미설치")
     need = ("SessionStart", "PreCompact")
     missing = [e for e in need if e not in cmds]
     if missing:
@@ -155,7 +158,40 @@ def c_hook_wiring():
             if re.search(r"/(Users|home)/[^/]+/", c)]
     if hard:
         return FAIL, "절대경로 하드코딩 — 다른 머신에서 조용히 죽는다:\n      " + "\n      ".join(hard)
-    return PASS, f"{len(cmds)}종 · 전부 $CLAUDE_PROJECT_DIR 상대"
+    return PASS, f"{len(cmds)}종 · 경로 상대"
+
+
+def c_hook_wiring():
+    return _wiring("claude")
+
+
+def c_hook_wiring_codex():
+    return _wiring("codex")
+
+
+def c_hook_codex_run():
+    """Codex 훅은 CLAUDE_PROJECT_DIR을 못 받는다 — git root 폴백이 실제로 도는지 잰다.
+    서브디렉토리에서도 인스턴스 루트를 잡아야 한다 (여기가 틀리면 조용히 남의 NOW를 읽는다)."""
+    cmds = _hook_cmds("codex") or {}
+    cs = cmds.get("SessionStart") or []
+    if not cs:
+        return SKIP, "Codex 훅 없음"
+    sub = os.path.join(ROOT, "system") if os.path.isdir(os.path.join(ROOT, "system")) else ROOT
+    outs = {}
+    for label, cwd in (("루트", ROOT), ("서브디렉토리", sub), ("리포 밖", "/tmp")):
+        r = subprocess.run(["bash", "-c", cs[0]], capture_output=True, text=True, cwd=cwd)
+        try:
+            ctx = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
+        except Exception:
+            return FAIL, f"{label}에서 유효 JSON이 아니다: {r.stdout[:80]!r}"
+        if r.returncode != 0:
+            return FAIL, f"{label}에서 exit {r.returncode} — 훅은 항상 0이어야 한다"
+        outs[label] = "실패분기" if ctx.startswith("[kit]") else f"{len(ctx)}자"
+    if outs["루트"] == "실패분기" or outs["서브디렉토리"] == "실패분기":
+        return FAIL, f"인스턴스 안에서 주입 실패: {outs}"
+    if outs["리포 밖"] != "실패분기":
+        return WARN, "리포 밖에서도 주입됐다 — git root 폴백이 엉뚱한 곳을 잡을 수 있다"
+    return PASS, f"루트·서브디렉토리 주입 OK · 리포 밖 실패분기 OK"
 
 
 def c_hook_success():
@@ -228,6 +264,35 @@ def c_tools_run():
     return (FAIL, " · ".join(bad)) if bad else (PASS, "now/linkcheck/coherence 실행 OK")
 
 
+def c_links():
+    """**결과를 본다.** 실행 여부만 보던 게 2026-08-24 사고의 자리다 — 킷에서 깨진 참조
+    27개가 doctor를 통과했다. 도구를 돌리는 것과 도구가 뭐라 했는지 보는 것은 다른 일이다."""
+    r = sh(sys.executable, "tools/linkcheck.py")
+    m = re.search(r"broken: (\d+)", r.stdout)
+    if not m:
+        return FAIL, f"linkcheck 출력을 못 읽었다: {(r.stdout + r.stderr)[:120]!r}"
+    n = int(m.group(1))
+    if not n:
+        refs = re.search(r"refs=(\d+)", r.stdout)
+        return PASS, f"참조 {refs.group(1) if refs else '?'}개 · 깨짐 0"
+    detail = [l for l in r.stdout.splitlines() if l.startswith("BROKEN")][:5]
+    more = f"\n      … 외 {n - len(detail)}개" if n > len(detail) else ""
+    return FAIL, f"깨진 참조 {n}개:\n      " + "\n      ".join(detail) + more
+
+
+def c_coherence():
+    """정합성 감지기의 **결과**를 본다."""
+    r = sh(sys.executable, "tools/coherence.py", "--quiet")
+    m = re.search(r"(?:총|이슈) (\d+)건", r.stdout)
+    if m is None and ("이상 없음" in r.stdout or "링크 OK" in r.stdout):
+        return PASS, r.stdout.strip().splitlines()[0][:90]
+    if m is None:
+        return WARN, f"출력을 못 읽었다: {r.stdout.strip()[:90]!r}"
+    n = int(m.group(1))
+    head = r.stdout.strip().splitlines()[0]
+    return (PASS if not n else WARN), head[:110]
+
+
 def c_recall():
     r = sh(sys.executable, "tools/recall.py", "sessions")
     if r.returncode:
@@ -255,7 +320,11 @@ def c_valve():
     r = sh("git", "remote", "-v")
     remotes = sorted({l.split()[1] for l in r.stdout.splitlines() if len(l.split()) > 1})
     if M.INSTANCE_CONTEXT != "work":
-        return SKIP, f"context={M.INSTANCE_CONTEXT} (밸브는 work 인스턴스에만 적용)"
+        # 조용한 SKIP은 "괜찮다"로 읽힌다. 무엇을 안 재는지 말한다.
+        # (config는 이 tree 안에 있어서 스스로 고칠 수 있다 — 이 검사는 차단이 아니라 진술이다.
+        #  실제 차단은 .gitignore와 pull-only 자격증명이다. DR-026)
+        return SKIP, (f"context={M.INSTANCE_CONTEXT} — 원격 검사 안 함. "
+                      "회사 자료를 다루면 context를 work로 바꿔라")
     if not remotes:
         return PASS, "원격 없음 — 회사 자료가 나갈 경로가 아예 없다"
     allow = M.REMOTE_ALLOWLIST
@@ -265,6 +334,40 @@ def c_valve():
                       + "\n      ".join(bad)
                       + "\n      회사 자료가 개인 저장소로 나갈 수 있다. 원격을 지우거나 allowlist에 넣어라")
     return PASS, f"원격 {len(remotes)}개 전부 allowlist 안"
+
+
+def c_symlinks():
+    """추적되는 심볼릭 링크는 밸브의 구멍이다.
+
+    2026-08-24 실측: `ln -s _private/work/secret.md leak.md` 후 `git add leak.md`가
+    통과한다. git이 저장하는 것은 내용이 아니라 대상 경로라 내용 자체는 안 나가지만,
+    경로가 구조를 드러내고 아카이브·역참조 설정에 따라 내용까지 갈 수 있다.
+    """
+    # -z로 읽는다. git은 특수문자 경로를 따옴표로 감싸므로 줄 단위 파싱은 경로를 망친다
+    # (2026-08-24 실측: 따옴표 붙은 경로를 readlink에 넘겨 33개를 "문제 없음"으로 오판했다).
+    r = subprocess.run(["git", "ls-files", "-s", "-z"], capture_output=True, text=True, cwd=ROOT)
+    if r.returncode:
+        return SKIP, "git 저장소 아님"
+    links = [rec.split("\t", 1)[1] for rec in r.stdout.split("\0")
+             if rec.startswith("120000") and "\t" in rec]
+    if not links:
+        return PASS, "추적 심볼릭 링크 0"
+    priv = os.path.realpath(os.path.join(ROOT, "_private"))
+    into_private = []
+    for l in links:
+        full = os.path.join(ROOT, l)
+        try:
+            raw = os.readlink(full)
+        except OSError:
+            raw = ""
+        if os.path.realpath(full).startswith(priv) or "_private" in raw:
+            into_private.append(f"{l[-52:]}  ->  {raw[-52:]}")
+    if into_private:
+        more = f"\n      … 외 {len(into_private) - 3}개" if len(into_private) > 3 else ""
+        return FAIL, (f"_private을 가리키는 추적 링크 {len(into_private)}개 — 대상 경로 문자열이"
+                      " 원격에 올라간다 (내용은 안 가지만 구조·파일명이 드러난다):\n      "
+                      + "\n      ".join(into_private[:3]) + more)
+    return WARN, f"추적 심볼릭 링크 {len(links)}개 (대상이 _private 밖)"
 
 
 def c_engine_drift():
@@ -330,16 +433,21 @@ CHECKS = [
     ("배선 · 전사 경로 유도",   c_transcripts),
     ("배선 · state/",          c_state),
     ("배선 · NOW.md",          c_now),
-    ("훅 · 배선(경로 하드코딩)", c_hook_wiring),
+    ("훅 · 배선 claude",        c_hook_wiring),
+    ("훅 · 배선 codex",         c_hook_wiring_codex),
+    ("훅 · codex 실행",         c_hook_codex_run),
     ("훅 · 성공 분기",          c_hook_success),
     ("훅 · 실패 분기",          c_hook_failure),
     ("훅 · 전역 시각 주입",     c_global_hook),
     ("훅 · 슬래시 커맨드",      c_commands),
     ("도구 · 실행",            c_tools_run),
+    ("도구 · 링크 무결성",      c_links),
+    ("도구 · 정합성",          c_coherence),
     ("도구 · recall 소스",     c_recall),
     ("도구 · 원장",            c_ledger),
     ("밸브 · 원격 검사",        c_valve),
     ("밸브 · 연료 비추적",      c_ignored),
+    ("밸브 · 추적 심볼릭링크",   c_symlinks),
     ("엔진 · 킷 드리프트",      c_engine_drift),
 ]
 

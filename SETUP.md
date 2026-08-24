@@ -92,8 +92,8 @@ python3 tools/linkcheck.py
 **`broken: 0`이 목표다.** 여기서 깨진 참조가 나오면 이 리포가 없는 파일을 가리키고 있다는
 뜻이고, 그 문서를 읽는 에이전트는 따라갈 수 없는 경로를 보게 된다.
 
-setup 직후에는 원장(`_private/ledger/hotset.md`) 하나가 남는다. 원장은 첫 사실을 기록할 때
-생기기 때문이다. 지금 만들 거면:
+setup 직후에는 원장 핫셋 하나가 남는다 (`rec.py hot`의 산출물이라 첫 사실을 기록해야
+생긴다). 지금 만들 거면:
 
 ```bash
 python3 tools/rec.py new <id> --claim="..." --status=확정 --origin="..." --domain=...
