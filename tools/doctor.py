@@ -429,6 +429,26 @@ def c_symlinks():
     return WARN, f"추적 심볼릭 링크 {len(links)}개 (대상이 _private 밖)"
 
 
+def c_agents_parity():
+    """CLAUDE.md와 AGENTS.md가 같은가.
+
+    두 런타임이 같은 규약 위에서 돌게 하려고 바이트 동일 사본을 둔다. 2026-08-24 실측:
+    두 파일이 함께 존재한 커밋 3개 전부 동일했다 — **드리프트는 한 번도 안 났다.**
+    다만 그걸 지켜온 것은 구조가 아니라 사람이 손으로 맞춘 것이고 표본은 4일이다.
+    그래서 메커니즘(포인터·심볼릭링크)을 바꾸는 대신 탐지기를 둔다. 비용이 0에 가깝다.
+    """
+    a, b = os.path.join(ROOT, "CLAUDE.md"), os.path.join(ROOT, "AGENTS.md")
+    if not os.path.exists(a):
+        return FAIL, "CLAUDE.md 없음"
+    if not os.path.exists(b):
+        return WARN, "AGENTS.md 없음 — Codex가 규약을 못 읽는다"
+    x, y = open(a, "rb").read(), open(b, "rb").read()
+    if x == y:
+        return PASS, f"바이트 동일 ({len(x)} bytes)"
+    return FAIL, (f"갈라졌다 (CLAUDE {len(x)} / AGENTS {len(y)} bytes) — "
+                  "두 런타임이 다른 규약을 읽는다. cp CLAUDE.md AGENTS.md")
+
+
 def c_schema():
     """config가 엔진보다 뒤처졌나 (KIT-DR-005).
 
@@ -573,6 +593,7 @@ CHECKS = [
     ("밸브 · 원격 검사",        c_valve),
     ("밸브 · 연료 비추적",      c_ignored),
     ("밸브 · 추적 심볼릭링크",   c_symlinks),
+    ("규약 · CLAUDE=AGENTS",    c_agents_parity),
     ("엔진 · config 스키마",    c_schema),
     ("엔진 · 업스트림",         c_upstream),
     ("엔진 · 킷 드리프트",      c_engine_drift),
