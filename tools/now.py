@@ -185,13 +185,22 @@ def check(memory_dir=None, root=None, issues=False):
     이슈(`~` 접두)와 편집이 만든 이슈를 가른다 — 전자로 Stop을 막으면 이번 턴에 고칠 수
     없는 경보가 되고, 못 고칠 경보는 곧 꺼진다 (codex 라운드 3).
     """
+    import hashlib as _h
+    import glob as _glob
     import re as _re
     root = root or M.ROOT
     # auto-memory는 전사 디렉토리 아래 산다. 전사 경로가 유도값이므로 이것도 유도값이다 (DR-025).
     memory_dir = memory_dir or os.path.join(M.TRANSCRIPTS, "memory")
+
+    # (gated, 안정 ID, 사람이 읽는 문구).
+    # **ID와 문구를 가른 이유** (codex 라운드 4): 문구 전체를 ID로 쓰면 표시 문구만 고쳐도
+    # 게이트가 "새 이슈"로 막았다. ID엔 상태를 식별하는 것만 넣고 날짜·줄번호·나이는 문구로 뺀다.
     warns = []
+    def W(gated, ident, text):
+        warns.append((gated, ident, text))
 
     # 1) 트랙 정본 낙후: journal의 해당 트랙 최신 사건보다 정본 파일이 오래됨
+    #    시간만 흘러서는 안 생긴다 (codex가 시계를 9/1로 고정해 확인). 편집 유발이라 gated.
     entries = M.parse_journal()
     latest = {}
     for e in entries:
@@ -202,7 +211,8 @@ def check(memory_dir=None, root=None, issues=False):
             fdate = datetime.datetime.fromtimestamp(os.path.getmtime(p)).strftime("%Y-%m-%d")
             jdate = latest[key][:10]
             if fdate < jdate:
-                warns.append(f"[정본 낙후] {rel} ({fdate}) < journal {key} 최신 사건 ({jdate})")
+                W(True, f"canonical-stale:{rel}",
+                  f"[정본 낙후] {rel} ({fdate}) < journal {key} 최신 사건 ({jdate})")
 
     # 2) MEMORY.md 인덱스 휘발성 (8/8 사고의 패턴)
     idx = os.path.join(memory_dir, "MEMORY.md")
@@ -212,7 +222,11 @@ def check(memory_dir=None, root=None, issues=False):
     if os.path.exists(idx):
         for i, line in enumerate(open(idx, encoding="utf-8"), 1):
             if line.startswith("- ") and vol.search(line):
-                warns.append(f"[인덱스 휘발성] MEMORY.md:{i} {line.strip()[:80]}")
+                # ID에 줄번호를 안 쓴다 — 위에 한 줄만 넣어도 전부 새 이슈가 됐다.
+                m = _re.search(r"\]\(([a-z0-9-]+\.md)\)", line)
+                k = m.group(1) if m else _h.sha1(line.strip().encode()).hexdigest()[:8]
+                W(True, f"index-volatile:{k}",
+                  f"[인덱스 휘발성] MEMORY.md:{i} {line.strip()[:80]}")
 
     # 3) 메모리 파일 ↔ 인덱스 정합
     if os.path.exists(idx):
@@ -221,11 +235,11 @@ def check(memory_dir=None, root=None, issues=False):
                  if f.endswith(".md") and f != "MEMORY.md"}
         linked = set(_re.findall(r"\]\(([a-z0-9-]+\.md)\)", text))
         for f in sorted(files - linked):
-            warns.append(f"[인덱스 누락] {f} — 파일은 있는데 인덱스 줄 없음")
+            W(True, f"index-missing:{f}", f"[인덱스 누락] {f} — 파일은 있는데 인덱스 줄 없음")
         for f in sorted(linked - files):
-            warns.append(f"[유령 인덱스] {f} — 인덱스 줄은 있는데 파일 없음")
+            W(True, f"index-ghost:{f}", f"[유령 인덱스] {f} — 인덱스 줄은 있는데 파일 없음")
 
-    # 4) type:project 메모리 부패 후보 (14일 무갱신)
+    # 4) type:project 메모리 부패 후보 (14일 무갱신). 시간 유발이라 자문용.
     for f in sorted(os.listdir(memory_dir)) if os.path.isdir(memory_dir) else []:
         fp = os.path.join(memory_dir, f)
         if not f.endswith(".md") or f == "MEMORY.md":
@@ -238,30 +252,44 @@ def check(memory_dir=None, root=None, issues=False):
             age = (datetime.datetime.now()
                    - datetime.datetime.fromtimestamp(os.path.getmtime(fp))).days
             if age > M.MEMORY_ROT_DAYS and "state/NOW.md" not in open(fp, encoding="utf-8").read():
-                warns.append(f"[부패 후보] {f} — project형 {age}일 무갱신 (포인터화 검토)")
+                W(False, f"memory-rot:{f}",
+                  f"[부패 후보] {f} — project형 {age}일 무갱신 (포인터화 검토)")
 
-    # 5) NOW·journal 나이
-    for label, pth, lim in (("NOW", M.NOW_PATH, 3), ("journal", M.journal_path(), M.JOURNAL_STALE_DAYS)):
-        a = _age_days(pth)
-        if a is None:
-            warns.append(f"[{label} 부재] {pth}")
-        elif a > lim:
-            warns.append(f"[{label} 낡음] {a}일 전 (임계 {lim}일)")
+    # 5) NOW 나이
+    a = _age_days(M.NOW_PATH)
+    if a is None:
+        W(True, "now-absent", f"[NOW 부재] {M.NOW_PATH}")
+    elif a > 3:
+        W(False, "now-stale", f"[NOW 낡음] {a}일 전 (임계 3일)")
+
+    # 6) journal 나이. **월 경계를 부재와 가르는 이유** (codex 라운드 4): journal 경로는
+    #    월별이라 매달 1일이면 이번 달 파일이 없다. 그것만으로 hard issue를 내면 달력이
+    #    게이트를 막는다. 직전 달 것이 신선하면 정상 rollover(자문), 아예 하나도 없으면 부재(gated).
+    jp = M.journal_path()
+    ja = _age_days(jp)
+    if ja is None:
+        others = sorted(_glob.glob(os.path.join(os.path.dirname(jp), "journal-*.md")))
+        newest = min((x for x in (_age_days(o) for o in others) if x is not None), default=None)
+        if newest is not None and newest <= M.JOURNAL_STALE_DAYS:
+            W(False, "journal-rollover",
+              f"[journal 월 전환] {os.path.basename(jp)} 아직 없음 (직전 것이 {newest}일 전)")
+        else:
+            W(True, "journal-absent", f"[journal 부재] {jp}")
+    elif ja > M.JOURNAL_STALE_DAYS:
+        W(False, "journal-stale", f"[journal 낡음] {ja}일 전 (임계 {M.JOURNAL_STALE_DAYS}일)")
 
     if issues:
-        TIME_CAUSED = ("[부패 후보]", "[NOW 낡음]", "[journal 낡음]")
+        # 계약: `안정ID\t표시문구`, 시간 유발은 `~` 접두, 마지막 줄은 반드시 트레일러.
+        # 이슈 유무와 무관하게 exit 0 — 종료코드는 "측정이 됐는가"만 뜻한다 (codex 라운드 4).
         gated = 0
-        for w in warns:
-            if w.startswith(TIME_CAUSED):
-                print("~" + w)          # 자문용. 게이트는 안 문다
-            else:
-                print(w)
-                gated += 1
+        for g, ident, text in warns:
+            print(f"{ident if g else '~' + ident}\t{text}")
+            gated += 1 if g else 0
         print(f"#issues {gated}")
-        return len(warns)
+        return 0
 
-    for w in warns:
-        print("⚠", w)
+    for g, ident, text in warns:
+        print("⚠", text)
     print(f"check: 경고 {len(warns)}건" if warns else "check: 깨끗함")
     return len(warns)
 
