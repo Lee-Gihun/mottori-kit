@@ -37,7 +37,9 @@ def check(name, fn):
 
 
 def sh(*cmd, cwd=ROOT):
-    return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
+    # 내부 호출 표시 — 검사기가 자기 실행 기록을 남기지 않게 (memlib.log_run 참조)
+    env = dict(os.environ, MOTTORI_INTERNAL_RUN="1")
+    return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, env=env)
 
 
 # ----------------------------------------------------------------- 런타임
@@ -436,6 +438,34 @@ def c_symlinks():
     return WARN, f"추적 심볼릭 링크 {len(links)}개 (대상이 _private 밖)"
 
 
+def c_missed_gate():
+    """**새 산출물이 커밋됐는데 그 전에 검사기가 안 돌았나** (DR-033).
+
+    이것이 2026-08-24의 대표 미스다. 킷을 만들고 커밋했는데 `linkcheck`를 안 돌려
+    깨진 참조 27개가 "검증 완료"로 나갔다. 그때는 **안 돌렸다는 사실 자체가 관측되지
+    않았다** — 도구 실행에 기록이 없었기 때문이다.
+
+    자기보고가 아니다. git이 새 파일을 세고, 도구가 자기 실행을 남긴다. 둘 다 기계다.
+    """
+    import memlib as M
+    r = sh("git", "log", "-1", "--format=%cI")
+    if r.returncode or not r.stdout.strip():
+        return SKIP, "커밋 없음"
+    ct = r.stdout.strip()
+    added = sh("git", "show", "--diff-filter=A", "--name-only", "--format=", "HEAD").stdout.split()
+    if not added:
+        return PASS, "마지막 커밋에 새 파일 없음"
+    last = M.last_run("linkcheck")
+    if last is None:
+        return WARN, (f"마지막 커밋이 새 파일 {len(added)}개를 넣었는데 linkcheck 실행 기록이 없다\n"
+                      "      (기록은 오늘 신설됐다. 이 경고는 다음 커밋부터 의미가 생긴다)")
+    if last < ct:
+        return FAIL, (f"새 파일 {len(added)}개를 커밋했는데 그 뒤로 linkcheck를 안 돌렸다:\n      "
+                      + ", ".join(added[:4])
+                      + f"\n      마지막 linkcheck {last[:16]} < 커밋 {ct[:16]}")
+    return PASS, f"새 파일 {len(added)}개 · 커밋 뒤 linkcheck 실행됨"
+
+
 def c_agents_parity():
     """CLAUDE.md와 AGENTS.md가 같은가.
 
@@ -600,6 +630,7 @@ CHECKS = [
     ("밸브 · 원격 검사",        c_valve),
     ("밸브 · 연료 비추적",      c_ignored),
     ("밸브 · 추적 심볼릭링크",   c_symlinks),
+    ("게이트 · 산출물 검사누락",  c_missed_gate),
     ("규약 · CLAUDE=AGENTS",    c_agents_parity),
     ("엔진 · config 스키마",    c_schema),
     ("엔진 · 업스트림",         c_upstream),
@@ -648,6 +679,8 @@ def main():
         print(f"  {i}. {title}")
         print(f"     {how}")
 
+    __import__("sys").path.insert(0, HERE)
+    import memlib as _M; _M.log_run("doctor", f"fail={n[FAIL]} warn={n[WARN]}")
     if n[FAIL]:
         print(f"\nFAIL {n[FAIL]}개를 먼저 고쳐라. 그 전에는 이 인스턴스의 상태 자동화를 믿지 마라.")
     return 1 if n[FAIL] else 0

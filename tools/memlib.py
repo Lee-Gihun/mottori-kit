@@ -251,6 +251,44 @@ JOURNAL_STALE_DAYS = _TH.get("journal_stale_days", 2)
 MEMORY_ROT_DAYS = _TH.get("memory_rot_days", 14)
 NOW_HOOK_MAX_BYTES = _TH.get("now_hook_max_bytes", 6000)
 
+# ------------------------------------------------------------------- 실행 기록
+
+TOOL_RUNS = os.path.join(STATE, ".tool-runs.log")
+
+
+def log_run(tool, result=""):
+    """검사기가 돌았다는 사실을 남긴다 (DR-033).
+
+    왜 필요한가. 2026-08-24에 새 산출물(킷)을 만들고 `linkcheck`를 안 돌려 깨진 참조 27개가
+    통과했다. 그런데 **"안 돌렸다"를 아무도 모른다** — 도구 실행에 기록이 없기 때문이다.
+    사람이 세기로 한 것은 안 세어진다는 것이 오늘의 반복 교훈이라, 기계가 남긴다.
+    """
+    # doctor가 자기 검사로 호출한 경우는 기록하지 않는다. 안 그러면 "누가 일부러 돌렸다"와
+    # "계측기가 자기 검사로 돌렸다"를 구별할 수 없어 미스 검출기가 언제나 통과한다
+    # (2026-08-24 실측: 첫 판이 정확히 이 이유로 오늘의 실패를 재현했는데 못 잡았다).
+    if os.environ.get("MOTTORI_INTERNAL_RUN"):
+        return
+    try:
+        os.makedirs(STATE, exist_ok=True)
+        ts = datetime.datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S%z")
+        with open(TOOL_RUNS, "a", encoding="utf-8") as f:
+            f.write(f"{ts}\t{tool}\t{result}\n")
+    except Exception:
+        pass          # 기록 실패가 검사를 막으면 안 된다
+
+
+def last_run(tool):
+    """이 도구가 마지막으로 돈 시각 (ISO). 기록이 없으면 None."""
+    if not os.path.exists(TOOL_RUNS):
+        return None
+    hit = None
+    for line in open(TOOL_RUNS, encoding="utf-8"):
+        parts = line.rstrip("\n").split("\t")
+        if len(parts) >= 2 and parts[1] == tool:
+            hit = parts[0]
+    return hit
+
+
 # ----------------------------------------------------------------------- DR
 
 DR_HEADER = re.compile(r"^### DR-(\d{3}) (.+) \((\d{4}-\d{2}-\d{2}) · (active|superseded_by:DR-\d{3})\)")
