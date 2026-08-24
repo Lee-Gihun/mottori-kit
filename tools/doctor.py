@@ -293,6 +293,21 @@ def c_coherence():
     return (PASS if not n else WARN), head[:110]
 
 
+def c_regression():
+    """회귀 픽스처가 실제로 통과하는가. **doctor가 이걸 안 돌리고 있었다** (적대 검증 V1-9).
+
+    검출기가 살아 있는지를 재는 유일한 자동 수단인데 검사 목록에 없었다.
+    계측기가 자기 옆의 계측기를 안 보고 있었던 셈이다.
+    """
+    r = sh(sys.executable, "tools/test_memcheck.py")
+    if r.returncode == 0:
+        n = r.stdout.count("✓ 검출")
+        return PASS, f"픽스처 {n}개 전부 검출"
+    fails = [l.strip() for l in r.stdout.splitlines() if "미검출" in l or "실패" in l]
+    return FAIL, ("과거 사고 재현 픽스처가 실패한다 — 검출기가 죽었을 수 있다:\n      "
+                  + "\n      ".join(fails[:4] or [(r.stdout + r.stderr)[:150]]))
+
+
 def c_recall():
     r = sh(sys.executable, "tools/recall.py", "sessions")
     if r.returncode:
@@ -315,25 +330,69 @@ def c_ledger():
 
 # --------------------------------------------------------- 단방향 밸브 (DR-026)
 
+def _remote_host(url):
+    """원격 URL에서 host를 뽑는다. scp 문법(git@host:path)과 로컬 경로도 처리."""
+    u = url.strip()
+    m = re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://(?:[^@/]+@)?([^/:]+)", u)
+    if m:
+        return m.group(1).lower()
+    m = re.match(r"^(?:[^@]+@)?([^/:@]+):", u)          # git@github.com:user/repo
+    if m:
+        return m.group(1).lower()
+    return ("local:" + os.path.realpath(os.path.expanduser(u))) if u.startswith(("/", "~", ".")) else ""
+
+
+def _allowed(url, allowlist):
+    """**부분 문자열 비교 금지** (2026-08-24 적대 검증).
+
+    이전 판의 `any(a in url for a in allowlist)`는
+    `https://evil.invalid/https://github.com/trusted/repo`를 통과시켰다.
+    허용 항목을 URL의 **경로 안에 심으면** 그대로 뚫린다.
+    이제 host를 뽑아 host끼리 비교하고, 허용 항목에 경로가 있으면 경로도 경계까지 본다.
+    """
+    def path_of(u):
+        u = re.sub(r"^[a-zA-Z][a-zA-Z0-9+.-]*://(?:[^@/]+@)?[^/]+/?", "", u.strip())
+        u = re.sub(r"^(?:[^@]+@)?[^/:@]+:", "", u)
+        return re.sub(r"\.git$", "", u).strip("/").lower()
+
+    host = _remote_host(url)
+    if not host:
+        return False
+    for a in allowlist:
+        a = (a or "").strip().rstrip("/")
+        if not a:                       # 빈 항목이 전부 허용이 되면 안 된다
+            continue
+        ah = _remote_host(a) or a.split("/")[0].lower()
+        if ah != host:
+            continue
+        ap = path_of(a)
+        if not ap:
+            return True                 # host만 지정 = 그 host 전체 허용
+        up = path_of(url)
+        if up == ap or up.startswith(ap + "/"):
+            return True
+    return False
+
+
 def c_valve():
     import memlib as M
     r = sh("git", "remote", "-v")
     remotes = sorted({l.split()[1] for l in r.stdout.splitlines() if len(l.split()) > 1})
     if M.INSTANCE_CONTEXT != "work":
-        # 조용한 SKIP은 "괜찮다"로 읽힌다. 무엇을 안 재는지 말한다.
-        # (config는 이 tree 안에 있어서 스스로 고칠 수 있다 — 이 검사는 차단이 아니라 진술이다.
-        #  실제 차단은 .gitignore와 pull-only 자격증명이다. DR-026)
-        return SKIP, (f"context={M.INSTANCE_CONTEXT} — 원격 검사 안 함. "
+        # 조용한 SKIP은 "괜찮다"로 읽힌다. 무엇을 안 재는지 말하고 원격 수도 보인다.
+        # (config는 이 tree 안에 있어 스스로 고칠 수 있다 — 이 검사는 차단이 아니라 진술이다.
+        #  실제 차단은 .gitignore 기본거부와 pull-only 자격증명이다. DR-026)
+        extra = f" · 원격 {len(remotes)}개 있음" if remotes else ""
+        return SKIP, (f"context={M.INSTANCE_CONTEXT} — 원격 검사 안 함{extra}. "
                       "회사 자료를 다루면 context를 work로 바꿔라")
     if not remotes:
         return PASS, "원격 없음 — 회사 자료가 나갈 경로가 아예 없다"
-    allow = M.REMOTE_ALLOWLIST
-    bad = [u for u in remotes if not any(a in u for a in allow)]
+    bad = [u for u in remotes if not _allowed(u, M.REMOTE_ALLOWLIST)]
     if bad:
         return FAIL, ("work 인스턴스가 allowlist 밖 원격을 가졌다:\n      "
                       + "\n      ".join(bad)
-                      + "\n      회사 자료가 개인 저장소로 나갈 수 있다. 원격을 지우거나 allowlist에 넣어라")
-    return PASS, f"원격 {len(remotes)}개 전부 allowlist 안"
+                      + "\n      원격을 지우거나 allowlist에 넣어라")
+    return PASS, f"원격 {len(remotes)}개 전부 allowlist 안 (host 기준)"
 
 
 def c_symlinks():
@@ -462,6 +521,7 @@ CHECKS = [
     ("도구 · 실행",            c_tools_run),
     ("도구 · 링크 무결성",      c_links),
     ("도구 · 정합성",          c_coherence),
+    ("도구 · 회귀 픽스처",      c_regression),
     ("도구 · recall 소스",     c_recall),
     ("도구 · 원장",            c_ledger),
     ("밸브 · 원격 검사",        c_valve),
