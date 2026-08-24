@@ -57,6 +57,17 @@ def strip_fences(text):
     return re.sub(r"^[ \t]*```.*?^[ \t]*```", "", text, flags=re.S | re.M)
 
 
+_IGN_CACHE = {}
+
+def _is_ignored(rel):
+    """`git check-ignore`가 이 경로를 무시 대상이라고 증명하는가. 호출당 프로세스라 캐시한다."""
+    if rel not in _IGN_CACHE:
+        r = subprocess.run(["git", "-C", ROOT, "check-ignore", "-q", "--", rel],
+                           capture_output=True)
+        _IGN_CACHE[rel] = (r.returncode == 0)
+    return _IGN_CACHE[rel]
+
+
 def check():
     broken, checked = [], 0
     for rel in tracked_md():
@@ -80,25 +91,36 @@ def check():
         for t in targets:
             t2 = urllib.parse.unquote(t)
             checked += 1
-            # 존재는 TREE 먼저, 없으면 ROOT. `--tree`(index) 모드에서 gitignore된 대상
-            # (심볼릭 링크가 가리키는 `_private/` 등)이 통째로 깨진 것으로 보이지 않게
-            # 하려는 것이다. 그 대가로 "worktree엔 있고 index엔 없는 대상"은 못 잡는다.
+            # TREE(=`--tree`면 index를 꺼낸 트리) 안에 있으면 통과. 심볼릭 링크 자체가
+            # 엔트리인 경우가 있어 lexists도 본다.
             cands = [os.path.join(base, t2), os.path.join(TREE, t2)]
+            if any(os.path.exists(c) or os.path.lexists(c) for c in cands):
+                continue
+            # **ROOT 폴백은 조건부다** (codex 라운드 4). 무조건 폴백하면 "worktree엔 있고
+            # index엔 없는 대상"을 통째로 놓친다 — 그 커밋을 다른 클론에서 받으면 참조가 깨진다.
+            # gitignore된 대상만 local-only 참조로 봐준다. 실측: 이 리포의 ROOT 전용 참조
+            # 98건은 전부 gitignore 대상이었다.
             if TREE != ROOT:
-                cands += [os.path.join(ROOT, os.path.dirname(rel), t2), os.path.join(ROOT, t2)]
-            if not any(os.path.exists(c) for c in cands):
-                broken.append((rel, t))
+                rc = [os.path.join(ROOT, os.path.dirname(rel), t2), os.path.join(ROOT, t2)]
+                hit = next((c for c in rc if os.path.exists(c) or os.path.lexists(c)), None)
+                if hit and _is_ignored(os.path.relpath(hit, ROOT)):
+                    continue
+            broken.append((rel, t))
     return broken, checked
 
 if __name__ == "__main__":
     broken, checked = check()
 
     if "--issues" in sys.argv:
-        # **이슈 집합 계약** (codex 라운드 3). 개수는 치환에 눈이 먼다 — 링크 하나 고치고
-        # 하나 깨면 같은 수가 된다. ID를 내보내고 게이트가 집합 차를 본다.
+        # **이슈 집합 계약** (codex 라운드 3~4). 개수는 치환에 눈이 먼다 — 링크 하나 고치고
+        # 하나 깨면 같은 수가 된다. `안정ID\t표시문구`를 내고 게이트가 집합 차를 본다.
         # 마지막 줄의 트레일러가 계약이다. 이게 없으면 "이슈 0"이 아니라 "측정 실패"다.
+        # 이슈가 있어도 exit 0 — 종료코드는 "측정이 됐는가"만 뜻한다.
+        #
+        # ID에 파일과 대상을 둘 다 쓴다. 대상만 쓰면 같은 깨진 대상을 여러 파일에 퍼뜨리는
+        # 것을 구분 못 한다. rename이 새 ID를 만드는 비용은 그 놓침보다 싸다 (codex 라운드 4).
         for rel, t in sorted(broken):
-            print(f"{rel} -> {t}")
+            print(f"{rel} -> {t}\t깨진 참조 {rel} -> {t}")
         print(f"#issues {len(broken)}")
         sys.exit(0)
 
