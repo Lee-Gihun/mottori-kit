@@ -256,6 +256,16 @@ NOW_HOOK_MAX_BYTES = _TH.get("now_hook_max_bytes", 6000)
 TOOL_RUNS = os.path.join(STATE, ".tool-runs.log")
 
 
+def _index_hash():
+    """추적 파일 내용의 상태 해시. 커밋 여부와 무관하게 내용이 같으면 같다."""
+    import subprocess as _sp, hashlib as _h
+    try:
+        out = _sp.run(["git", "ls-files", "-s"], capture_output=True, text=True, cwd=ROOT).stdout
+        return _h.sha1(out.encode()).hexdigest()[:12] if out else "-"
+    except Exception:
+        return "-"
+
+
 def log_run(tool, result=""):
     """검사기가 돌았다는 사실을 남긴다 (DR-033).
 
@@ -271,22 +281,44 @@ def log_run(tool, result=""):
     try:
         os.makedirs(STATE, exist_ok=True)
         ts = datetime.datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S%z")
+        # **추적 내용의 상태 해시**를 남긴다 (2026-08-24, codex 라운드 2 지적 반영).
+        # 시각은 같은 초에서 뒤집혔고, HEAD는 더 나빴다 — 커밋 전에 제대로 검사한 것을
+        # 커밋 후에 미스로 오판했다. 검사 대상은 커밋 ID가 아니라 **내용**이다.
+        # `git ls-files -s`는 경로·모드·blob 해시라 내용이 바뀔 때만 바뀌고,
+        # 커밋 자체로는 안 바뀐다. 그래서 사전 검증이 인정된다.
+        head = _index_hash()
         with open(TOOL_RUNS, "a", encoding="utf-8") as f:
-            f.write(f"{ts}\t{tool}\t{result}\n")
+            f.write(f"{ts}\t{tool}\t{head}\t{result}\n")
     except Exception:
         pass          # 기록 실패가 검사를 막으면 안 된다
 
 
 def last_run(tool):
-    """이 도구가 마지막으로 돈 시각 (ISO). 기록이 없으면 None."""
+    """이 도구가 마지막으로 돈 (시각, HEAD). 기록이 없으면 (None, None)."""
     if not os.path.exists(TOOL_RUNS):
-        return None
-    hit = None
+        return (None, None)
+    hit = (None, None)
     for line in open(TOOL_RUNS, encoding="utf-8"):
         parts = line.rstrip("\n").split("\t")
-        if len(parts) >= 2 and parts[1] == tool:
-            hit = parts[0]
+        if len(parts) >= 3 and parts[1] == tool:
+            hit = (parts[0], parts[2])
     return hit
+
+
+def verified_now(tool):
+    """지금 이 내용 상태에서 그 도구가 돈 적이 있나."""
+    return ran_at_head(tool, _index_hash())
+
+
+def ran_at_head(tool, head):
+    """이 상태 해시에서 그 도구가 돈 적이 있나."""
+    if not os.path.exists(TOOL_RUNS) or not head or head == "-":
+        return False
+    for line in open(TOOL_RUNS, encoding="utf-8"):
+        parts = line.rstrip("\n").split("\t")
+        if len(parts) >= 3 and parts[1] == tool and parts[2] == head[:12]:
+            return True
+    return False
 
 
 # ----------------------------------------------------------------------- DR
