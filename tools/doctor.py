@@ -404,6 +404,7 @@ def c_symlinks():
     """
     # -z로 읽는다. git은 특수문자 경로를 따옴표로 감싸므로 줄 단위 파싱은 경로를 망친다
     # (2026-08-24 실측: 따옴표 붙은 경로를 readlink에 넘겨 33개를 "문제 없음"으로 오판했다).
+    import memlib as M
     r = subprocess.run(["git", "ls-files", "-s", "-z"], capture_output=True, text=True, cwd=ROOT)
     if r.returncode:
         return SKIP, "git 저장소 아님"
@@ -423,9 +424,15 @@ def c_symlinks():
             into_private.append(f"{l[-52:]}  ->  {raw[-52:]}")
     if into_private:
         more = f"\n      … 외 {len(into_private) - 3}개" if len(into_private) > 3 else ""
-        return FAIL, (f"_private을 가리키는 추적 링크 {len(into_private)}개 — 대상 경로 문자열이"
-                      " 원격에 올라간다 (내용은 안 가지만 구조·파일명이 드러난다):\n      "
-                      + "\n      ".join(into_private[:3]) + more)
+        head = (f"_private을 가리키는 추적 링크 {len(into_private)}개 — 대상 경로 문자열이"
+                " 원격에 올라간다 (내용은 안 간다. 구조와 파일명만):\n      "
+                + "\n      ".join(into_private[:3]) + more)
+        # 심각도는 인스턴스에 달렸다. work면 회사 구조가 나가는 것이라 차단이고,
+        # personal이면 자기 프라이빗 원격에 자기 파일명이 가는 것이라 경고다.
+        # (2026-08-24: 안 고쳐질 FAIL을 계속 띄우면 사람이 FAIL을 무시하게 된다 — 오늘의 교훈.)
+        if M.INSTANCE_CONTEXT == "work":
+            return FAIL, head
+        return WARN, head + "\n      정리하려면: git rm --cached <경로> (파일은 디스크에 남는다)"
     return WARN, f"추적 심볼릭 링크 {len(links)}개 (대상이 _private 밖)"
 
 
