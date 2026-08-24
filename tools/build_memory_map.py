@@ -55,7 +55,7 @@ footer{color:var(--mut);font-size:12.5px;margin:36px 0 8px;font-family:var(--mon
 
 STORES = [
     ("개인 사실 원장", "_private/ledger/ (rec.py)", "손으로 쓰는 진실 · 불가침",
-     "기훈 삶의 사실. 감사 사슬 audit, 핫셋은 생성물. 이 시스템의 관할 밖."),
+     "사람이 손으로 쓰는 사실 원장. 감사 사슬 audit, 핫셋은 생성물. 이 시스템의 관할 밖."),
     ("에피소드 원장", "~/.claude/…/*.jsonl", "원문 · 최종 검증처",
      "전 대화 전사. 회상: <code>recall.py find</code>. 백업: _private/transcript-backup/."),
     ("작업 사건 원장", "state/journal-YYYY-MM.md", "append-only",
@@ -80,7 +80,7 @@ FLOWS = [
         "요약의 상태 단언과 NOW 충돌 시 → NOW 우선 (코어 2)",
         "깊이가 필요하면 → 서류철 → recall로 원문 슬라이스"]),
     ("스레드 복귀 의식", [
-        "스레드 감지 (SOI·리로케이션·레이더) 또는 /dossier 호출",
+        "스레드 감지 (등록된 서류철) 또는 /dossier 호출",
         "<b>서류철부터 읽는다</b> — 위치·확정·기각·미결·다음 수",
         "원문이 걸린 판정은 recall 표적 질의 (통째 붓기 금지)",
         "떠날 때 델타 ≤5줄 append (마감 의식)"]),
@@ -88,7 +88,7 @@ FLOWS = [
         "/garden → wf_gardener.js (report-only 계약)",
         "check 해석 + 부패·중복·모순 탐지 + <b>서류철 주장을 전사와 대조</b>",
         "제안 리포트 state/gardener-*.md — 집행 금지",
-        "세션이 요약 제시 → 기훈 판정 → 집행 → journal + DR"]),
+        "세션이 요약 제시 → 사람 판정 → 집행 → journal + DR"]),
     ("사건 기록 의식", [
         "결정·국면·정정·교훈 발생 그 턴에",
         "<code>now.py log \"[track/type] 한 줄\"</code> — 스키마 검증 후 append",

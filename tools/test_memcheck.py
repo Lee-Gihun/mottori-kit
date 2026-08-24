@@ -25,7 +25,7 @@ def fixture_8_8_stale_index(tmp):
     open(os.path.join(mem, "MEMORY.md"), "w", encoding="utf-8").write(
         "# Memory Index\n\n"
         "- [Session state](session-state-handoff.md) — 샘플 트랙 진행중(8/8)"
-        "→딜 국면(Shawn 콜 대기) · 미스트랄 R2 화 8/11 · 홀리데이 온사이트 월 8/10\n")
+        "→다음 국면(응답 대기) · 샘플 B 화 8/11 · 샘플 C 월 8/10\n")
     open(os.path.join(mem, "session-state-handoff.md"), "w").write("---\ntype: user\n---\nx")
     return mem
 
