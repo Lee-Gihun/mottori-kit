@@ -28,6 +28,18 @@ def _resolve_root():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+# 킷이 기대하는 설정 스키마 버전 (KIT-DR-005).
+# 엔진이 새 필드를 요구하게 되면 여기를 올리고 SCHEMA_CHANGES에 무엇을 해야 하는지 적는다.
+# 인스턴스는 pull로 엔진만 받으므로, 자기 config는 스스로 고쳐야 한다. doctor가 그걸 알린다.
+# 2026-08-24 실측: instance.context를 추가했을 때 옛 config는 그 필드가 없어 밸브가
+# 조용히 꺼진 채로 돌 뻔했다. 조용한 뒤처짐이 이 상수의 존재 이유다.
+SCHEMA_VERSION = 2
+SCHEMA_CHANGES = {
+    2: ("instance 블록 신설 — 데이터 국경의 근거값.\n"
+        '      "instance": {"name": "...", "context": "work|personal", "remote_allowlist": []}\n'
+        "      context가 없으면 밸브 검사가 personal로 간주하고 원격을 안 본다"),
+}
+
 ROOT = _resolve_root()
 CONFIG_PATH = os.path.join(ROOT, "system", "memory-config.json")
 
@@ -113,6 +125,16 @@ _INST = _CFG.get("instance", {})
 INSTANCE_NAME = _INST.get("name", os.path.basename(ROOT))
 INSTANCE_CONTEXT = _INST.get("context", "personal")   # personal | work
 REMOTE_ALLOWLIST = _INST.get("remote_allowlist", [])
+CONFIG_SCHEMA = _CFG.get("schema_version", 1)   # 없으면 1 (instance 블록 이전)
+
+
+def schema_gap():
+    """config가 엔진보다 뒤처졌으면 (현재, 기대, 해야 할 일 목록)을 준다. 아니면 None."""
+    if CONFIG_SCHEMA >= SCHEMA_VERSION:
+        return None
+    todo = [f"v{v}: {SCHEMA_CHANGES[v]}" for v in sorted(SCHEMA_CHANGES)
+            if CONFIG_SCHEMA < v <= SCHEMA_VERSION]
+    return CONFIG_SCHEMA, SCHEMA_VERSION, todo
 
 # 에피소드 소스 레지스트리 (DR-013). recall이 이것만 본다 — 소스 추가는 여기 한 줄.
 #  kind: claude-jsonl(type=user/assistant) · codex-jsonl(response_item/payload.message)
