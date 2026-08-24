@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/now.py\" hook-context 2>/dev/null || printf '%s' '{\"hookSpecificOutput\": {\"hookEventName\": \"SessionStart\", \"additionalContext\": \"[kit] 상태 자동 주입이 실패했다 (now.py 없음 또는 오류). 이 세션은 NOW를 못 받았다. `python3 tools/doctor.py`로 진단하고, 그동안은 state/NOW.md를 직접 읽어라.\"}}'"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/now.py\" precompact 2>/dev/null || date \"+%FT%T precompact 훅 실패\" >> \"$CLAUDE_PROJECT_DIR/state/.hook-errors.log\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "date '+[now: %Y-%m-%d %H:%M %Z (%a)]'"
+          }
+        ]
+      }
+    ]
+  }
+}
