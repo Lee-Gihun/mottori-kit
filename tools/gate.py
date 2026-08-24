@@ -107,9 +107,26 @@ def cmd_check():
             os.remove(DIRTY)
         except OSError:
             pass
+        # **측정 불능은 개선이 아니다** (codex 라운드 3). 검사기가 죽어 None이 나오면
+        # 그것도 막는다. 이전엔 None을 worse에서 빼서 crash가 조용히 통과했다.
+        dead = [k for k, v in cur.items() if v is None]
+        if dead:
+            try:
+                os.remove(DIRTY)
+            except OSError:
+                pass
+            M.log_run("gate", "blocked:dead=" + ",".join(dead))
+            print(json.dumps({"decision": "block", "reason":
+                  f"검사기가 결과를 못 냈다: {', '.join(dead)}. 죽었는지 확인해라 "
+                  "(측정 불능은 통과가 아니다)."}, ensure_ascii=False))
+            return 0
         if not worse:
-            # 좋아졌으면 기준선을 당긴다. 안 그러면 고친 만큼 다시 나빠질 여지가 생긴다.
-            if any(cur[k] is not None and base.get(k) is not None and cur[k] < base[k] for k in cur):
+            # 좋아졌을 때만 기준선을 당긴다. **모든 값이 유효하고 모든 성분이 나빠지지
+            # 않았을 때만** — 하나 고치고 하나 만드는 치환을 막는다.
+            if (all(v is not None for v in cur.values())
+                    and all(base.get(k) is not None for k in cur)
+                    and all(cur[k] <= base[k] for k in cur)
+                    and any(cur[k] < base[k] for k in cur)):
                 json.dump(cur, open(BASELINE, "w", encoding="utf-8"), ensure_ascii=False)
             return 0
         M.log_run("gate", "blocked:" + ";".join(worse))
