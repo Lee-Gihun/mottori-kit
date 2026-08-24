@@ -59,6 +59,27 @@ def _codex_cwd(fp):
     return cwd
 
 
+def _same_instance(cwd):
+    """이 rollout이 이 인스턴스에서 돌았는가. **판정 불가는 거부**한다 (2026-08-24 적대 검증).
+
+    처음엔 셋 다 틀렸다.
+    - `startswith(ROOT)`는 경로 경계를 안 봐서 `/x/repo-evil`이 `/x/repo`를 통과했다.
+    - `cwd` 미기록(옛 포맷)을 "판정 불가라 남긴다"로 처리해 타 인스턴스가 그대로 보였다.
+    - 상대 경로 `cwd`는 realpath가 **현재** 작업 디렉토리 기준으로 풀려 엉뚱하게 통과했다.
+
+    데이터 국경에서는 가용성보다 기밀성이 앞선다. 모르면 안 보여준다.
+    일부러 열려면 `--all-instances`.
+    """
+    if not cwd or not os.path.isabs(cwd):
+        return False
+    try:
+        real = os.path.realpath(cwd)
+        root = os.path.realpath(M.ROOT)
+        return real == root or os.path.commonpath([real, root]) == root
+    except ValueError:      # 드라이브가 다르면 commonpath가 던진다
+        return False
+
+
 def _source_files(names, all_instances=False):
     """(source_name, kind, filepath) 목록. 소스 순서·경로는 memlib이 정본.
 
@@ -76,13 +97,7 @@ def _source_files(names, all_instances=False):
             continue
         fs = sorted(_glob.glob(os.path.join(base, pat), recursive=True), key=os.path.getmtime)
         if kind == "codex-jsonl" and not all_instances:
-            kept = []
-            for f in fs:
-                cwd = _codex_cwd(f)
-                # cwd 미기록(옛 포맷)은 판정 불가라 남긴다 — 조용히 버리면 회상이 빈다
-                if cwd is None or os.path.realpath(cwd).startswith(os.path.realpath(M.ROOT)):
-                    kept.append(f)
-            fs = kept
+            fs = [f for f in fs if _same_instance(_codex_cwd(f))]
         out.extend((name, kind, f) for f in fs)
     return out
 
