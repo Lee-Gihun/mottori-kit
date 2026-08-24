@@ -405,20 +405,39 @@ def c_engine_drift():
 
 
 def c_ignored():
-    """연료가 실제로 git에서 안 보이는가. 밸브의 실측."""
+    """연료가 git에서 안 보이는가. **추적 여부가 아니라 노출 여부**를 본다.
+
+    2026-08-24 적대 검증: 이전 판은 probe가 이미 tracked일 때만 경고해서,
+    `.gitignore`를 통째로 지워 연료가 untracked로 드러난 가장 위험한 상태를 PASS로 셌다.
+    """
     r = sh("git", "rev-parse", "--is-inside-work-tree")
     if r.returncode:
         return SKIP, "git 저장소 아님"
-    leaked = []
-    for probe in ("state/NOW.md", "_private/x", "system/memory-config.json"):
-        c = sh("git", "check-ignore", "-q", probe)
-        tracked = sh("git", "ls-files", "--error-unmatch", probe)
-        if c.returncode != 0 and tracked.returncode == 0:
-            leaked.append(probe)
-    if leaked:
-        return WARN, "추적 중 (인스턴스 정책에 따라 정상일 수 있다): " + ", ".join(leaked)
-    return PASS, "연료 경로가 git 밖"
+    import memlib as M
+    probes = ["state/NOW.md", "state/journal-x.md", "_private/x.md",
+              "system/memory-config.json", "company/tracker.md", "notes.md"]
+    not_ignored = [x for x in probes if sh("git", "check-ignore", "-q", x).returncode != 0]
+    tracked = [x for x in probes if sh("git", "ls-files", "--error-unmatch", x).returncode == 0]
+    st = sh("git", "status", "--porcelain", "--untracked-files=all").stdout.splitlines()
+    exposed = [l[3:] for l in st if l.startswith("??")]
 
+    if M.INSTANCE_CONTEXT != "work":
+        # 개인 인스턴스는 트랙 문서를 일부러 추적한다. 규칙 부재는 정상이고 노출만 본다.
+        return (PASS, f"context=personal — 노출 {len(exposed)}개 (트랙 문서 추적은 정상)") \
+            if len(exposed) < 20 else (WARN, f"untracked 노출 {len(exposed)}개")
+
+    msgs = []
+    still = [x for x in not_ignored if x not in tracked]
+    if still:
+        msgs.append("ignore 규칙이 안 잡는 경로: " + ", ".join(still))
+    if exposed:
+        msgs.append(f"untracked 노출 {len(exposed)}개 — 커밋 한 번이면 나간다: "
+                    + ", ".join(exposed[:4]))
+    if tracked:
+        msgs.append("이미 추적 중: " + ", ".join(tracked))
+    if msgs:
+        return FAIL, "\n      ".join(msgs)
+    return PASS, f"probe {len(probes)}개 전부 ignore · untracked 노출 0"
 
 # -------------------------------------------------------------------- 실행
 
