@@ -28,6 +28,15 @@
             "command": "date '+[now: %Y-%m-%d %H:%M %Z (%a)]'"
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/gate.py\" resume 2>/dev/null || true"
+          }
+        ]
       }
     ],
     "PostToolUse": [
