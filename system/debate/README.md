@@ -83,5 +83,5 @@
   (8/23 11:05 훅 3종 발화 확인: SessionStart·PreCompact·UserPromptSubmit)
 - `2026-08-23-t0-reading-room.md` — 리딩룸 포맷. 상태: 합의 (3라운드), 집행 완료
 - `2026-08-23-field-kit.md` — 필드 킷 그릇. 상태: codex 대안 채택, **기훈 판정 3건 대기**
-- `2026-08-23-attribution-instrument.md` — 모델 실패와 하네스 실패의 귀속. 상태: **보류 (DR-026)**.
-  설계 수렴, 집행 안 함. 산출물은 DR-025 규칙 하나. 재검토 조건 3개는 DR-026
+- `2026-08-23-attribution-instrument.md` — 모델 실패와 하네스 실패의 귀속. 상태: **보류 (DR-024)**.
+  설계 수렴, 집행 안 함. 산출물은 DR-023 규칙 하나. 재검토 조건 3개는 DR-024

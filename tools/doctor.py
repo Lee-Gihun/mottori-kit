@@ -273,14 +273,28 @@ def c_engine_drift():
     사본 둘을 두는 대가는 드리프트인데, 자동 동기화를 만들면 "이 수정이 반출해도 되는
     것인가"를 기계가 판정해야 한다. 그건 문자열 검사로 증명할 수 없다. 그래서 탐지만 한다.
     """
-    import filecmp
     kit = os.environ.get("MOTTORI_KIT") or os.path.expanduser("~/mottori-kit")
     if not os.path.isdir(os.path.join(kit, "tools")) or os.path.realpath(kit) == os.path.realpath(ROOT):
         return SKIP, "비교할 킷 사본 없음"
+    try:
+        import kit_sync
+    except Exception as e:
+        return SKIP, f"kit_sync 없음 ({e})"
+    # 탈개인화 치환을 거친 뒤 비교한다. 안 그러면 **의도된 차이**가 드리프트로 잡혀
+    # 매번 warn이 뜨고, 그러면 진짜 드리프트가 났을 때 아무도 안 본다.
     mine, theirs = os.path.join(ROOT, "tools"), os.path.join(kit, "tools")
     shared = sorted(set(os.listdir(mine)) & set(os.listdir(theirs)))
-    diff = [f for f in shared if os.path.isfile(os.path.join(mine, f))
-            and not filecmp.cmp(os.path.join(mine, f), os.path.join(theirs, f), shallow=False)]
+    diff = []
+    for f in shared:
+        a, b = os.path.join(mine, f), os.path.join(theirs, f)
+        if not os.path.isfile(a):
+            continue
+        try:
+            want = kit_sync.depersonalize(open(a, encoding="utf-8").read())
+            if want != open(b, encoding="utf-8").read():
+                diff.append(f)
+        except UnicodeDecodeError:
+            pass
     if diff:
         return WARN, (f"공유 {len(shared)}개 중 {len(diff)}개 갈라짐: {', '.join(diff)}"
                       "\n      `python3 tools/kit_sync.py` 로 차이를 보고 `--apply`로 내보낸다")
