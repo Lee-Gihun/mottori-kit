@@ -117,6 +117,7 @@ def main():
     if QUIET:
         if problems:
             print(f"[coherence] 이슈 {len(problems)}건: " + " | ".join(problems[:4])
+            M.log_run('coherence', f'issues={total}')
                   + (" …" if len(problems) > 4 else ""))
         else:
             print("[coherence] 이상 없음")
