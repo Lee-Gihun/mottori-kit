@@ -83,6 +83,26 @@ doctor가 마지막에 인쇄하는 **"자동 검사 불가"** 네 개는 기계
 
 등록하면 `state/NOW.md`의 온도판에 그 트랙의 신선도가 자동으로 뜬다.
 
+## 5b. 자기 점검 — 문서가 자기 안에서 닫히는가
+
+```bash
+python3 tools/linkcheck.py
+```
+
+**`broken: 0`이 목표다.** 여기서 깨진 참조가 나오면 이 리포가 없는 파일을 가리키고 있다는
+뜻이고, 그 문서를 읽는 에이전트는 따라갈 수 없는 경로를 보게 된다.
+
+setup 직후에는 원장(`_private/ledger/hotset.md`) 하나가 남는다. 원장은 첫 사실을 기록할 때
+생기기 때문이다. 지금 만들 거면:
+
+```bash
+python3 tools/rec.py new <id> --claim="..." --status=확정 --origin="..." --domain=...
+python3 tools/rec.py hot
+```
+
+*(`rec.py new`만 원장 부재 상태에서 돈다. `hot`·`find`·`check`는 원장이 있어야 한다 —
+빈 원장에 대고 조회하면 "없다"와 "안 만들었다"를 구별할 수 없기 때문이다.)*
+
 ## 6. 전역 설정 (선택, 한 번만)
 
 턴마다 현재 시각을 주입하는 훅은 이 리포의 `.claude/settings.json`에 이미 들어 있다.
