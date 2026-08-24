@@ -1,0 +1,36 @@
+# 단방향 밸브 (DR-024)
+#
+# 이 리포는 **엔진만** 추적한다. 인스턴스가 만들어내는 것은 태생부터 git 밖이다.
+# 규율("커밋할 때 조심한다")이 아니라 구조다 — git이 아예 안 보므로 실수로 푸시할 수 없다.
+#
+# 회사 인스턴스에서 이게 왜 중요한가: journal·원장·서류철에는 회사 내부 얘기가 쌓인다.
+# 그게 개인 GitHub으로 한 번 올라가면 되돌리기가 비싸다. 그래서 차단을 사람 손에 맡기지 않는다.
+#
+# 뒤집어 말하면 **인스턴스 데이터는 이 리포로 백업되지 않는다.** 그 백업은 따로 마련해야 한다
+# (CHECKLIST.md의 "백업" 항목).
+
+# --- 인스턴스 상태 (연료) ---
+state/*
+!state/.gitkeep
+_private/
+conv/
+
+# --- 인스턴스 설정 (템플릿은 templates/에 추적된다) ---
+system/memory-config.json
+system/instance-rules.md
+
+# --- 생성물 ---
+system/memory-map.html
+system/build-log.md
+
+# --- 런타임 간 토론: 규약(README)만 추적, 발주·로그는 인스턴스 것 ---
+system/debate/_*
+system/debate/[0-9]*
+
+# --- 잡동사니 ---
+.DS_Store
+__pycache__/
+*.pyc
+.mypy_cache/
+.ipynb_checkpoints/
+tmp/

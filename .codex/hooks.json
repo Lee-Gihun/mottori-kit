@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/tools/now.py\" hook-context 2>/dev/null || printf '%s' '{\"hookSpecificOutput\": {\"hookEventName\": \"SessionStart\", \"additionalContext\": \"[kit] 상태 자동 주입이 실패했다 (now.py 없음 또는 오류). 이 세션은 NOW를 못 받았다. `python3 tools/doctor.py`로 진단하고, 그동안은 state/NOW.md를 직접 읽어라.\"}}'"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/tools/now.py\" precompact 2>/dev/null || date \"+%FT%T codex precompact 훅 실패\" >> \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/state/.hook-errors.log\""
+          }
+        ]
+      }
+    ]
+  }
+}
