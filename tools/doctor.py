@@ -447,6 +447,20 @@ def c_symlinks():
     return WARN, f"추적 심볼릭 링크 {len(links)}개 (대상이 _private 밖)"
 
 
+def _linkcheck_scope():
+    """linkcheck가 지금 읽게 될 파일들의 해시. 인증서와 같은 식이어야 한다."""
+    import hashlib
+    r = sh("git", "ls-files", "--cached", "--others", "--exclude-standard", "*.md")
+    d = hashlib.sha1()
+    for f in sorted(x for x in r.stdout.split() if x.strip()):
+        d.update(f.encode())
+        try:
+            d.update(open(os.path.join(ROOT, f), "rb").read())
+        except OSError:
+            d.update(b"<missing>")
+    return d.hexdigest()[:12]
+
+
 def c_missed_gate():
     """**지금 이 내용 상태가 검사를 통과한 적이 있나** (DR-033).
 
@@ -469,8 +483,11 @@ def c_missed_gate():
         return SKIP, "git 저장소 아님"
     if not os.path.exists(M.TOOL_RUNS):
         return WARN, "검사 실행 기록 자체가 없다 (계기 미가동)"
-    if M.verified_now("linkcheck"):
-        return PASS, "지금 내용 상태에서 linkcheck 통과 기록 있음"
+    # 인증서는 linkcheck가 **자기가 읽은 파일들**로 만든 해시다 (codex 라운드 3).
+    # index 해시로는 untracked 추가와 unstaged 수정을 못 잡았다.
+    cur_scope = _linkcheck_scope()
+    if M.ran_at_head("linkcheck", cur_scope, require_ok=True):
+        return PASS, "지금 파일 상태에서 linkcheck 통과 기록 있음"
     # 미검증 상태다. 새 파일이 끼어 있을 때만 문제로 본다 — 단순 수정마다 울면 꺼진다.
     added = sh("git", "show", "--diff-filter=A", "--name-only", "--format=", "HEAD").stdout.split()
     untracked_new = [l[3:] for l in sh("git", "status", "--porcelain").stdout.splitlines()

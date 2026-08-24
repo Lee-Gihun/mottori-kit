@@ -67,5 +67,16 @@ if __name__ == "__main__":
     for rel, t in sorted(broken):
         print(f"BROKEN {rel} -> {t}")
     print(f"[linkcheck] broken: {len(broken)}")
-    M.log_run('linkcheck', f'broken={len(broken)}')
-    sys.exit(1 if broken else 0)
+    # **자기가 실제로 읽은 것의 해시를 남긴다** (codex 라운드 3 지적).
+    # 이전엔 memlib이 git index 해시를 남겼는데, linkcheck는 worktree bytes를 읽고
+    # untracked도 본다. 인증서의 입력과 검사기의 입력이 달랐다.
+    import hashlib as _h
+    _d = _h.sha1()
+    for _f in sorted(tracked_md()):
+        _d.update(_f.encode())
+        try:
+            _d.update(open(os.path.join(ROOT, _f), "rb").read())
+        except OSError:
+            _d.update(b"<missing>")
+    M.log_run("linkcheck", f"broken={len(broken)}", scope=_d.hexdigest()[:12],
+              ok=(len(broken) == 0))
