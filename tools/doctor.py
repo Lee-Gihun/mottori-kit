@@ -270,6 +270,9 @@ def c_links():
     """**결과를 본다.** 실행 여부만 보던 게 2026-08-24 사고의 자리다 — 킷에서 깨진 참조
     27개가 doctor를 통과했다. 도구를 돌리는 것과 도구가 뭐라 했는지 보는 것은 다른 일이다."""
     r = sh(sys.executable, "tools/linkcheck.py")
+    if r.returncode not in (0, 1) or "Traceback" in r.stderr:
+        first = (r.stderr.strip().splitlines() or ["?"])[-1]
+        return FAIL, f"검사기가 죽었다 (exit={r.returncode}): {first[:100]}"
     m = re.search(r"broken: (\d+)", r.stdout)
     if not m:
         return FAIL, f"linkcheck 출력을 못 읽었다: {(r.stdout + r.stderr)[:120]!r}"
@@ -285,11 +288,17 @@ def c_links():
 def c_coherence():
     """정합성 감지기의 **결과**를 본다."""
     r = sh(sys.executable, "tools/coherence.py", "--quiet")
+    # **크래시는 경고가 아니라 실패다.** 2026-08-24 실측: 내가 coherence에 한 줄을 잘못 넣어
+    # SyntaxError를 냈는데, 이 검사가 "출력을 못 읽었다"라는 WARN을 내서 그대로 커밋·푸시했다.
+    # 도구가 죽은 것과 도구가 문제를 못 찾은 것은 완전히 다른 사건이다.
+    if r.returncode not in (0, 1) or "Traceback" in r.stderr or "Error" in r.stderr:
+        first = (r.stderr.strip().splitlines() or ["?"])[-1]
+        return FAIL, f"검사기가 죽었다 (exit={r.returncode}): {first[:100]}"
     m = re.search(r"(?:총|이슈) (\d+)건", r.stdout)
     if m is None and ("이상 없음" in r.stdout or "링크 OK" in r.stdout):
         return PASS, r.stdout.strip().splitlines()[0][:90]
     if m is None:
-        return WARN, f"출력을 못 읽었다: {r.stdout.strip()[:90]!r}"
+        return FAIL, f"출력을 못 읽었다 — 형식이 바뀌었거나 도구가 이상하다: {(r.stdout+r.stderr).strip()[:90]!r}"
     n = int(m.group(1))
     head = r.stdout.strip().splitlines()[0]
     return (PASS if not n else WARN), head[:110]
