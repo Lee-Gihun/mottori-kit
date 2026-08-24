@@ -267,6 +267,26 @@ def c_valve():
     return PASS, f"원격 {len(remotes)}개 전부 allowlist 안"
 
 
+def c_engine_drift():
+    """킷과 인스턴스의 엔진이 갈라졌는가. 예방이 아니라 **탐지**다 (DR-027).
+
+    사본 둘을 두는 대가는 드리프트인데, 자동 동기화를 만들면 "이 수정이 반출해도 되는
+    것인가"를 기계가 판정해야 한다. 그건 문자열 검사로 증명할 수 없다. 그래서 탐지만 한다.
+    """
+    import filecmp
+    kit = os.environ.get("MOTTORI_KIT") or os.path.expanduser("~/mottori-kit")
+    if not os.path.isdir(os.path.join(kit, "tools")) or os.path.realpath(kit) == os.path.realpath(ROOT):
+        return SKIP, "비교할 킷 사본 없음"
+    mine, theirs = os.path.join(ROOT, "tools"), os.path.join(kit, "tools")
+    shared = sorted(set(os.listdir(mine)) & set(os.listdir(theirs)))
+    diff = [f for f in shared if os.path.isfile(os.path.join(mine, f))
+            and not filecmp.cmp(os.path.join(mine, f), os.path.join(theirs, f), shallow=False)]
+    if diff:
+        return WARN, (f"공유 {len(shared)}개 중 {len(diff)}개 갈라짐: {', '.join(diff)}"
+                      "\n      `python3 tools/kit_sync.py` 로 차이를 보고 `--apply`로 내보낸다")
+    return PASS, f"공유 도구 {len(shared)}개 바이트 동일 ({kit})"
+
+
 def c_ignored():
     """연료가 실제로 git에서 안 보이는가. 밸브의 실측."""
     r = sh("git", "rev-parse", "--is-inside-work-tree")
@@ -306,6 +326,7 @@ CHECKS = [
     ("도구 · 원장",            c_ledger),
     ("밸브 · 원격 검사",        c_valve),
     ("밸브 · 연료 비추적",      c_ignored),
+    ("엔진 · 킷 드리프트",      c_engine_drift),
 ]
 
 # 자동 검사 불가 — 이 목록이 이 도구의 반증 가능 칸이다.
