@@ -66,26 +66,40 @@ _TRANSCRIPTS_LAZY = [None]
 def transcript_dir(root=None):
     """Claude Code 전사 디렉토리를 인스턴스 경로에서 **유도**한다 (DR-025).
 
-    맹글링 규칙: 경로의 `/`와 `_`를 `-`로 치환. 2026-08-24 실측 —
-    `~/.claude/projects` 실제 키 12개와 훅 stdin의 `transcript_path` 표본이 전부 일치.
-    (`.`·공백이 든 경로 표본은 없었다. 확인 못 함 — 그래서 유도 실패 시 글롭으로 되짚는다.)
+    맹글링 규칙: **영숫자와 하이픈이 아닌 모든 문자를 `-`로** 치환.
+    2026-08-24 실측으로 확정했다. 특수문자를 섞은 디렉토리에서 실제 세션을 돌려
+    Claude Code가 만든 키와 대조: `k a.b_c-d킷` -> `k-a-b-c-d-`.
+    즉 `/` `_` `.` 공백 한글이 전부 하이픈이 된다.
+
+    *처음엔 `[/_]`만으로 잡았다가 틀렸다.* 표본 12개가 전부 영숫자 경로여서 규칙이
+    과소적합했다. 공백이나 점이 든 경로(`~/My Work/kit`, `~/work.v2`)에서 조용히
+    빈 결과가 났을 것이다 — 이 함수가 막으려던 바로 그 실패다.
+
+    **한글 경로 주의:** 한글은 전부 하이픈이 되므로 서로 다른 한글 이름이 같은 키로
+    충돌할 수 있다 (`킷한글`과 `킷영문` 둘 다 `---`). 그래서 유도 실패 시 글롭으로
+    되짚되, 후보가 둘 이상이면 판정을 포기하고 부재를 보고한다.
 
     이 값을 설정으로 받지 않는 이유: 설정이면 이식 때 사람이 고쳐야 하고,
     안 고치면 **조용히 빈 결과**가 나온다. 회상이 0건인데 도구는 정상 종료한다.
     """
     root = root or ROOT
     base = os.path.expanduser("~/.claude/projects")
-    key = re.sub(r"[/_]", "-", root)
+    key = mangle_project_key(root)
     derived = os.path.join(base, key)
     if os.path.isdir(derived):
         return derived
-    # 유도 실패: 맹글링 규칙이 안 맞는 문자가 경로에 있을 수 있다. 끝 세그먼트로 되짚는다.
-    tail = re.sub(r"[/_]", "-", os.path.basename(root))
-    if os.path.isdir(base):
+    # 유도 실패: 규칙이 바뀌었거나 세션을 아직 안 돌렸다. 끝 세그먼트로 되짚는다.
+    tail = mangle_project_key(os.path.basename(root))
+    if os.path.isdir(base) and tail.strip("-"):
         hits = [d for d in os.listdir(base) if d.endswith(tail)]
         if len(hits) == 1:
             return os.path.join(base, hits[0])
     return derived  # 없으면 없는 경로를 그대로 — 호출부(doctor)가 부재를 보고한다
+
+
+def mangle_project_key(path):
+    """Claude Code의 프로젝트 디렉토리 이름 규칙 (2026-08-24 실측)."""
+    return re.sub(r"[^A-Za-z0-9-]", "-", path)
 
 
 STATE = os.path.join(ROOT, "state")
