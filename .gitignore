@@ -1,31 +1,52 @@
-# 단방향 밸브 (DR-024)
+# 단방향 밸브 1층 — **기본 거부** (DR-002, 2026-08-24 적대 검증에서 뒤집음)
 #
-# 이 리포는 **엔진만** 추적한다. 인스턴스가 만들어내는 것은 태생부터 git 밖이다.
-# 규율("커밋할 때 조심한다")이 아니라 구조다 — git이 아예 안 보므로 실수로 푸시할 수 없다.
+# 처음엔 반대였다. `state/`와 `_private/`만 무시하고 나머지는 추적했다.
+# 그게 틀렸다는 게 검증에서 나왔다: README와 SETUP은 "문서·노트·트랙을 이 워크스페이스 안에
+# 두고 굴리라"고 하는데, 그러면 `company/tracker.md` 같은 **평범한 경로의 회사 자료가
+# 그냥 커밋된다.** 목록으로 막는 방식은 내가 생각해낸 경로만 막는다.
 #
-# 회사 인스턴스에서 이게 왜 중요한가: journal·원장·서류철에는 회사 내부 얘기가 쌓인다.
-# 그게 개인 GitHub으로 한 번 올라가면 되돌리기가 비싸다. 그래서 차단을 사람 손에 맡기지 않는다.
+# 그래서 뒤집었다. **전부 무시하고 엔진만 되살린다.** 새로 만드는 것은 무엇이든 기본적으로
+# git 밖이고, 엔진을 고칠 때만 의식적으로 추적된다. 실수의 방향이 안전한 쪽으로 바뀐다.
 #
 # 뒤집어 말하면 **인스턴스 데이터는 이 리포로 백업되지 않는다.** 그 백업은 따로 마련해야 한다
 # (CHECKLIST.md의 "백업" 항목).
+#
+# 엔진에 파일을 추가하려면 아래 allowlist에 한 줄 넣는다. 그 한 줄이 판단의 자리다.
 
-# --- 인스턴스 상태 (연료) ---
-state/*
-!state/.gitkeep
-_private/
-conv/
+# --- 전부 거부 ---
+/*
 
-# --- 인스턴스 설정 (템플릿은 templates/에 추적된다) ---
-system/memory-config.json
-system/instance-rules.md
+# --- 엔진만 되살린다 ---
+!/.gitignore
+!/README.md
+!/SETUP.md
+!/CHECKLIST.md
+!/CLAUDE.md
+!/AGENTS.md
+!/setup.sh
+!/tools/
+!/templates/
+!/system/
+!/.claude/
+!/.codex/
+!/state/
+!/.github/
 
-# --- 생성물 ---
-system/memory-map.html
-system/build-log.md
-
-# --- 런타임 간 토론: 규약(README)만 추적, 발주·로그는 인스턴스 것 ---
-system/debate/_*
-system/debate/[0-9]*
+# --- 되살린 디렉토리 안에서 다시 거부할 것 ---
+# 인스턴스 설정 (템플릿은 templates/에 추적된다)
+/system/memory-config.json
+/system/instance-rules.md
+# 생성물
+/system/memory-map.html
+/system/build-log.md
+# 런타임 간 토론: 규약(README)만 추적, 발주·로그·라운드는 인스턴스 것
+/system/debate/*
+!/system/debate/README.md
+# 상태는 전부 인스턴스 것. 디렉토리 자리만 남긴다
+/state/*
+!/state/.gitkeep
+# Claude 로컬 설정 (권한 허용 목록 등)은 머신 것
+/.claude/settings.local.json
 
 # --- 잡동사니 ---
 .DS_Store
@@ -33,4 +54,3 @@ __pycache__/
 *.pyc
 .mypy_cache/
 .ipynb_checkpoints/
-tmp/
