@@ -204,14 +204,113 @@ def _snip(text, rx, width=260):
     return ("…" if a else "") + s + ("…" if a + width < len(text) else "")
 
 
+def _score(text, branches, rx):
+    """매치 품질. 어휘 검색에서 임베딩 전에 해야 할 일 (2026-08-24).
+
+    질의 `a|b|c`에서 **몇 갈래가 맞았는지**가 1차 신호다. 하나만 맞은 발화와 셋 다 맞은
+    발화를 같은 취급하면 순위가 없는 것과 다름없다. 실측: 순위 없이 파일 순서로 자르니
+    주제어 대역 hit@8이 0%였다.
+
+    (1) 맞은 갈래 수  (2) 총 출현 횟수  (3) 길이 정규화 없음 — 긴 발화가 유리한 건
+    회상 용도에서 오히려 맞다. 짧은 맞장구보다 긴 논의가 찾고 싶은 것이다.
+    """
+    if not branches:
+        return (1, len(rx.findall(text)))
+    matched = sum(1 for b in branches if b.search(text))
+    total = sum(len(b.findall(text)) for b in branches)
+    return (matched, total)
+
+
+def _branches(pattern):
+    """최상위 `|`로 갈라진 갈래들. 갈라지지 않으면 빈 목록."""
+    if "|" not in pattern:
+        return []
+    depth, parts, cur = 0, [], ""
+    for ch in pattern:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch == "|" and depth == 0:
+            parts.append(cur); cur = ""
+        else:
+            cur += ch
+    parts.append(cur)
+    try:
+        return [re.compile(x, re.I) for x in parts if x.strip()]
+    except re.error:
+        return []
+
+
+def _match_stamps(pattern, sources, all_instances, thinking,
+                  include_agents, include_system, role, since):
+    """1차 스캔: 매치의 타임스탬프만 모은다. 순위를 매기려면 전수를 봐야 한다."""
+    rx = re.compile(pattern, re.I)
+    br = _branches(pattern)
+    out = []
+    for sname, kind, fp in _source_files(sources, all_instances):
+        fkind, _p, _b = _file_identity(fp) if kind == "codex-jsonl" else ("user", None, None)
+        if fkind == "subagent" and not include_agents:
+            continue
+        if kind == "text":
+            for ln in open(fp, encoding="utf-8", errors="replace"):
+                if rx.search(ln):
+                    # 텍스트 소스(dumps 등)는 시각이 없다. 점수는 같은 식으로 매기고
+                    # 시각은 빈 문자열이라 최신순에서는 자연히 뒤로 간다.
+                    out.append((_score(ln, br, rx), ""))
+            continue
+        for line in open(fp, encoding="utf-8", errors="replace"):
+            try:
+                d = json.loads(line)
+            except Exception:
+                continue
+            if kind == "codex-jsonl":
+                got = _text_of_codex(d)
+                if not got:
+                    continue
+                r, text, ts = got
+            else:
+                got = _text_of(d, include_thinking=thinking)
+                if not got:
+                    continue
+                r, text = got
+                if r == "user" and _is_system_injected(text) and not include_system:
+                    continue
+                ts = (d.get("timestamp") or "")[:16]
+            if since and ts and ts[:10] < since:
+                continue
+            if (role in (None, r)) and text and rx.search(text):
+                out.append((_score(text, br, rx), ts or ""))
+    return out
+
+
 def find(pattern, role=None, since=None, around=2, max_hits=8, thinking=False, sources=None,
-         include_agents=False, include_system=False, all_instances=False):
+         include_agents=False, include_system=False, all_instances=False,
+         order="recent"):
     """기본은 authored-only: 기훈이 실제로 친 것과 Claude/Codex가 실제로 답한 것만.
 
     include_agents=True면 서브에이전트 rollout도 검색하되 부모 복제본은 접어서 표시한다.
     include_system=True면 시스템 주입 레코드도 [주입] 태그와 함께 보여준다.
     """
     rx = re.compile(pattern, re.I)
+
+    # **순위 (2026-08-24 신설).** 이전에는 파일을 순서대로 읽다가 max_hits에서 멈췄다.
+    # 그 결과 언제나 **가장 오래된 N건**이 나왔다. 실측: "설계|금지"의 상위 8건이 전부
+    # 05-31~06-06이었고, 찾던 07-22 발화는 1300번째였다. hit@8이 주제어 대역에서 0%.
+    # "그때 그 얘기"를 찾는 도구가 정확히 반대로 동작하고 있었다.
+    #
+    # 최신순이 기본이다. 회상의 실제 용도가 최근 맥락 복구이기 때문이다.
+    # 비용은 전수 스캔 2.2초 (543MB 단일 세션 실측). 조기 중단으로 아끼던 시간보다
+    # 틀린 결과를 받는 대가가 크다.
+    _br = _branches(pattern)
+    if order in ("score", "recent"):
+        scored = _match_stamps(pattern, sources, all_instances, thinking,
+                               include_agents, include_system, role, since)
+        key = (lambda x: (x[0], x[1])) if order == "score" else (lambda x: (x[1], x[0]))
+        _floor = sorted(scored, key=key, reverse=True)[max_hits - 1] if len(scored) > max_hits else None
+        _floorkey = key
+    else:
+        _floor = _floorkey = None
     hits = 0
     _seen_texts = {}
     _seen_ids = set()
@@ -289,6 +388,9 @@ def find(pattern, role=None, since=None, around=2, max_hits=8, thinking=False, s
                 ring = ring[-around:] if around else []
                 continue
             if (role in (None, r)) and text and rx.search(text):
+                if _floor is not None and _floorkey(
+                        (_score(text, _br, rx), raw_ts or "")) < _floorkey(_floor):
+                    continue          # 상위 N에 못 드는 매치
                 hits += 1
                 # codex rollout이 과거 히스토리를 재포함해 같은 발화가 나중 날짜로 재보고될 수
                 # 있다 (8/22 실측: 7/7 대화가 8/8 rollout에 중복). 시점 판정 오염 방지 태그.
@@ -340,6 +442,8 @@ def main():
                    help="서브에이전트 rollout도 검색 (부모 복제본은 접힘)")
     f.add_argument("--include-system", action="store_true",
                    help="시스템 주입 레코드도 표시 (플러그인 목록·AGENTS 전문·커맨드 래퍼 등)")
+    f.add_argument("--order", choices=["score","recent","oldest"], default="score",
+                   help="score=매치품질(기본) · recent=최신순 · oldest=파일순(이전 동작)")
     f.add_argument("--all-instances", action="store_true",
                    help="다른 인스턴스의 Codex 세션까지 검색 (기본은 이 인스턴스만 — DR-025)")
     sub.add_parser("sessions")
@@ -348,7 +452,7 @@ def main():
         srcs = None if (a.source in (None, "all")) else set(a.source.split(","))
         return find(a.pattern, a.role, a.since, a.around, a.max_hits, a.thinking, srcs,
                     include_agents=a.include_agents, include_system=a.include_system,
-                    all_instances=a.all_instances)
+                    all_instances=a.all_instances, order=a.order)
     if a.cmd == "sessions":
         return sessions()
     ap.print_help()
