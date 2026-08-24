@@ -53,11 +53,29 @@ bash setup.sh --name tinder-work --context work
 
 되돌리려면 만들어진 세 파일을 지우면 된다. 되돌릴 수 없는 일은 하지 않는다.
 
+## 2b. 검증 후방선 설치
+
+```bash
+bash tools/install_hooks.sh
+```
+
+`.git/hooks/`는 clone으로 따라오지 않는다. 이걸 한 번 돌려야 pre-commit 후방선이 생긴다.
+
+**왜 필요한가.** Stop 게이트는 `Write|Edit|NotebookEdit`만 본다. Bash 편집, 외부 writer,
+Codex 편집, 사용자 interrupt는 못 본다. pre-commit은 실제로 커밋되는 index를 검사해서
+그 구멍을 닫는다. (`--no-verify`는 여전히 우회다. 계약이 아니라 후방선이다.)
+
+이미 다른 pre-commit이 있으면 덮어쓰지 않고 멈춘다. 그때는 내용을 보고 직접 합쳐라.
+
 ## 3. 검증
 
 ```bash
 python3 tools/doctor.py
+python3 tools/gate.py baseline    # 이 리포의 현재 이슈를 기준선으로
 ```
+
+기준선을 안 세우면 첫 편집 턴에서 게이트가 "기준선이 없어서 지금 상태를 채택했다"고
+한 번 알린다. 그것도 정상이지만 미리 세워두는 편이 깔끔하다.
 
 **FAIL이 0이어야 세팅 완료다.** warn은 상황에 따라 정상이다 (예: codex CLI 미설치).
 

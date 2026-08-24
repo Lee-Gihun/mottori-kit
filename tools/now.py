@@ -178,8 +178,13 @@ def precompact():
 VOLATILE_RE = None  # lazy
 
 
-def check(memory_dir=None, root=None):
-    """드리프트 계기 — PRD §3.3의 5종 검출기. 반환: 경고 수."""
+def check(memory_dir=None, root=None, issues=False):
+    """드리프트 계기 — PRD §3.3의 5종 검출기. 반환: 경고 수.
+
+    `issues=True`면 게이트용 이슈 집합 계약으로 출력한다. 시간이 흘러서 저절로 생기는
+    이슈(`~` 접두)와 편집이 만든 이슈를 가른다 — 전자로 Stop을 막으면 이번 턴에 고칠 수
+    없는 경보가 되고, 못 고칠 경보는 곧 꺼진다 (codex 라운드 3).
+    """
     import re as _re
     root = root or M.ROOT
     # auto-memory는 전사 디렉토리 아래 산다. 전사 경로가 유도값이므로 이것도 유도값이다 (DR-025).
@@ -243,6 +248,18 @@ def check(memory_dir=None, root=None):
         elif a > lim:
             warns.append(f"[{label} 낡음] {a}일 전 (임계 {lim}일)")
 
+    if issues:
+        TIME_CAUSED = ("[부패 후보]", "[NOW 낡음]", "[journal 낡음]")
+        gated = 0
+        for w in warns:
+            if w.startswith(TIME_CAUSED):
+                print("~" + w)          # 자문용. 게이트는 안 문다
+            else:
+                print(w)
+                gated += 1
+        print(f"#issues {gated}")
+        return len(warns)
+
     for w in warns:
         print("⚠", w)
     print(f"check: 경고 {len(warns)}건" if warns else "check: 깨끗함")
@@ -261,7 +278,7 @@ def main():
         print(f"NOW.md 재생성 ({os.path.getsize(M.NOW_PATH)} bytes)")
         return r
     if cmd == "check":
-        n = check()
+        n = check(issues="--issues" in sys.argv)
         return 0 if n == 0 else 2
     if cmd == "threads":
         return threads()
