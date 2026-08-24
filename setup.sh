@@ -18,8 +18,8 @@ cd "$ROOT"
 NAME=""; CONTEXT=""; FORCE=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --name)    NAME="$2"; shift 2 ;;
-    --context) CONTEXT="$2"; shift 2 ;;
+    --name)    [ $# -ge 2 ] || { echo "--name 뒤에 값이 없다"; exit 1; }; NAME="$2"; shift 2 ;;
+    --context) [ $# -ge 2 ] || { echo "--context 뒤에 값이 없다"; exit 1; }; CONTEXT="$2"; shift 2 ;;
     --force)   FORCE=1; shift ;;
     *) echo "모르는 인자: $1"; exit 1 ;;
   esac
@@ -59,16 +59,34 @@ fi
 ORIGIN="$(git remote get-url origin 2>/dev/null || true)"
 
 python3 - "$NAME" "$CONTEXT" "$ORIGIN" <<'PY'
-import json, sys
+import json, os, shutil, sys
 name, context, origin = sys.argv[1], sys.argv[2], sys.argv[3]
+dst = "system/memory-config.json"
 cfg = json.load(open("templates/memory-config.json", encoding="utf-8"))
+
+# --force 재실행이 손으로 등록한 트랙·스레드·검사목록을 지우면 안 된다
+# (2026-08-24 적대 검증: 이전 판은 tracks=[]로 초기화해 조용히 날렸다).
+old = {}
+if os.path.exists(dst):
+    shutil.copy2(dst, dst + ".bak")
+    try:
+        old = json.load(open(dst, encoding="utf-8"))
+    except Exception as e:
+        print(f"     기존 config 파싱 실패, 백업만 남긴다: {e}")
+cfg["tracks"]  = old.get("tracks", [])
+cfg["threads"] = old.get("threads", [])
+if old.get("checks"):
+    cfg["checks"] = old["checks"]
+if old.get("personal_pointer"):
+    cfg["personal_pointer"] = old["personal_pointer"]
+
 cfg["instance"]["name"] = name
 cfg["instance"]["context"] = context
 cfg["instance"]["remote_allowlist"] = [origin] if origin else []
-cfg["tracks"] = []          # 트랙은 첫 작업이 생길 때 사람이 추가한다
-json.dump(cfg, open("system/memory-config.json", "w", encoding="utf-8"),
-          ensure_ascii=False, indent=2)
-print(f"  system/memory-config.json  ({name} / {context})")
+json.dump(cfg, open(dst, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+print(f"  {dst}  ({name} / {context})")
+if old:
+    print(f"     보존: 트랙 {len(cfg['tracks'])}개 · 스레드 {len(cfg['threads'])}개 · 백업 {dst}.bak")
 if origin:
     print(f"     origin 자동 등록: {origin}")
 PY

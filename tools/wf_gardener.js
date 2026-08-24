@@ -7,7 +7,12 @@ export const meta = {
 // PRD: system/PRD-session-memory.md §3.5. Report-only by contract: the gardener
 // proposes, the session + Gihun adjudicate. This mirrors the radar's
 // flag->adjudicate split, which kept 2 false alarms from becoming false fixes.
-const ROOT = require('path').resolve(__dirname, '..')   // DR-023
+const ROOT = require('path').resolve(__dirname, '..')   // DR-025
+// auto-memory 디렉토리는 인스턴스 경로에서 유도한다 (DR-025).
+// 맹글링 규칙은 tools/memlib.py transcript_dir()과 같아야 한다: 영숫자·하이픈 외 전부 '-'.
+const MEMDIR = require('path').join(
+  require('os').homedir(), '.claude', 'projects',
+  ROOT.replace(/[^A-Za-z0-9-]/g, '-'), 'memory')
 
 const REPORT_SCHEMA = {
   type: 'object',
@@ -61,7 +66,10 @@ DO, IN ORDER:
 
 3. Verify dossiers against the episodic record (THE core duty — a distillation that is not
    checked against raw is how memory rots politely):
-   - Read ${ROOT}/research/soi-dossier.md and ${ROOT}/jobs/relocation-dossier.md.
+   - First get the registry: python3 ${ROOT}/tools/now.py threads
+     (dossier paths are instance data and live in system/memory-config.json, never here).
+     If the registry is empty, skip this step and say so in the report.
+   - Read each registered dossier.
    - Pick the 3 most load-bearing factual claims in EACH (dates, numbers, who-said-what).
    - For each claim run a targeted query:
        python3 ${ROOT}/tools/recall.py find "<keyword>" --max 2 --around 1
