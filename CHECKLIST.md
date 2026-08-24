@@ -81,9 +81,10 @@ doctor는 훅 명령이 올바른 JSON을 뱉는 것까지 확인한다. 그 JSO
   bash tools/install_hooks.sh && python3 tools/gate.py baseline
 
   # 1) 깨진 참조를 만들면 커밋이 막히는가
-  printf '[없는것](does-not-exist-zz.md)\n' > _gatetest.md
-  git add _gatetest.md && git commit -m "막혀야 정상"   # 막혀야 한다
-  git reset -q HEAD _gatetest.md && rm _gatetest.md
+  #    경로가 system/ 아래인 이유: 리포 루트는 기본거부라 git add 자체가 안 된다
+  printf '[없는것](nope-zz.md)\n' > system/_gatetest.md
+  git add system/_gatetest.md && git commit -m "막혀야 정상"   # 막혀야 한다
+  git reset -q HEAD system/_gatetest.md && rm system/_gatetest.md
 
   # 2) 검사기가 죽으면 "이슈 0"이 아니라 차단인가
   python3 tools/gate.py dirty
