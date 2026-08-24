@@ -429,6 +429,52 @@ def c_symlinks():
     return WARN, f"추적 심볼릭 링크 {len(links)}개 (대상이 _private 밖)"
 
 
+def c_schema():
+    """config가 엔진보다 뒤처졌나 (KIT-DR-005).
+
+    엔진은 `git pull`로 오지만 **config는 인스턴스 소유라 안 온다.** 새 엔진이 새 필드를
+    요구하면 옛 config는 그 필드가 없고, 없는 채로 조용히 다른 동작을 한다.
+    2026-08-24 실측: instance.context가 없으면 밸브 검사가 personal로 간주해 원격을 안 본다.
+    """
+    import memlib as M
+    gap = M.schema_gap()
+    if gap is None:
+        return PASS, f"schema v{M.CONFIG_SCHEMA} (엔진 기대 v{M.SCHEMA_VERSION})"
+    cur, want, todo = gap
+    return FAIL, (f"config schema v{cur} < 엔진 기대 v{want} — 아래를 config에 반영해라:\n      "
+                  + "\n      ".join(todo)
+                  + f'\n      반영 후 "schema_version": {want} 로 올린다')
+
+
+def c_upstream():
+    """엔진 파일을 로컬에서 고쳤나 · 업스트림과 몇 커밋 차이인가.
+
+    엔진은 업스트림 소유다. 로컬에서 고치면 다음 pull에서 충돌하거나 조용히 되돌아간다.
+    고칠 게 있으면 인스턴스 소유 짝(rituals.local.md 등)에 쓰거나 업스트림에 알린다.
+    """
+    r = sh("git", "rev-parse", "--is-inside-work-tree")
+    if r.returncode:
+        return SKIP, "git 저장소 아님"
+    # 상류(엔진을 저작하는 인스턴스)에서는 엔진 수정이 정상이다. 표지는 kit_sync.py의 존재 —
+    # 내보내기 도구는 상류에만 산다 (kit_sync.py의 EXCLUDED 참조).
+    if os.path.exists(os.path.join(ROOT, "tools", "kit_sync.py")):
+        return SKIP, "여기가 상류다 (kit_sync 보유) — 엔진 수정이 정상"
+    # 추적 파일 중 수정된 것 = 전부 엔진 (인스턴스 소유는 추적 안 되므로)
+    mod = [l[3:] for l in sh("git", "status", "--porcelain").stdout.splitlines()
+           if l[:2].strip() in ("M", "MM", "AM", "D")]
+    up = sh("git", "rev-list", "--count", "HEAD..@{u}")
+    behind = up.stdout.strip() if up.returncode == 0 else None
+    msgs = []
+    if mod:
+        msgs.append("로컬에서 수정된 엔진 파일 — 다음 pull에서 충돌하거나 되돌아간다:\n      "
+                    + ", ".join(mod[:6]))
+    if behind and behind != "0":
+        msgs.append(f"업스트림보다 {behind}커밋 뒤처짐 — `git pull` 후 doctor를 다시 돌려라")
+    if msgs:
+        return WARN, "\n      ".join(msgs)
+    return PASS, ("엔진 로컬 수정 0" + (f" · 업스트림 동기" if behind == "0" else " · 업스트림 미설정"))
+
+
 def c_engine_drift():
     """킷과 인스턴스의 엔진이 갈라졌는가. 예방이 아니라 **탐지**다 (DR-027).
 
@@ -527,6 +573,8 @@ CHECKS = [
     ("밸브 · 원격 검사",        c_valve),
     ("밸브 · 연료 비추적",      c_ignored),
     ("밸브 · 추적 심볼릭링크",   c_symlinks),
+    ("엔진 · config 스키마",    c_schema),
+    ("엔진 · 업스트림",         c_upstream),
     ("엔진 · 킷 드리프트",      c_engine_drift),
 ]
 
