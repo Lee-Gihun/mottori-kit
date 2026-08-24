@@ -120,6 +120,7 @@ fi
 mkdir -p state
 python3 tools/now.py log "[system/state] 인스턴스 세팅: $NAME ($CONTEXT) — 킷 클론 후 초기화" >/dev/null
 python3 tools/now.py render >/dev/null
+python3 tools/gate.py baseline >/dev/null 2>&1 || true
 echo "  state/journal-$(date +%Y-%m).md · state/NOW.md"
 
 # --- 5. 검증 ---
