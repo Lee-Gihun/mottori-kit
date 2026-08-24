@@ -266,7 +266,7 @@ def _index_hash():
         return "-"
 
 
-def log_run(tool, result=""):
+def log_run(tool, result="", scope=None, ok=None):
     """검사기가 돌았다는 사실을 남긴다 (DR-033).
 
     왜 필요한가. 2026-08-24에 새 산출물(킷)을 만들고 `linkcheck`를 안 돌려 깨진 참조 27개가
@@ -286,9 +286,11 @@ def log_run(tool, result=""):
         # 커밋 후에 미스로 오판했다. 검사 대상은 커밋 ID가 아니라 **내용**이다.
         # `git ls-files -s`는 경로·모드·blob 해시라 내용이 바뀔 때만 바뀌고,
         # 커밋 자체로는 안 바뀐다. 그래서 사전 검증이 인정된다.
-        head = _index_hash()
+        # scope: 검사기가 실제로 읽은 것의 해시. 없으면 index 해시로 폴백.
+        # ok: 검사가 통과했나. **실패한 실행을 "검증됨"으로 세면 안 된다** (codex 라운드 3).
+        head = scope or _index_hash()
         with open(TOOL_RUNS, "a", encoding="utf-8") as f:
-            f.write(f"{ts}\t{tool}\t{head}\t{result}\n")
+            f.write(f"{ts}\t{tool}\t{head}\t{result}\t{'ok' if ok else 'ng' if ok is not None else '-'}\n")
     except Exception:
         pass          # 기록 실패가 검사를 막으면 안 된다
 
@@ -310,14 +312,21 @@ def verified_now(tool):
     return ran_at_head(tool, _index_hash())
 
 
-def ran_at_head(tool, head):
-    """이 상태 해시에서 그 도구가 돈 적이 있나."""
+def ran_at_head(tool, head, require_ok=True):
+    """이 상태 해시에서 그 도구가 **통과한** 적이 있나.
+
+    `require_ok`가 기본 True인 이유: 같은 상태에서 `broken=27`로 실패한 실행도
+    "기록이 있다"로 세면 검증됐다고 보고하게 된다 (codex 라운드 3 지적).
+    """
     if not os.path.exists(TOOL_RUNS) or not head or head == "-":
         return False
     for line in open(TOOL_RUNS, encoding="utf-8"):
         parts = line.rstrip("\n").split("\t")
         if len(parts) >= 3 and parts[1] == tool and parts[2] == head[:12]:
-            return True
+            if not require_ok:
+                return True
+            if len(parts) >= 5 and parts[4] == "ok":
+                return True
     return False
 
 
