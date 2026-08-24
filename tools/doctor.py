@@ -439,31 +439,38 @@ def c_symlinks():
 
 
 def c_missed_gate():
-    """**새 산출물이 커밋됐는데 그 전에 검사기가 안 돌았나** (DR-033).
+    """**지금 이 내용 상태가 검사를 통과한 적이 있나** (DR-033).
 
-    이것이 2026-08-24의 대표 미스다. 킷을 만들고 커밋했는데 `linkcheck`를 안 돌려
-    깨진 참조 27개가 "검증 완료"로 나갔다. 그때는 **안 돌렸다는 사실 자체가 관측되지
-    않았다** — 도구 실행에 기록이 없었기 때문이다.
+    2026-08-24의 대표 미스다. 킷을 만들고 커밋했는데 `linkcheck`를 안 돌려 깨진 참조 27개가
+    "검증 완료"로 나갔다. 그때는 **안 돌렸다는 사실 자체가 관측되지 않았다.**
 
-    자기보고가 아니다. git이 새 파일을 세고, 도구가 자기 실행을 남긴다. 둘 다 기계다.
+    자기보고가 아니다. git이 내용 상태를 해싱하고, 도구가 자기 실행을 남긴다. 둘 다 기계다.
+
+    **네 번 고쳤다. 매번 대리값을 재고 있었다** (codex 라운드 2가 마지막 둘을 잡았다).
+      1차 시각 비교 — doctor 내부 호출이 기록을 오염시켜 언제나 통과
+      2차 무기록 면죄 — 신규 인스턴스는 언제나 무기록이라 영원히 안 울림
+      3차 시각 파싱 — git은 `+09:00`, 로그는 `+0900`. 같은 초면 등호로 통과
+      4차 HEAD 해시 — **커밋 전에 제대로 검사한 것을 커밋 후 미스로 오판**했고,
+         수정만 하는 다음 커밋이 앞 미스를 가렸다
+    지금은 `git ls-files -s`의 해시다. 내용이 바뀔 때만 바뀌고 커밋 자체로는 안 바뀐다.
+    그래서 사전 검증이 인정되고, 나중 커밋이 앞 미스를 못 가린다.
     """
     import memlib as M
-    r = sh("git", "log", "-1", "--format=%cI")
-    if r.returncode or not r.stdout.strip():
-        return SKIP, "커밋 없음"
-    ct = r.stdout.strip()
+    if sh("git", "rev-parse", "--is-inside-work-tree").returncode:
+        return SKIP, "git 저장소 아님"
+    if not os.path.exists(M.TOOL_RUNS):
+        return WARN, "검사 실행 기록 자체가 없다 (계기 미가동)"
+    if M.verified_now("linkcheck"):
+        return PASS, "지금 내용 상태에서 linkcheck 통과 기록 있음"
+    # 미검증 상태다. 새 파일이 끼어 있을 때만 문제로 본다 — 단순 수정마다 울면 꺼진다.
     added = sh("git", "show", "--diff-filter=A", "--name-only", "--format=", "HEAD").stdout.split()
-    if not added:
-        return PASS, "마지막 커밋에 새 파일 없음"
-    last = M.last_run("linkcheck")
-    if last is None:
-        return WARN, (f"마지막 커밋이 새 파일 {len(added)}개를 넣었는데 linkcheck 실행 기록이 없다\n"
-                      "      (기록은 오늘 신설됐다. 이 경고는 다음 커밋부터 의미가 생긴다)")
-    if last < ct:
-        return FAIL, (f"새 파일 {len(added)}개를 커밋했는데 그 뒤로 linkcheck를 안 돌렸다:\n      "
-                      + ", ".join(added[:4])
-                      + f"\n      마지막 linkcheck {last[:16]} < 커밋 {ct[:16]}")
-    return PASS, f"새 파일 {len(added)}개 · 커밋 뒤 linkcheck 실행됨"
+    untracked_new = [l[3:] for l in sh("git", "status", "--porcelain").stdout.splitlines()
+                     if l.startswith(("A ", "??"))]
+    new_files = added + untracked_new
+    if not new_files:
+        return WARN, "지금 상태는 미검증 (새 파일은 없다) — `python3 tools/linkcheck.py`"
+    return FAIL, (f"새 파일 {len(new_files)}개가 있는 상태인데 linkcheck 기록이 없다:\n      "
+                  + ", ".join(new_files[:4]) + "\n      `python3 tools/linkcheck.py`")
 
 
 def c_agents_parity():
