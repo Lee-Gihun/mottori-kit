@@ -43,6 +43,17 @@ def is_real_path(t):
     if "..." in t or "·" in t: return False
     return True
 
+def strip_fences(text):
+    """펜스 코드블록을 지운다.
+
+    블록 안은 실행 예시지 참조가 아니다. 일부러 깨진 경로를 보여주는 검증 절차
+    (CHECKLIST의 게이트 시험)가 문서 자신을 FAIL 시키는 것을 실측하고 넣었다.
+    코드블록이 기여하던 실제 커버리지는 거의 없다 — 인라인 백틱(CODEREF)과
+    마크다운 링크는 블록 밖에서 잡히고, 블록 안의 셸 명령은 원래 두 패턴 어디에도
+    안 걸렸다."""
+    return re.sub(r"^```.*?^```", "", text, flags=re.S | re.M)
+
+
 def check():
     broken, checked = [], 0
     for rel in tracked_md():
@@ -50,7 +61,7 @@ def check():
             continue
         fp = os.path.join(TREE, rel)
         try:
-            text = open(fp, encoding="utf-8").read()
+            text = strip_fences(open(fp, encoding="utf-8").read())
         except Exception:
             continue
         base = os.path.dirname(fp)
