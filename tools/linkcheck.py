@@ -15,6 +15,14 @@ import memlib as M
 ROOT = M.ROOT
 INCLUDE_ALL = "--all" in sys.argv
 
+# `--tree DIR`: 파일 내용을 다른 트리에서 읽는다 (pre-commit이 index를 꺼내 검사할 때).
+# 설정과 제외 목록은 인스턴스 것을 그대로 쓴다 — 트리만 갈아끼우는 것이 요점이다.
+def _opt(name, default=None):
+    return sys.argv[sys.argv.index(name) + 1] if name in sys.argv[:-1] else default
+
+TREE = os.path.abspath(_opt("--tree", ROOT))
+FILELIST = _opt("--filelist")          # 주면 git 대신 이 파일에서 목록을 읽는다
+
 # 역사적/동결 문서: 옛 경로를 의도적으로 담고 있어 기본 제외.
 # 목록은 인스턴스 고유값이라 config에 산다 (DR-025) — 왜 제외하는지도 거기 적혀 있다.
 EXCLUDE_PREFIXES = tuple(M.check_config("linkcheck_exclude_prefixes", []))
@@ -23,6 +31,8 @@ LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 CODEREF = re.compile(r"`([A-Za-z0-9_\-./·]+\.(?:md|txt|tex|py|html|json|pdf|docx|sh))`")
 
 def tracked_md():
+    if FILELIST:
+        return [l for l in open(FILELIST, encoding="utf-8").read().splitlines() if l.strip()]
     out = subprocess.run(["git", "-C", ROOT, "ls-files", "--cached", "--others",
                           "--exclude-standard", "*.md"], capture_output=True, text=True).stdout
     return [l for l in out.splitlines() if l.strip()]
@@ -38,7 +48,7 @@ def check():
     for rel in tracked_md():
         if not INCLUDE_ALL and rel.startswith(EXCLUDE_PREFIXES):
             continue
-        fp = os.path.join(ROOT, rel)
+        fp = os.path.join(TREE, rel)
         try:
             text = open(fp, encoding="utf-8").read()
         except Exception:
@@ -56,12 +66,28 @@ def check():
         for t in targets:
             t2 = urllib.parse.unquote(t)
             checked += 1
-            if not (os.path.exists(os.path.join(base, t2)) or os.path.exists(os.path.join(ROOT, t2))):
+            # 존재는 TREE 먼저, 없으면 ROOT. `--tree`(index) 모드에서 gitignore된 대상
+            # (심볼릭 링크가 가리키는 `_private/` 등)이 통째로 깨진 것으로 보이지 않게
+            # 하려는 것이다. 그 대가로 "worktree엔 있고 index엔 없는 대상"은 못 잡는다.
+            cands = [os.path.join(base, t2), os.path.join(TREE, t2)]
+            if TREE != ROOT:
+                cands += [os.path.join(ROOT, os.path.dirname(rel), t2), os.path.join(ROOT, t2)]
+            if not any(os.path.exists(c) for c in cands):
                 broken.append((rel, t))
     return broken, checked
 
 if __name__ == "__main__":
     broken, checked = check()
+
+    if "--issues" in sys.argv:
+        # **이슈 집합 계약** (codex 라운드 3). 개수는 치환에 눈이 먼다 — 링크 하나 고치고
+        # 하나 깨면 같은 수가 된다. ID를 내보내고 게이트가 집합 차를 본다.
+        # 마지막 줄의 트레일러가 계약이다. 이게 없으면 "이슈 0"이 아니라 "측정 실패"다.
+        for rel, t in sorted(broken):
+            print(f"{rel} -> {t}")
+        print(f"#issues {len(broken)}")
+        sys.exit(0)
+
     scope = "ALL (동결 포함)" if INCLUDE_ALL else "라이브 문서 (동결 제외)"
     print(f"[linkcheck] scope={scope}, refs={checked}")
     for rel, t in sorted(broken):

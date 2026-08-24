@@ -75,6 +75,30 @@ doctor는 훅 명령이 올바른 JSON을 뱉는 것까지 확인한다. 그 JSO
   sleep 60 && tail -5 /tmp/codex.log
   ```
 - `[ ]` 슬래시 커맨드 `/now` `/recall` `/dossier` `/garden`이 뜨는가
+- `[기계]` **검증 게이트가 실제로 막는가.** 세 판 다 확인해라. 하나라도 통과하면 게이트가
+  없는 것과 같다.
+  ```bash
+  bash tools/install_hooks.sh && python3 tools/gate.py baseline
+
+  # 1) 깨진 참조를 만들면 커밋이 막히는가
+  printf '[없는것](does-not-exist-zz.md)\n' > _gatetest.md
+  git add _gatetest.md && git commit -m "막혀야 정상"   # 막혀야 한다
+  git reset -q HEAD _gatetest.md && rm _gatetest.md
+
+  # 2) 검사기가 죽으면 "이슈 0"이 아니라 차단인가
+  python3 tools/gate.py dirty
+  cp tools/linkcheck.py /tmp/lc.bak && printf 'def ((((\n' >> tools/linkcheck.py
+  echo '{}' | python3 tools/gate.py check     # "측정 불능" 차단이 떠야 한다
+  cp /tmp/lc.bak tools/linkcheck.py
+
+  # 3) 기준선이 깨지면 차단인가 (삭제는 채택 + 통보, 손상은 차단)
+  cp state/.gate-baseline.json /tmp/bl.bak && printf '{ 깨짐' > state/.gate-baseline.json
+  python3 tools/gate.py dirty && echo '{}' | python3 tools/gate.py check
+  cp /tmp/bl.bak state/.gate-baseline.json
+  ```
+  **게이트가 못 보는 것 (범위를 알고 써라).** Stop 훅은 `Write|Edit|NotebookEdit`만 본다.
+  Bash 편집, 외부 writer, Codex 편집은 pre-commit에서만 걸린다. interrupt로 끝난 턴은
+  다음 프롬프트의 `gate.py resume`이 회수한다. `git commit --no-verify`는 전부 우회한다.
 
 ## E. 백업 — 이 리포가 안 해주는 것
 
