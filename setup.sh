@@ -53,17 +53,36 @@ if [ "$CONTEXT" != "work" ] && [ "$CONTEXT" != "personal" ]; then
 fi
 
 # --- 2. config 생성 ---
-python3 - "$NAME" "$CONTEXT" <<'PY'
+# 클론해 온 origin은 킷 리포다. 엔진 업데이트를 받는 정상 경로이므로 allowlist에 넣는다.
+# 넣지 않으면 doctor가 매번 FAIL을 내고, 늑대소년이 된 검사는 아무도 안 본다.
+# **데이터 차단은 이 allowlist가 아니라 .gitignore와 pull-only 자격증명이 한다** (DR-002).
+ORIGIN="$(git remote get-url origin 2>/dev/null || true)"
+
+python3 - "$NAME" "$CONTEXT" "$ORIGIN" <<'PY'
 import json, sys
-name, context = sys.argv[1], sys.argv[2]
+name, context, origin = sys.argv[1], sys.argv[2], sys.argv[3]
 cfg = json.load(open("templates/memory-config.json", encoding="utf-8"))
 cfg["instance"]["name"] = name
 cfg["instance"]["context"] = context
+cfg["instance"]["remote_allowlist"] = [origin] if origin else []
 cfg["tracks"] = []          # 트랙은 첫 작업이 생길 때 사람이 추가한다
 json.dump(cfg, open("system/memory-config.json", "w", encoding="utf-8"),
           ensure_ascii=False, indent=2)
 print(f"  system/memory-config.json  ({name} / {context})")
+if origin:
+    print(f"     origin 자동 등록: {origin}")
 PY
+
+if [ -n "$ORIGIN" ] && [ "$CONTEXT" = "work" ]; then
+  cat <<EOF
+
+  주의: 이 인스턴스는 work인데 원격이 붙어 있다.
+    $ORIGIN
+  .gitignore가 state/·_private/·config를 추적하지 않으므로 데이터는 이 원격으로 못 간다.
+  다만 **엔진 코드는 밀 수 있다.** 회사에서 고친 코드가 개인 저장소로 나가면 안 된다면
+  pull-only 자격증명으로 다시 클론하거나 원격을 지워라 (CHECKLIST.md B).
+EOF
+fi
 
 # --- 3. 인스턴스 규약 ---
 if [ ! -f "$RULES" ]; then

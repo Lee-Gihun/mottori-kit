@@ -92,11 +92,19 @@ def c_config():
 
 
 def c_transcripts():
-    """전사 경로 유도 (DR-025). 여기가 조용히 틀리면 recall이 0건을 반환하고도 정상 종료한다."""
+    """전사 경로 유도 (DR-025). 여기가 조용히 틀리면 recall이 0건을 반환하고도 정상 종료한다.
+
+    부재의 의미가 인스턴스 나이에 따라 다르다. 갓 클론한 곳은 세션을 안 돌렸으니 없는 게
+    정상이고, 오래 쓴 곳에 없으면 유도가 틀린 것이다. 첫 설치마다 FAIL을 띄우면
+    사람이 FAIL을 무시하게 된다 — 계측기가 자기 신호를 죽이는 실패다.
+    """
     import memlib as M
     if not os.path.isdir(M.TRANSCRIPTS):
-        return FAIL, (f"유도된 전사 디렉토리가 없다: {M.TRANSCRIPTS}\n"
-                      "      이 인스턴스로 Claude Code 세션을 아직 안 돌렸거나, 경로 맹글링 규칙이 안 맞는다")
+        fresh = len(M.parse_journal()) < 5
+        msg = (f"없음: {M.TRANSCRIPTS}\n      ")
+        if fresh:
+            return WARN, msg + "이 디렉토리에서 Claude Code 세션을 아직 안 돌렸다 (신규 설치면 정상). 첫 세션 뒤 다시 확인해라"
+        return FAIL, msg + "journal은 쌓였는데 전사가 없다 — 경로 맹글링 규칙이 이 경로에 안 맞는다"
     n = len([f for f in os.listdir(M.TRANSCRIPTS) if f.endswith(".jsonl")])
     return (PASS if n else WARN), f"{M.TRANSCRIPTS} · 세션 {n}개"
 
