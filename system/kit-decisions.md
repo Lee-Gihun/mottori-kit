@@ -36,3 +36,29 @@ append-only. 형식: `### DR-NNN 제목 (YYYY-MM-DD · active|superseded_by:DR-M
 파이썬의 `except: pass`가 겹쳐 **이중 침묵**이 된 것이다. 설치돼 보이는데 죽은 상태가 만들어진다.
 기각 대안: 실패 시 stderr 노출 — 도구를 일부러 안 깐 정상 상황에서도 시끄러워진다.
 그래서 "훅 정의가 있는데 도구가 없다"는 경우에만 시끄럽게 한다.
+
+### DR-004 규약 문서를 엔진/인스턴스 쌍으로 가른다 (2026-08-24 · active)
+결정: `git pull`이 덮는 파일과 인스턴스가 쓰는 파일을 물리적으로 분리한다.
+`CLAUDE.md`↔`system/instance-rules.md` · `system/rituals.md`↔`system/rituals.local.md` ·
+`system/kit-decisions.md`↔`system/decisions.md`. 오른쪽은 전부 `.gitignore` 안이다.
+`setup.sh`가 없는 것만 씨앗에서 만든다.
+맥락: 킷은 **고치라고 만든 문서**와 **고치지 말라는 코드**를 같은 방식으로 배포했다. 코드는
+pull이 깨끗이 덮지만 규약 문서는 양쪽이 고치면 충돌한다. 실증: 인스턴스가 rituals에 한 줄
+추가하고 업스트림도 같은 파일을 고치면 divergent branches가 된다. DR 번호는 더 나쁘다 —
+킷 DR-004와 인스턴스 DR-004가 같은 파일에서 부딪힌다.
+검증: 인스턴스에 트랙·로컬의식·로컬DR·회사문서·journal을 쌓은 뒤 업스트림이 rituals와
+kit-decisions를 고치고 pull. **충돌 0, 새 교훈 도착, 인스턴스 것 전부 보존, linkcheck 0.**
+기각 대안: 병합 도구나 3-way merge — 문서는 자동 병합이 의미를 깨고, 사람이 매번 판정하게 된다.
+
+### DR-005 config 스키마 버전과 업그레이드 안내 (2026-08-24 · active)
+결정: `memory-config.json`에 `schema_version`을 둔다. 엔진이 새 필드를 요구하면
+`memlib.SCHEMA_VERSION`을 올리고 `SCHEMA_CHANGES`에 **무엇을 해야 하는지** 적는다.
+`doctor`가 뒤처짐을 FAIL로 내고 해야 할 일을 그대로 인쇄한다.
+`CHANGELOG.md`의 항목은 `[해야 함]`·`[알아둘 것]`·`[자동]` 셋으로 태깅한다.
+맥락: 엔진은 pull로 오는데 **config는 인스턴스 소유라 안 온다.** 2026-08-24에 `instance.context`를
+추가했을 때, 그 필드가 없는 옛 config는 밸브 검사가 personal로 간주해 **원격을 아예 안 보는**
+상태가 된다. 조용한 뒤처짐이고, 조용한 것이 이 리포에서 반복해 문제였다.
+부수 결정: `doctor`의 업스트림 검사는 상류에서 SKIP한다. 표지는 `tools/kit_sync.py`의 존재 —
+내보내기 도구는 상류에만 산다. 상류에서 엔진 수정은 정상이므로 경고하면 늑대소년이 된다.
+기각 대안: 자동 마이그레이션 — config는 사람이 읽고 판단할 값(어느 원격을 허용하나)을 담는다.
+기계가 채우면 그 판단이 사라진다.
