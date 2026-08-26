@@ -257,13 +257,25 @@ def c_commands():
 # ---------------------------------------------------------------- 도구 동작
 
 def c_tools_run():
-    """도구가 import·실행되는가. render는 생성물을 덮으므로 check만 돌린다."""
+    """도구가 import·실행되는가. render는 생성물을 덮으므로 check만 돌린다.
+
+    now.py check 는 **계약 경로(--issues)로 부른다.** 맨몸 경로는 경고 수를 종료코드로 쓰는
+    사람용 출력이라, 드리프트 경고 2건을 "도구가 안 돈다"로 오독해 FAIL이 떴다 (2026-08-26
+    실측). 종료코드는 "측정이 됐는가"만 뜻한다 — DR-039 계약 v2.
+    """
     bad = []
-    for args in (["tools/now.py", "check"], ["tools/linkcheck.py"], ["tools/coherence.py", "--quiet"]):
+    for args in (["tools/now.py", "check", "--issues"], ["tools/linkcheck.py"], ["tools/coherence.py", "--quiet"]):
         r = sh(sys.executable, *args)
         if r.returncode not in (0, 1):   # coherence·linkcheck는 문제 발견 시 1을 낸다
             bad.append(f"{args[0]} exit={r.returncode} {r.stderr.strip()[:80]}")
-    return (FAIL, " · ".join(bad)) if bad else (PASS, "now/linkcheck/coherence 실행 OK")
+        elif "--issues" in args:
+            # 종료코드만 보면 크래시를 못 잡는다 — 파이썬 미포착 예외도 1이고 그건 허용치 안이다.
+            # 계약 v2가 이미 답을 갖고 있다: `#issues N` 트레일러가 **마지막 줄**에 있어야
+            # 측정이 실제로 끝난 것이다 (DR-039). 2026-08-26 음성 시험에서 드러난 구멍.
+            last = (r.stdout.strip().splitlines() or [""])[-1]
+            if not re.match(r"^#issues \d+$", last):
+                bad.append(f"{args[0]} 트레일러 없음/비말미: {last[:40]!r}")
+    return (FAIL, " · ".join(bad)) if bad else (PASS, "now/linkcheck/coherence 실행 OK (트레일러 확인)")
 
 
 def c_links():
@@ -337,6 +349,26 @@ def c_ledger():
     m = re.search(r"문제: (\d+)건", r.stdout)
     bad = int(m.group(1)) if m else 0
     return (PASS if not bad else WARN), f"사실 {n}건 · 정합성 문제 {bad}건"
+
+
+def c_portrait():
+    """인물 원장이 굶고 있는가 (`system/person-ledger.md` · DR-042).
+
+    원장만 손으로 따로 써야 해서, 바쁜 구간에서 정확히 굶는다 — 그리고 바쁜 구간이 재료가
+    가장 많은 구간이라 손실이 가장 크다. 2026-08-26 실측: 3일 정지 동안 판정급 95건이
+    지나갔고, 그 사이 딥패스 6건이 낡은 원장을 근거로 돌았다. 기억에 맡긴 규칙은 안 돈다.
+    """
+    import portrait as P
+    if not os.path.exists(P.PORTRAIT):
+        return SKIP, "인물 원장 없음"
+    since = P._last_update()
+    if not since:
+        return WARN, "원장에 날짜가 없어 신선도를 못 잰다"
+    n = len([e for e in P._entries() if e[0] > since and e[2] in P.HARVEST_TYPES])
+    msg = f"마지막 {since} · 미수확 판정급 {n}건 (임계 {P.STALE_THRESHOLD})"
+    if n >= P.STALE_THRESHOLD:
+        return WARN, msg + " — python3 tools/portrait.py candidates"
+    return PASS, msg
 
 
 # --------------------------------------------------------- 단방향 밸브 (DR-026)
@@ -660,6 +692,7 @@ CHECKS = [
     ("도구 · 회귀 픽스처",      c_regression),
     ("도구 · recall 소스",     c_recall),
     ("도구 · 원장",            c_ledger),
+    ("도구 · 인물 원장",       c_portrait),
     ("밸브 · 원격 검사",        c_valve),
     ("밸브 · 연료 비추적",      c_ignored),
     ("밸브 · 추적 심볼릭링크",   c_symlinks),
