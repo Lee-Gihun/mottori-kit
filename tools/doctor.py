@@ -118,7 +118,10 @@ def c_state():
     if not os.access(M.STATE, os.W_OK):
         return FAIL, f"쓰기 불가: {M.STATE}"
     j = M.journal_path()
-    entries = M.parse_journal()
+    errors = []
+    entries = M.parse_journal(errors=errors)
+    if errors:
+        return FAIL, f"journal 손상 {len(errors)}건 · 첫 항목: {errors[0]}"
     return PASS, f"journal {'있음' if os.path.exists(j) else '없음(첫 log에 생성)'} · 엔트리 {len(entries)}줄"
 
 
@@ -126,7 +129,9 @@ def c_now():
     import memlib as M
     if not os.path.exists(M.NOW_PATH):
         return WARN, "NOW.md 없음 — `python3 tools/now.py render`로 생성"
-    return PASS, f"{os.path.getsize(M.NOW_PATH)} bytes"
+    size = os.path.getsize(M.NOW_PATH)
+    return ((PASS, f"{size} UTF-8 bytes (상한 {M.NOW_MAX_BYTES})") if size <= M.NOW_MAX_BYTES else
+            (FAIL, f"{size} bytes > 상한 {M.NOW_MAX_BYTES} — render/예산 계약 위반"))
 
 
 # ------------------------------------------------------------------- 훅
@@ -148,19 +153,44 @@ def _hook_cmds(runtime="claude"):
 
 
 def _wiring(runtime):
-    """훅 명령줄에 절대경로가 박혀 있으면 이식 즉시 죽는다 — 그게 이번 작업의 발단이다."""
+    """JSON declaration만 본다. trust/firing/effect를 이 결과로 승격하지 않는다."""
     cmds = _hook_cmds(runtime)
     if cmds is None:
         return (WARN, f"{'/'.join(HOOK_FILES[runtime])} 없음 — 이 런타임은 훅 미설치")
-    need = ("SessionStart", "PreCompact")
-    missing = [e for e in need if e not in cmds]
-    if missing:
-        return FAIL, f"훅 누락: {', '.join(missing)}"
+    import hookdiag
+    p = os.path.join(ROOT, *HOOK_FILES[runtime])
+    report = hookdiag.static_report(runtime, json.load(open(p, encoding="utf-8")))
+    essential = [role for role in ("injector", "side_effect") if not report[role]["declared"]]
+    if essential:
+        return FAIL, "필수 capability 누락: " + ", ".join(essential)
+    invalid = [role for role, row in report.items()
+               if row["declared"] and not row["command_valid"]]
+    if invalid:
+        return FAIL, "선언됐지만 command invalid: " + ", ".join(invalid)
     hard = [f"{e}: {c}" for e, cs in cmds.items() for c in cs
             if re.search(r"/(Users|home)/[^/]+/", c)]
     if hard:
         return FAIL, "절대경로 하드코딩 — 다른 머신에서 조용히 죽는다:\n      " + "\n      ".join(hard)
-    return PASS, f"{len(cmds)}종 · 경로 상대"
+    startup = "\n".join(cmds.get("SessionStart", []))
+    authority_markers = ("state/NOW.md", "_private/state/NOW.md", "unavailable")
+    missing_authority = [x for x in authority_markers if x not in startup]
+    if missing_authority:
+        return FAIL, ("SessionStart 실패 fallback이 public+local 권위 계약을 못 말한다: "
+                      + ", ".join(missing_authority))
+    detail = hookdiag.compact_summary(report) + " · command path=relative"
+    if runtime == "codex":
+        gaps = [r for r in ("observer", "enforcer") if not report[r]["declared"]]
+        guard_matchers = report["guard"].get("matchers", [])
+        dead_guard = bool(guard_matchers) and not any(
+            hookdiag.matcher_reachable(m) for m in guard_matchers)
+        if dead_guard:
+            detail += " · PreToolUse matcher가 Codex 도구명에 0-hit"
+        if gaps:
+            detail += " · repo gate lifecycle 부재(후방선=pre-commit)"
+        return (WARN if gaps or dead_guard else PASS), detail
+    missing_gate = [r for r in ("observer", "enforcer", "recovery") if not report[r]["declared"]]
+    return ((WARN, detail + " · Claude gate lifecycle 누락: " + ", ".join(missing_gate))
+            if missing_gate else (PASS, detail))
 
 
 def c_hook_wiring():
@@ -171,8 +201,35 @@ def c_hook_wiring_codex():
     return _wiring("codex")
 
 
+def c_hook_codex_armed():
+    """Official hooks/list를 통해 enabled/trustStatus/currentHash까지만 확인한다."""
+    try:
+        import hookdiag
+        entry = hookdiag.codex_hooks_list(ROOT)
+        report = hookdiag.codex_runtime_report(entry.get("hooks", []))
+    except FileNotFoundError as e:
+        return SKIP, str(e)
+    except Exception as e:
+        return WARN, f"hooks/list 조회 불가: {type(e).__name__}: {e}"
+    required = [r for r in ("injector", "side_effect") if not report[r]["armed"]]
+    detail = hookdiag.compact_summary(report)
+    invalid = [role for role, row in report.items()
+               if row["declared"] and not row["command_valid"]]
+    if invalid:
+        return FAIL, detail + " · command invalid: " + ", ".join(invalid)
+    if entry.get("errors"):
+        return FAIL, detail + f" · loader errors={entry['errors']}"
+    if required:
+        return FAIL, detail + " · unarmed: " + ", ".join(required)
+    if report["guard"]["declared"] and not report["guard"]["matcher_reachable"]:
+        return WARN, detail + " · guard armed지만 matcher-unreachable"
+    return PASS, detail
+
+
 def c_hook_codex_run():
-    """Codex 훅은 CLAUDE_PROJECT_DIR을 못 받는다 — git root 폴백이 실제로 도는지 잰다.
+    """Codex hook command만 직접 실행한다. dispatcher/trust/model effect 검사는 아니다.
+
+    Codex 훅은 CLAUDE_PROJECT_DIR을 못 받는다 — git root 폴백이 실제로 도는지 잰다.
     서브디렉토리에서도 인스턴스 루트를 잡아야 한다 (여기가 틀리면 조용히 남의 NOW를 읽는다)."""
     cmds = _hook_cmds("codex") or {}
     cs = cmds.get("SessionStart") or []
@@ -193,7 +250,7 @@ def c_hook_codex_run():
         return FAIL, f"인스턴스 안에서 주입 실패: {outs}"
     if outs["리포 밖"] != "실패분기":
         return WARN, "리포 밖에서도 주입됐다 — git root 폴백이 엉뚱한 곳을 잡을 수 있다"
-    return PASS, f"루트·서브디렉토리 주입 OK · 리포 밖 실패분기 OK"
+    return PASS, "command-valid only · 루트/서브디렉토리 JSON OK · dispatcher/fired/effect=unknown"
 
 
 def c_hook_success():
@@ -211,7 +268,7 @@ def c_hook_success():
         return FAIL, f"유효 JSON이 아니다: {e} · stdout[:120]={r.stdout[:120]!r}"
     if ctx.startswith("[kit]"):
         return FAIL, "실패 분기로 떨어졌다 — now.py가 안 돈다"
-    return PASS, f"{len(ctx)} chars 주입 예정"
+    return PASS, f"command-valid only · {len(ctx.encode('utf-8'))} UTF-8 bytes · fired/effect=unknown"
 
 
 def c_hook_failure():
@@ -228,6 +285,9 @@ def c_hook_failure():
         ctx = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
     except Exception as e:
         return FAIL, f"실패 분기가 유효 JSON이 아니다: {e}"
+    missing = [x for x in ("state/NOW.md", "_private/state/NOW.md", "unavailable") if x not in ctx]
+    if missing:
+        return FAIL, "실패 분기의 권위 안내 누락: " + ", ".join(missing)
     return (PASS if "[kit]" in ctx else WARN), "실패 시 모델에게 경고가 주입된다"
 
 
@@ -244,6 +304,21 @@ def c_global_hook():
     has = any("date" in h.get("command", "") for b in ups for h in b.get("hooks", []))
     return (PASS, "시각 주입 훅 있음") if has else \
            (WARN, "시각 주입 훅 없음 — 모델이 '오늘'을 모른다. SETUP.md의 전역 설정 절 참조")
+
+
+def c_precommit_install():
+    """active hook path의 설치본을 tracked template과 exact 비교한다. 절대 복구하지 않는다."""
+    script = os.path.join(ROOT, "tools", "install_hooks.sh")
+    if not os.path.exists(script):
+        return WARN, "installer 없음"
+    r = sh("bash", script, "--check")
+    detail = (r.stdout + r.stderr).strip().splitlines()
+    first = detail[0] if detail else f"exit={r.returncode}"
+    if r.returncode == 0 and first.startswith("current:"):
+        return PASS, first
+    if first.startswith("missing:"):
+        return WARN, first + " · `bash tools/install_hooks.sh --repair` 필요"
+    return FAIL, first
 
 
 def c_commands():
@@ -322,13 +397,25 @@ def c_regression():
     검출기가 살아 있는지를 재는 유일한 자동 수단인데 검사 목록에 없었다.
     계측기가 자기 옆의 계측기를 안 보고 있었던 셈이다.
     """
-    r = sh(sys.executable, "tools/test_memcheck.py")
-    if r.returncode == 0:
-        n = r.stdout.count("✓ 검출")
-        return PASS, f"픽스처 {n}개 전부 검출"
-    fails = [l.strip() for l in r.stdout.splitlines() if "미검출" in l or "실패" in l]
-    return FAIL, ("과거 사고 재현 픽스처가 실패한다 — 검출기가 죽었을 수 있다:\n      "
-                  + "\n      ".join(fails[:4] or [(r.stdout + r.stderr)[:150]]))
+    scripts = ["test_memcheck.py", "test_state_runtime.py", "test_hook_runtime.py"]
+    # kit_sync.py는 상류에만 있는 표지다. 배포 킷에서는 installer와 그 fixture가 둘 다
+    # distribution contract이므로 한쪽을 지워 3-suite green으로 축소하는 경로를 막는다.
+    if not os.path.isfile(os.path.join(ROOT, "tools", "kit_sync.py")):
+        required = ("setup.sh", os.path.join("tools", "test_setup_migration.py"))
+        missing = [path for path in required if not os.path.isfile(os.path.join(ROOT, path))]
+        if missing:
+            return FAIL, "배포 킷 회귀 구성 누락: " + ", ".join(missing)
+        scripts.append("test_setup_migration.py")
+    passed, bad = [], []
+    for script in scripts:
+        r = sh(sys.executable, "tools/" + script)
+        if r.returncode == 0:
+            passed.append(script)
+        else:
+            tail = (r.stdout + r.stderr).strip().splitlines()[-3:]
+            bad.append(script + ": " + " | ".join(tail))
+    return ((FAIL, "회귀 실패:\n      " + "\n      ".join(bad)) if bad else
+            (PASS, f"suite {len(passed)}개 green: " + ", ".join(passed)))
 
 
 def c_recall():
@@ -559,6 +646,9 @@ def c_schema():
     2026-08-24 실측: instance.context가 없으면 밸브 검사가 personal로 간주해 원격을 안 본다.
     """
     import memlib as M
+    if M.CONFIG_SCHEMA > M.SCHEMA_VERSION:
+        return FAIL, (f"config schema v{M.CONFIG_SCHEMA} > 엔진 v{M.SCHEMA_VERSION} — "
+                      "옛 엔진이 새 privacy 필드를 무시할 수 있다. 엔진부터 갱신해라")
     gap = M.schema_gap()
     if gap is None:
         return PASS, f"schema v{M.CONFIG_SCHEMA} (엔진 기대 v{M.SCHEMA_VERSION})"
@@ -681,10 +771,12 @@ CHECKS = [
     ("배선 · NOW.md",          c_now),
     ("훅 · 배선 claude",        c_hook_wiring),
     ("훅 · 배선 codex",         c_hook_wiring_codex),
-    ("훅 · codex 실행",         c_hook_codex_run),
-    ("훅 · 성공 분기",          c_hook_success),
+    ("훅 · codex armed",        c_hook_codex_armed),
+    ("훅 · codex 명령 유효성",   c_hook_codex_run),
+    ("훅 · claude 명령 유효성",  c_hook_success),
     ("훅 · 실패 분기",          c_hook_failure),
-    ("훅 · 전역 시각 주입",     c_global_hook),
+    ("훅 · claude 전역 시각",   c_global_hook),
+    ("훅 · pre-commit 설치본",  c_precommit_install),
     ("훅 · 슬래시 커맨드",      c_commands),
     ("도구 · 실행",            c_tools_run),
     ("도구 · 링크 무결성",      c_links),
@@ -706,12 +798,10 @@ CHECKS = [
 # 자동 검사 불가 — 이 목록이 이 도구의 반증 가능 칸이다.
 # 여기 있는 것을 "확인했다"고 말하면 거짓이다. 사람이 해야 한다.
 MANUAL = [
-    ("SessionStart 훅이 실제로 모델 컨텍스트에 들어갔는가",
-     "훅 출력은 모델에게만 가고 셸로 안 온다. doctor는 '유효 JSON을 뱉는다'까지만 안다.\n"
-     "     카나리아 법 (2026-08-24 실측으로 작동 확인):\n"
-     "       python3 tools/now.py log \"[system/artifact] 카나리아 ZEBRA-7741\"\n"
-     "       claude -p \"NOW 파일을 읽지 말고, 주입된 내용만으로 답해라. 카나리아 문자열은?\"\n"
-     "     문자열이 그대로 나오면 주입된 것이다. 파일을 읽으러 가면 훅이 안 도는 것이다."),
+    ("SessionStart dispatcher와 모델 effect가 실제로 이어졌는가",
+     "routine doctor는 declared/command-valid/armed까지만 잰다. 명시적으로 비용을 쓸 때만\n"
+     "       python3 tools/hook_canary.py --all\n"
+     "     양 런타임의 fresh positive와 hooks-disabled negative를 함께 통과해야 fired/effect를 검증한다."),
     ("PreCompact 훅이 컴팩션 때 실제로 도는가",
      "컴팩션을 인위적으로 못 일으킨다. 확인법: 다음 컴팩션 후 state/journal-*.md 끝에 "
      "'[system/state] 컴팩션 발생' 줄이 붙었는지 본다."),

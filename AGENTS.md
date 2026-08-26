@@ -23,11 +23,12 @@
    *(Why: 증빙·원료·개인 영역은 복구 불가 — 한 번의 실수가 파산인 영역. 그리고 국경은
    규율이 아니라 구조로 막는다 — `.gitignore`와 `tools/doctor.py`의 밸브 검사가 그 집행부다.)*
 
-2. **상태 정본 = `state/NOW.md`.** 세션 시작·재개·컴팩션 후 NOW를 확인한다 (훅이 주입하면
-   그것을, 주입이 없으면 직접 읽는다). 컴팩션 요약이나 기억의 상태 단언과 충돌하면 **NOW가
-   이긴다.** 결정·국면 변화·정정·교훈은 발생한 그 턴에
-   `python3 tools/now.py log "[track/type] 한 줄"`. *(Why: 상태를 대화에 두면 압축이 삼킨다 —
-   낡은 스냅샷이 일주일간 정본 행세한 사고 실측.)*
+2. **상태 정본 = public NOW + local overlay.** 세션 시작·재개·컴팩션 후 훅이 합친 view를
+   확인한다. 훅이 없으면 `state/NOW.md`와, 존재할 때 `_private/state/NOW.md`를 함께 읽는다.
+   public만 있으면 local 상태는 **unavailable**이지 "없음"이 아니다. 컴팩션 요약·기억과
+   충돌하면 이 view가 이긴다. 결정·국면·정정·교훈은 그 턴에 `python3 tools/now.py log
+   "[track/type] 한 줄"`; 개인·회사 유래 또는 불확실하면 `log --private`로 내린다. *(Why:
+   상태를 대화에 두면 압축이 삼키고, local 사건을 public NOW에 섞으면 Git이 국경을 우회한다.)*
 
 3. **단언 전 조회, 모르면 모른다.** 개인 사실 = `python3 tools/rec.py find` + 핫셋 · 과거 발화
    원문 = `python3 tools/recall.py find` · 처방 전엔 "이미 뭘 했는지"부터 묻는다. 기훈의

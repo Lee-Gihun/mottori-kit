@@ -116,10 +116,13 @@ def _lock(timeout=150):
         f.close()
 
 
-def _issues(cmd, cwd=None):
+def _issues(cmd, cwd=None, instance=None):
     """검사기 하나 → 게이트가 무는 ID 집합. 측정 실패면 None."""
     env = dict(os.environ, MOTTORI_INTERNAL_RUN="1")
-    env.pop("MOTTORI_INSTANCE", None)
+    if instance is None:
+        env.pop("MOTTORI_INSTANCE", None)
+    else:
+        env["MOTTORI_INSTANCE"] = instance
     try:
         r = subprocess.run(cmd, capture_output=True, text=True,
                            cwd=cwd or M.ROOT, env=env, timeout=120)
@@ -147,7 +150,17 @@ def measure(tree=None, filelist=None):
         c = list(cmd)
         if tree and name == "linkcheck":
             c += ["--tree", tree] + (["--filelist", filelist] if filelist else [])
-        out[name] = _issues(c)
+        if tree and name == "now-check":
+            # pre-commit은 worktree가 아니라 index에서 꺼낸 엔진과 상태를 검사해야 한다.
+            # 인스턴스 저장소(visa)는 config/state가 tracked라 extracted tree가 정본이고,
+            # 배포 킷은 둘 다 의도적으로 ignored라 staged 엔진을 현재 local instance에 대입한다.
+            staged_now = os.path.join(tree, "tools", "now.py")
+            staged_config = os.path.join(tree, "system", "memory-config.json")
+            instance = tree if os.path.isfile(staged_config) else M.ROOT
+            c = [sys.executable, staged_now, "check", "--issues", "--portable"]
+            out[name] = _issues(c, cwd=instance, instance=instance)
+        else:
+            out[name] = _issues(c)
     return out
 
 

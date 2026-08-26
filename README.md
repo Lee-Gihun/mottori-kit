@@ -13,8 +13,9 @@ Claude Code와 Codex가 같은 규약 위에서 돌고, 컴팩션을 넘어 작�
 
 **상태 손실.** 낡은 스냅샷이 정본 행세를 한다. 실측: 8/8자 메모리가 8/15까지 현재 상태로
 행세했고, 사람이 직접 정정해줘야 했다.
-→ 상태를 대화가 아니라 **디스크**에 둔다. `state/journal-*.md`에 사건이 append되고
-`state/NOW.md`가 거기서 재생성되며, SessionStart 훅이 매 세션 시작에 자동 주입한다.
+→ 상태를 대화가 아니라 **디스크**에 둔다. 명시된 public track은 `state/journal-*.md`와
+`state/NOW.md`로, 미등재·`--private` 사건은 `_private/state/`의 local journal과 overlay로 간다.
+SessionStart 훅은 두 NOW를 합쳐 주입하며, local이 없는 clone은 그 상태를 `unavailable`로 밝힌다.
 
 **깊이 손실.** 컴팩션은 *지금 하던 일*의 연속성을 위해 요약하므로 다른 스레드의 논증 결이
 구조적으로 뭉개진다. 며칠 전 결론에 도달했던 주제로 돌아가면 얕은 얘기를 다시 한다.

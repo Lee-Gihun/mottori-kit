@@ -73,8 +73,8 @@
 | 감각·단기기억 | 세션 컨텍스트 | 휘발, 압축됨. **캐시일 뿐** |
 | **에피소드 기억** | 전사 원장 (`~/.claude/projects/…/*.jsonl`) | 이미 존재(373MB). **회상 도구만 부재** → recall.py |
 | 의미 기억 (내구재) | auto-memory `user`/`feedback` + `system/lenses` + 프레임 문서 | 반감기 김. 현행 유지 |
-| **작업 기억 포인터** | `state/NOW.md` (생성물) | "지금 무엇이 살아 있나" |
-| 사건 기록 | `state/` 아래 `journal-YYYY-MM.md` (append) | 컴팩션 독립 추출 경로 |
+| **작업 기억 포인터** | `state/NOW.md`(공유 가능 projection) + local private overlay(로컬 overlay) | 둘을 합친 local view가 "지금 무엇이 살아 있나" |
+| 사건 기록 | `state/`와 `_private/state/`의 월별 journal (public/local) | 컴팩션 독립 추출 경로, 쓰기 시점 격리 |
 | **스레드 장기 상태** | 스레드 서류철 (§3.3) | 깊이의 착지점 — 증상 7·8의 해독제 |
 | 개인 사실 | `_private/ledger` (rec.py) | 불가침, 기존대로 |
 | 1차 사고 | 사건 시점 기록 (journal·서류철 델타) | 참여자(세션)가 그 자리에서 |
@@ -87,11 +87,12 @@
 ```
 [개인 사실]   _private/ledger (rec.py)                     ← 불가침
 [에피소드]    전사 원장 *.jsonl                            ← 원문. 최종 검증처
-[작업 사건]   state/journal-YYYY-MM.md                     ← append-only
+[작업 사건]   state/의 월별 journal + _private/state/의 월별 journal  ← append-only, public/local 분리
 [스레드 깊이] 스레드 서류철 (지정된 정본 1개/스레드)        ← 손으로 쓰는 진실
 [트랙 상태]   트랙 정본 (tracker.md, TODO.md, …)
 ──────────── 이하 생성물·포인터·캐시 ────────────
-[생성물]      state/NOW.md · START_HERE 온도판
+[생성물]      state/NOW.md(public projection) + _private/state/NOW.md(local overlay)
+              · START_HERE 온도판
 [포인터]      auto-memory의 상태류 (내용 금지)
 [캐시]        세션 컨텍스트 · 컴팩션 요약 — 상태·깊이 단언 모두 잠정,
               충돌 시 위 계층이 이긴다
@@ -106,7 +107,7 @@
 |---|---|---|
 | **기훈이 무엇을 말했나** | 전사 원장 원문 | 그의 발화가 원점이다. 요약·기억은 파생물 |
 | **기훈이 무엇을 결정했나** | `system/decisions.md` (DR) + journal `decision` | 발화는 탐색을 포함한다. 결정은 따로 확정된 것만 |
-| **지금 상태가 무엇인가** | `state/NOW.md` (생성물) | 컴팩션 요약이나 기억의 상태 단언과 충돌하면 NOW가 이긴다 |
+| **지금 상태가 무엇인가** | 훅이 합친 public NOW + local overlay | 둘이 충돌하면 scope가 더 좁은 local이 이긴다. overlay 부재는 반드시 명시한다 |
 | **개인 사실이 무엇인가** | `_private/ledger` | 불가침. 조회 없이 단언 금지 |
 | **어느 스레드가 어디까지 갔나** | 그 스레드의 서류철 | 손으로 쓰는 진실. journal은 사건만 |
 
@@ -121,12 +122,48 @@
 `tools/recall.py`가 이 셋을 기본으로 제외한다 (`--include-agents`, `--include-system`으로 복원).
 런타임이 달라도 이 규칙은 같다. 파일 형식만 다르고 오염의 종류는 동일하다.
 
-### 3.2 `state/` — v1 그대로 (journal + NOW + now.py)
+### 3.2 상태 ledger — public projection + local overlay [KIT-DR-006]
 
-v1 §3.2~3.4 유지: journal 한 줄 문법(type 6종: decision/state/artifact/correction/lesson/switch),
-NOW.md 생성 전용 + 자기 신선도 표시, `now.py log|render|check`, 의식 4종
-(사건 즉시 기록 · 전환 기록 · **컴팩션 복구 첫 수 = NOW 읽기** · 재편 후 check).
-상세는 이 문서 v1 이력 참조 — 반복하지 않는다.
+journal 한 줄 문법과 `now.py log|render|check` CLI는 유지하되, 기록 전에 track을
+`journal_visibility.public_tracks`로 분류한다. 명시된 track만 추적 journal로 가고,
+`personal`을 포함한 미등재 track은 `_private/state/`로 내려간다. `--private`는 public track도
+강제로 내리는 **하향 override만** 제공한다. 설정 부재·파손·schema 불일치는 전부 local로
+fail-close하며, quiet `precompact`를 포함한 mutation 명령마다 raw config 값을 싣지 않은 stderr
+경고를 정확히 한 번 낸다. 분류는 내용 판정을 대신하지 않는다. private 사건에서 파생된
+`system/*`도 호출자가 `--private`로 내려야 하고, public 승격은 공유 가능한 capsule을 새로
+기록하는 사람의 판정이다. migration 이전의 추적 journal은 `legacy_cutoff`와 그 순간 고정한
+`legacy_public_tracks`로 판정한다. 이후 allowlist 확대는 과거 private-derived body에 소급되지 않는다.
+
+`state/NOW.md`는 공유 가능한 상태의 정본 projection, local private overlay는 로컬 overlay다.
+SessionStart는 둘을 명시적으로 합쳐 local authoritative view를 만든다. overlay가 없는 clone은
+그 사실을 `unavailable`로 말하며, public projection만 보고 전체 상태라고 단언하지 않는다.
+registry 일부가 invalid면 `degraded`, local journal이 corrupt면 `unavailable/corrupt`로 구분한다.
+local render 실패는 유효한 public injection까지 없애지 않고 public-only degraded view를 반환한다.
+private 기록은 추적 journal과 public NOW의 bytes를 바꾸지 않는다. private thread 이름·dossier도
+추적 config가 아니라 local private thread registry에 두고 public projection에서 제외한다.
+local registry identity는 private scope의 입력일 뿐 public render/log를 막지 않는다. public key와
+충돌하거나 local 안에서 중복된 key는 skip하고 registry를 `degraded`로 내린다.
+
+한 repo-wide lock이 journal append → flush/fsync → 해당 snapshot render → same-filesystem temp
+fsync → atomic replace를 직렬화한다. append만 또는 publish만 잠그면 stale last-writer가
+가능하므로 둘은 한 transaction이다. hook reader는 lock 없이 old-or-new 완성본만 읽고,
+journal이 snapshot보다 새로우면 lock을 얻어 재생성한다. renderer는 import 시점 config·source와,
+private scope에서만 local registry의 content identity를 고정한다. journal·canonical을 포함한 동적 입력의 render 전후와
+atomic replace 직후 fingerprint가 같을 때만 publish를 확정한다. post-publish 검증이 실패하면 이전
+snapshot의 존재·bytes·mode·mtime을 먼저 복원하고, log transaction은 방금 append와 journal mtime도
+rollback해 안전한 retry가 중복 사건이나 stale cursor를 만들지 않게 한다. 이 검증 없이 live 새 bytes를
+marker에 쓰면 구 코드 산출물을 새 코드가 만든 것으로
+false-certify할 수 있다. malformed 사건 줄은 조용히 버리지 않는다.
+freshness의 `N일 전`은 elapsed 24시간이 아니라 local calendar-date 차이로 계산해 marker의
+local-date clock과 같은 경계에서만 바뀐다. live snapshot marker는 freshness label 때문에
+mtime까지 묶는다. Git index에는 mtime이 없으므로
+pre-commit은 staged config·journal·canonical·renderer의 content-only fingerprint와, marker 자체만
+placeholder로 정규화한 snapshot 전체 bytes를 함께 묶은 content marker를 검사한다. 따라서
+checkout-index의 새 mtime은 허용하면서 staged NOW 본문 단독 변조는 거부한다.
+
+기존 추적 history는 이 변경으로 지워지지 않는다. 새 renderer는 legacy `personal`/미등재 사건을
+public NOW에서 재출력하지 않지만, 이미 reachable한 journal/blob 정리는 별도 파괴 작업이며
+이 결정의 승인 범위가 아니다.
 
 ### 3.3 스레드 서류철 (dossier) — 깊이의 착지점 [신설]
 
@@ -231,7 +268,8 @@ auto-memory 메커니즘 개조 없음 · journal에 대화 미러링 없음 · 
 4. **깊이 복원 — 주제 복귀 시 이전 확정 결론·기각 경로를 서류철+recall로 재진술. 기훈이
    "피상적"이라 느끼는 복귀가 관측되면 그 자체를 실패 사례로 journal에 기록하고 원인 분석**
 5. **recall known-item 리콜 — "그때 그 얘기" 질의 실패를 기록, 3회 누적 시 §3.7 게이트 발동**
-6. 의식 원가 ≤ 툴콜 1회, NOW ≤ 2KB, 세션 시작 로드 총량 현행 이하 (다이어트로 오히려 감소)
+6. 의식 원가 ≤ 툴콜 1회, public NOW와 SessionStart additionalContext 각각 ≤ 6,000 UTF-8 bytes.
+   주입은 public/local 양쪽에 최소 예산을 보장하고 절단 사실을 표시
 7. **규칙 준수율 — 다이어트 후 상시 규칙 위반이 체감 감소하는가 (기훈 관측 기준)**
 
 ## 5. 단계별 목표 (실행 계약은 §12)
@@ -287,7 +325,7 @@ memory-map.html (`system/` 아래, P3 예정) 생성기(§11).
 ## 7. 결정 필요 사항 (v1 D1~D5 + v2 추가)
 
 - **D1~D5**: v1과 동일 (state/ 위치=루트, journal=md 문법, START_HERE 온도판=포인터,
-  journal git 추적, 소급=이번 주) — *제안 유지*
+  **public journal만** git 추적, 소급=이번 주) — D4는 KIT-DR-006으로 범위를 좁힘
 - **D6. 서류철 규약** — 기존 문서 지정 방식(제안) vs 전용 dossier 파일 신설. 첫 지정 3개:
   SOI / 리로케이션 / 레이더.
 - **D7. recall 검색 범위** — 이 프로젝트 세션만(제안) vs `~/.claude/projects` 전체.
@@ -324,8 +362,11 @@ memory-map.html (`system/` 아래, P3 예정) 생성기(§11).
 하나**이고, now.py·recall.py·정원사·memory-map이 전부 그것을 import한다.
 
 정의 대상 (초안 — 구현 시 memlib에 최종 기입, 변경은 DR로):
-- **journal 줄:** `- <ISO8601+09:00> [<track>/<type>] <한 줄> (→ ref)*` · type ∈ {decision,
+- **journal 줄:** `- <ISO8601+09:00> [<track>/<type>] <한 줄> (→ ref)*` · timezone 필수 · type ∈ {decision,
   state, artifact, correction, lesson, switch} · ref ∈ {rec:, dr:, paper id, 경로}
+- **journal visibility:** 별도 `journal_visibility.public_tracks` allowlist. 미등재·설정 오류는 local,
+  `--private`만 하향 override. legacy는 cutoff+당시 public set으로 고정해 소급 승격을 금지한다.
+  track 온도판 레지스트리와 보안 분류 레지스트리를 겸용하지 않는다
 - **NOW 섹션 (고정 순서):** 생성시각+입력 신선도 → 트랙 온도판 → 살아 있는 스레드(서류철 링크)
   → 열린 루프 → 최근 사건 N줄 → 정본 포인터
 - **서류철 다섯 칸 헤더:** `## 현재 위치` `## 확정 (+왜)` `## 기각 (+왜)` `## 미결` `## 다음 수`
@@ -342,11 +383,14 @@ memory-map.html (`system/` 아래, P3 예정) 생성기(§11).
 
 | 훅 | 동작 | 왜 |
 |---|---|---|
-| **SessionStart** (startup·resume·compact) | `state/NOW.md` 내용을 additionalContext로 주입 (+신선도 경고) | 컴팩션 복구 첫 수를 **규율에서 인프라로** — RC3·RC4의 구조적 차단 |
+| **SessionStart** (startup·resume·compact) | public NOW + local overlay를 6,000 UTF-8 bytes 안에서 구조적으로 합쳐 주입. overlay의 available·degraded·unavailable/corrupt를 구분하고 local 실패 때도 public은 주입 | 컴팩션 복구 첫 수를 **규율에서 인프라로** — RC3·RC4의 구조적 차단 |
 | **PreCompact** | `now.py log "[system/state] 컴팩션 발생"` 기록 | 압축 시점이 journal에 남아, 사후 세션이 "언제부터 요약인지" 안다 |
 | UserPromptSubmit | (기존 타임스탬프 훅 유지, 추가 없음) | 노이즈 금지 |
 
-전 훅 fail-safe(`|| true`) + 즉시 반환. 훅은 백업이지 유일 경로가 아니다.
+전 훅 fail-safe + 즉시 반환. 다만 내부 실패는 non-zero로 돌려 shell fallback이 실제로 발화해야
+한다. 훅은 백업이지 유일 경로가 아니다. `doctor`의 direct command 검사는 command-valid만
+증명하며 dispatcher-fired/effect를 PASS로 올리지 않는다. 실제 주입은 opt-in fresh-session
+positive/disabled-negative canary로만 검증한다.
 
 ### 10.2 스킬 (기훈용 진입점, Phase 2)
 
@@ -362,7 +406,8 @@ memory-map.html (`system/` 아래, P3 예정) 생성기(§11).
 
 ### 10.4 핸드오프 계약 (Codex·타 플랫폼·미래 세션 공통)
 
-읽기 순서 고정: **NOW → journal 최근 ~20줄 → (작업 스레드의) 서류철 → 필요 시 recall.**
+읽기 순서 고정: **public NOW + local overlay → 필요한 scope의 journal 최근 ~20줄 →
+(작업 스레드의) 서류철 → 필요 시 recall.** local overlay가 없으면 그 부재를 상태로 취급한다.
 전부 플랫폼 독립적 플레인 파일이므로 핸드오프 문서를 따로 쓰지 않는다 — 레이더 HANDOFF가
 장기 작업용이었다면, NOW가 세션 수준의 상시 HANDOFF다. AGENTS.md에 CLAUDE.md와 동일 규칙
 반영(기존 미러링 관행).

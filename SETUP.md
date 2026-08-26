@@ -51,12 +51,22 @@ bash setup.sh --name tinder-work --context work
 3. `state/` 준비 + 첫 journal 엔트리 기록
 4. `python3 tools/now.py render`로 첫 NOW 생성
 
-되돌리려면 만들어진 세 파일을 지우면 된다. 되돌릴 수 없는 일은 하지 않는다.
+기존 schema v1/v2/v3 인스턴스를 v4로 올리거나 v4 설정을 보존해 다시 적용할 때는 같은 이름·context로
+`bash setup.sh --force`를 실행한다. 기존 config는 `.bak`으로 남고 트랙·검사·공개 목록은 보존된다.
+단, v1~v3의 nonempty `threads[]`에는 public 판정 provenance가 없으므로 자동 승격하지 않고 중단한다.
+확인된 public 항목과 local 항목을 사람이 먼저 분리한 뒤 재실행한다. 검증된 v4 `threads[]`만 그대로
+보존한다. v3는 기존 공개 목록을 과거 journal 행의 provenance로 고정하고, v1/v2에는 그 판정이
+없으므로 기존 journal 전부를 fail-closed legacy-private로 둔다. 경계는 migration 전 마지막 journal
+timestamp다. malformed journal·config는 추측해 덮지 않는다. 끝나면 `python3 tools/doctor.py`를 다시 돌린다.
+
+새 설치를 되돌리려면 만들어진 세 파일을 지우면 된다. migration을 되돌릴 때는 내용을 확인한
+뒤 `system/memory-config.json.bak`을 복원한다. 되돌릴 수 없는 일은 하지 않는다.
 
 ## 2b. 검증 후방선 설치
 
 ```bash
-bash tools/install_hooks.sh
+bash tools/install_hooks.sh --repair
+bash tools/install_hooks.sh --check
 ```
 
 `.git/hooks/`는 clone으로 따라오지 않는다. 이걸 한 번 돌려야 pre-commit 후방선이 생긴다.
@@ -74,8 +84,8 @@ python3 tools/doctor.py
 python3 tools/gate.py baseline    # 이 리포의 현재 이슈를 기준선으로
 ```
 
-기준선을 안 세우면 첫 편집 턴에서 게이트가 "기준선이 없어서 지금 상태를 채택했다"고
-한 번 알린다. 그것도 정상이지만 미리 세워두는 편이 깔끔하다.
+기준선을 안 세우면 게이트는 삭제와 첫 설치를 구분할 수 없어 fail-closed로 막는다.
+`setup.sh`는 첫 초기화에서 baseline을 만들지만, 수동 설치·복구 때는 위 명령을 직접 실행한다.
 
 **FAIL이 0이어야 세팅 완료다.** warn은 상황에 따라 정상이다 (예: codex CLI 미설치).
 
