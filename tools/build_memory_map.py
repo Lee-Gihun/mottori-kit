@@ -58,14 +58,16 @@ STORES = [
      "사람이 손으로 쓰는 사실 원장. 감사 사슬 audit, 핫셋은 생성물. 이 시스템의 관할 밖."),
     ("에피소드 원장", "~/.claude/…/*.jsonl", "원문 · 최종 검증처",
      "전 대화 전사. 회상: <code>recall.py find</code>. 백업: _private/transcript-backup/."),
-    ("작업 사건 원장", "state/journal-YYYY-MM.md", "append-only",
-     "type 7종. 사건 시점 기록 — 컴팩션과 독립된 추출 경로. 쓰기: <code>now.py log</code>."),
-    ("스레드 서류철", " · ".join(k for k, _n, _d in M.THREADS) or "(미등록)", "손으로 쓰는 진실 (깊이)",
+    ("작업 사건 원장", "state/ + _private/state/ 월별 journal", "append-only · public/local",
+     "명시 public track만 추적. 미등재·<code>--private</code>는 local. 한 lock으로 append+snapshot을 직렬화."),
+    ("스레드 서류철", " · ".join(k for k, _n, _d in M.THREADS
+                                  if M.THREAD_VISIBILITY.get(k) == "public") or "(미등록)", "손으로 쓰는 진실 (깊이)",
      "다섯 칸: 위치·확정(+왜)·기각(+왜)·미결·다음 수. 복귀 의식의 대상. 정원사가 전사 대조 검증."),
     ("트랙 정본", " · ".join(c for _k, _n, c in M.TRACKS) or "(미등록)", "손으로 쓰는 진실 (상태)",
      "트랙별 공식 상태. 낙후는 <code>now.py check</code>가 [정본 낙후]로 탐지."),
-    ("NOW", "state/NOW.md", "생성물 — 손 편집 금지",
-     "지금의 단일 뷰. 자기 신선도 표시. 훅이 세션 시작·재개·컴팩션 후 자동 주입. 요약과 충돌 시 승자."),
+    ("NOW", "state/NOW.md + _private/state/NOW.md", "public projection + local overlay",
+     "공유 디스크(shared disk)의 둘을 합친 local view가 정본. overlay 부재는 <code>unavailable</code>, "
+     "불완전·손상은 degraded/corrupt로 구분해 6,000 UTF-8 bytes 안에서 주입."),
     ("의미 기억", "auto-memory (user/feedback)", "내구재 + 포인터",
      "성향·프레임·교정. 상태류는 추방(포인터만). 부패는 check·정원사가 탐지, archive/로 supersede."),
     ("결정 기록", "system/decisions.md", "append-only (DR)",
@@ -76,8 +78,8 @@ FLOWS = [
     ("컴팩션 생존 루프", [
         "PreCompact 훅이 journal에 '컴팩션 발생' 기록",
         "컨텍스트가 요약으로 재구성됨 (다른 스레드 깊이 소실)",
-        "SessionStart(compact) 훅이 <b>NOW를 자동 주입</b>",
-        "요약의 상태 단언과 NOW 충돌 시 → NOW 우선 (코어 2)",
+        "SessionStart(compact) 훅이 <b>shared disk의 public NOW + local overlay를 자동 주입</b>",
+        "요약의 상태 단언과 합친 view 충돌 시 → 합친 view 우선 (코어 2)",
         "깊이가 필요하면 → 서류철 → recall로 원문 슬라이스"]),
     ("스레드 복귀 의식", [
         "스레드 감지 (등록된 서류철) 또는 /dossier 호출",
@@ -91,8 +93,8 @@ FLOWS = [
         "세션이 요약 제시 → 사람 판정 → 집행 → journal + DR"]),
     ("사건 기록 의식", [
         "결정·국면·정정·교훈 발생 그 턴에",
-        "<code>now.py log \"[track/type] 한 줄\"</code> — 스키마 검증 후 append",
-        "NOW 자동 재생성 → 다음 주입에 반영",
+        "<code>now.py log [--private] \"[track/type] 한 줄\"</code> — 분류·검증 후 append",
+        "해당 public/local NOW를 atomic 재생성 → 다음 주입에 반영",
         "드리프트는 <code>now.py check</code> 5종 검출기가 백스톱"]),
 ]
 
@@ -106,7 +108,7 @@ def _sh(cmd):
 
 
 def gauges():
-    entries = M.parse_journal()
+    entries = M.parse_journal(visibility="public")
     now_age = "?"
     if os.path.exists(M.NOW_PATH):
         now_age = f"{(datetime.datetime.now() - datetime.datetime.fromtimestamp(os.path.getmtime(M.NOW_PATH))).seconds // 3600}h"
@@ -120,7 +122,7 @@ def gauges():
     if os.path.exists(M.DECISIONS):
         drs = open(M.DECISIONS, encoding="utf-8").read().count("### DR-")
     items = [
-        (f"{len(entries)}", "journal 사건", ""),
+        (f"{len(entries)}", "public journal 사건", ""),
         (f"{now_age}", "NOW 나이", ""),
         (f"{tsize}MB", "전사 원장", ""),
         (f"{drs}", "결정 기록(DR)", ""),
@@ -133,9 +135,9 @@ def ladder():
     rows = [
         ("불가침", "개인 사실 원장 — rec.py, 감사 사슬", "_private/ledger/", ""),
         ("원문", "에피소드 원장 — 전 대화 전사, 최종 검증처", "recall.py find", ""),
-        ("원장", "작업 사건 journal — append-only, 사건 시점 기록", "now.py log", ""),
+        ("원장", "작업 사건 journal — public/local 쓰기 시점 격리", "now.py log [--private]", ""),
         ("진실", "스레드 서류철 + 트랙 정본 — 손으로 쓰는 깊이·상태", "dossiers · tracker…", ""),
-        ("생성물", "NOW — 재계산되는 단일 뷰, 자기 신선도 표시", "now.py render", "gen"),
+        ("생성물", "public NOW + local overlay — 합친 view가 local 정본", "now.py render", "gen"),
         ("포인터", "auto-memory 상태류 — 내용 금지, NOW를 가리킴", "memory/*.md", "gen"),
         ("캐시", "세션 컨텍스트·컴팩션 요약 — 충돌 시 위가 이긴다", "(휘발)", "gen"),
     ]
@@ -155,14 +157,16 @@ def main():
     flows = "".join(
         f'<div class="flow"><b>{E(t)}</b><ol>' + "".join(f"<li>{s}</li>" for s in steps)
         + "</ol></div>" for t, steps in FLOWS)
-    threads = " · ".join(f"{n} <code>{E(d or '미지정')}</code>" for _, n, d in M.THREADS)
+    threads = " · ".join(f"{n} <code>{E(d or '미지정')}</code>" for k, n, d in M.THREADS
+                         if M.THREAD_VISIBILITY.get(k) == "public")
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
     page = f"""<meta charset="utf-8"><title>memory map — 세션·기억·상태</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"><style>{CSS}</style>
 <div class="wrap">
 <h1>기억 시스템 지도</h1>
-<p class="dek">스키마 정본 <code>tools/memlib.py</code> + 라이브 상태에서 생성 — 손으로 그리지
+<p class="dek">대화 surface가 아니라 공유 디스크(shared disk)가 master다. 스키마 정본
+<code>tools/memlib.py</code> + 라이브 상태에서 생성 — 손으로 그리지
 않으므로 구현과 이 그림은 갈라질 수 없다. 설계 전문: <code>system/PRD-session-memory.md</code>,
 결정 이력: <code>system/decisions.md</code>.</p>
 <div class="gauges">{gauges()}</div>
@@ -177,7 +181,7 @@ def main():
 <h2>L2 — 네 개의 루프</h2>
 {flows}
 
-<footer>생성 {ts} · python3 tools/build_memory_map.py · 훅: SessionStart(NOW 주입) ·
+<footer>생성 {ts} · python3 tools/build_memory_map.py · 훅: SessionStart(public+local 주입) ·
 PreCompact(기록) — .claude/settings.json</footer>
 </div>
 <script>

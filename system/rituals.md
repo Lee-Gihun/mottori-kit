@@ -9,8 +9,9 @@ PRD-session-memory §3.6. 규칙마다 Why를 붙인다 — 근거가 먼저 썩
 
 ## 세션 진입·복구
 
-- 세션의 상태 정본은 `state/NOW.md` (SessionStart 훅이 자동 주입).
-- 주입이 안 왔으면 훅이 죽은 것이다. `python3 tools/doctor.py`로 진단하고 NOW를 직접 읽는다.
+- 세션의 상태 정본은 public `state/NOW.md`와 local `_private/state/NOW.md`를 합친 view다
+  (SessionStart 훅이 자동 주입). local overlay가 없으면 상태는 `unavailable`이지 "없음"이 아니다.
+- 주입이 안 왔으면 훅이 죽은 것이다. `python3 tools/doctor.py`로 진단하고 두 NOW를 함께 읽는다.
   *(Why: 훅은 fail-safe라 조용히 죽는다. 침묵을 무소식으로 읽지 않는다.)*
 - **장기 작업 인수는 그 작업의 `HANDOFF.md`부터.** 진행 수치는 대화가 아니라 그 작업의
   상태 도구에서. *(Why: 상태는 디스크에.)*
@@ -19,6 +20,7 @@ PRD-session-memory §3.6. 규칙마다 Why를 붙인다 — 근거가 먼저 썩
 ## 판결급 이벤트 (결정·국면 변화·발사)
 
 - 그 턴에 `python3 tools/now.py log "[track/type] 한 줄"` — NOW는 자동 재생성된다.
+  개인·회사 유래 또는 공개 여부가 불확실한 사건은 `log --private`로 내린다.
 - 트랙 정본의 헤더 갱신일도 맞춘다. 안 맞추면 `python3 tools/now.py check`가
   [정본 낙후]로 잡는다. *(Why: 문서 간 드리프트 8일 실측.)*
 

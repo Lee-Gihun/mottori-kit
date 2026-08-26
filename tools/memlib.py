@@ -5,11 +5,10 @@ PRD: system/PRD-session-memory.md (v3) §9.
 이 파일이 유일한 스키마 정의처다. now.py·recall.py·정원사·memory-map이 전부
 여기서 import 한다. 스키마 변경은 반드시 system/decisions.md에 DR로 남긴다.
 """
+import datetime
+import hashlib
 import os
 import re
-import datetime
-
-import sys
 
 
 def _resolve_root():
@@ -33,17 +32,154 @@ def _resolve_root():
 # 인스턴스는 pull로 엔진만 받으므로, 자기 config는 스스로 고쳐야 한다. doctor가 그걸 알린다.
 # 2026-08-24 실측: instance.context를 추가했을 때 옛 config는 그 필드가 없어 밸브가
 # 조용히 꺼진 채로 돌 뻔했다. 조용한 뒤처짐이 이 상수의 존재 이유다.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
 SCHEMA_CHANGES = {
     2: ("instance 블록 신설 — 데이터 국경의 근거값.\n"
         '      "instance": {"name": "...", "context": "work|personal", "remote_allowlist": []}\n'
         "      context가 없으면 밸브 검사가 personal로 간주하고 원격을 안 본다"),
+    3: ("journal_visibility 신설 — public allowlist 밖 사건은 local-private로 fail-close.\n"
+        '      "journal_visibility": {"public_tracks": ["system", "research", ...]}\n'
+        "      private thread metadata는 추적 threads[]가 아니라 _private/state/threads.json에 둔다"),
+    4: ("legacy journal cutover 신설 — allowlist 추가가 과거 private-derived body를 재승격하지 않게 한다.\n"
+        '      "legacy_cutoff": null|"ISO8601", "legacy_public_tracks": [...]\n'
+        "      기존 인스턴스는 migration 시각과 그때의 public_tracks를 고정한다"),
 }
 
 ROOT = _resolve_root()
 CONFIG_PATH = os.path.join(ROOT, "system", "memory-config.json")
 
 CONFIG_WARNINGS = []
+_CONFIG_LOAD_OK = [True]
+_CONFIG_FINGERPRINT = [None]
+
+
+def file_fingerprint(path, missing_marker=b"<missing>"):
+    """Content identity for an input file without trusting its mtime."""
+    try:
+        raw = open(path, "rb").read()
+    except FileNotFoundError:
+        raw = missing_marker
+    except OSError as e:
+        raw = f"<unreadable:{type(e).__name__}>".encode()
+    return hashlib.sha256(raw).hexdigest()
+
+
+def config_fingerprint(path=None):
+    """Content identity for the exact config snapshot a process is using."""
+    return file_fingerprint(path or CONFIG_PATH, b"<missing-config>")
+
+
+# Hash the bytes this process imported, not whatever happens to be on disk later while rendering.
+# now.py verifies the live bytes still match before publish; the pair prevents old code from
+# certifying an output with a new source hash after a concurrent edit.
+MEMLIB_SOURCE_FINGERPRINT = file_fingerprint(__file__)
+
+
+def _validate_config_shape(data):
+    """Privacy routing config must be an object with safe container shapes.
+
+    Unknown keys remain forward-compatible.  Known containers are validated before any module-level
+    `.get()` calls so a syntactically valid but structurally invalid JSON file fails closed instead
+    of crashing import before a private journal can be written.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("config root가 object가 아님")
+
+    containers = {
+        "instance": dict,
+        "episodic_sources": list,
+        "tracks": list,
+        "journal_visibility": dict,
+        "threads": list,
+        "checks": dict,
+        "journal_types": list,
+        "thresholds": dict,
+    }
+    for key, typ in containers.items():
+        if key in data and not isinstance(data[key], typ):
+            raise ValueError(f"config.{key}가 {typ.__name__}가 아님")
+    if "schema_version" in data and (isinstance(data["schema_version"], bool)
+                                      or not isinstance(data["schema_version"], int)):
+        raise ValueError("config.schema_version이 int가 아님")
+
+    instance = data.get("instance", {})
+    if "remote_allowlist" in instance and not isinstance(instance["remote_allowlist"], list):
+        raise ValueError("config.instance.remote_allowlist가 list가 아님")
+
+    for i, row in enumerate(data.get("episodic_sources", [])):
+        if not isinstance(row, dict):
+            raise ValueError(f"config.episodic_sources[{i}]가 object가 아님")
+        for key in ("name", "kind", "base", "glob"):
+            if not isinstance(row.get(key), str) or not row[key]:
+                raise ValueError(f"config.episodic_sources[{i}].{key}가 비어 있음")
+
+    for i, row in enumerate(data.get("tracks", [])):
+        if not isinstance(row, dict):
+            raise ValueError(f"config.tracks[{i}]가 object가 아님")
+        for key in ("key", "name", "canonical"):
+            if not isinstance(row.get(key), str) or not row[key]:
+                raise ValueError(f"config.tracks[{i}].{key}가 비어 있음")
+        if "also" in row and not (isinstance(row["also"], list)
+                                   and all(isinstance(x, str) for x in row["also"])):
+            raise ValueError(f"config.tracks[{i}].also가 string list가 아님")
+
+    for i, row in enumerate(data.get("threads", [])):
+        if not isinstance(row, dict):
+            raise ValueError(f"config.threads[{i}]가 object가 아님")
+        for key in ("key", "name"):
+            if not isinstance(row.get(key), str) or not row[key]:
+                raise ValueError(f"config.threads[{i}].{key}가 비어 있음")
+        if row.get("dossier") is not None and not isinstance(row.get("dossier"), str):
+            raise ValueError(f"config.threads[{i}].dossier가 string/null이 아님")
+        visibility = row.get("visibility", "public")
+        if visibility == "private":
+            raise ValueError(
+                f"config.threads[{i}] private metadata 금지 — _private/state/threads.json으로 이동")
+        if visibility != "public":
+            raise ValueError(f"config.threads[{i}].visibility={visibility!r} 미지원")
+
+    visibility = data.get("journal_visibility", {})
+    if "public_tracks" in visibility and not (
+            isinstance(visibility["public_tracks"], list)
+            and all(isinstance(x, str) and x for x in visibility["public_tracks"])):
+        raise ValueError("config.journal_visibility.public_tracks가 non-empty string list가 아님")
+    legacy_tracks = visibility.get("legacy_public_tracks")
+    if legacy_tracks is not None and not (
+            isinstance(legacy_tracks, list)
+            and all(isinstance(x, str) and x for x in legacy_tracks)):
+        raise ValueError("config.journal_visibility.legacy_public_tracks가 string list가 아님")
+    legacy_cutoff = visibility.get("legacy_cutoff")
+    if legacy_cutoff is not None:
+        if not isinstance(legacy_cutoff, str):
+            raise ValueError("config.journal_visibility.legacy_cutoff가 ISO8601/null이 아님")
+        try:
+            parsed_cutoff = datetime.datetime.fromisoformat(legacy_cutoff)
+        except ValueError as e:
+            raise ValueError("config.journal_visibility.legacy_cutoff가 ISO8601이 아님") from e
+        if parsed_cutoff.utcoffset() is None:
+            raise ValueError("config.journal_visibility.legacy_cutoff에 timezone이 없음")
+    if data.get("schema_version", 1) >= 4 and not all(
+            key in visibility for key in ("legacy_cutoff", "legacy_public_tracks")):
+        raise ValueError("schema v4 journal_visibility legacy fields 누락")
+    if legacy_cutoff is None and legacy_tracks:
+        raise ValueError("legacy_cutoff=null인데 legacy_public_tracks가 비어 있지 않음")
+    if "journal_types" in data and not (
+            data["journal_types"] and all(isinstance(x, str) and x for x in data["journal_types"])):
+        raise ValueError("config.journal_types가 non-empty string list가 아님")
+    if "personal_pointer" in data and data["personal_pointer"] is not None \
+            and not isinstance(data["personal_pointer"], str):
+        raise ValueError("config.personal_pointer가 string/null이 아님")
+    thresholds = data.get("thresholds", {})
+    for key, value in thresholds.items():
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"config.thresholds.{key}가 non-negative int가 아님")
+    for key in ("now_tail_events", "now_recent_decisions"):
+        if key in thresholds and thresholds[key] < 1:
+            raise ValueError(f"config.thresholds.{key}가 positive int가 아님")
+    for key in ("now_max_bytes", "now_hook_max_bytes"):
+        if key in thresholds and not 1024 <= thresholds[key] <= 6000:
+            raise ValueError(f"config.thresholds.{key}가 1024..6000 범위가 아님")
+    return data
 
 
 def _load_config():
@@ -52,18 +188,25 @@ def _load_config():
     (계기는 자기 설정 오류로 침묵하면 안 된다 — 되먹임 렌즈의 fail-safe 원칙.)"""
     import json as _json
     try:
-        with open(CONFIG_PATH, encoding="utf-8") as f:
-            return _json.load(f)
+        raw = open(CONFIG_PATH, "rb").read()
+        _CONFIG_FINGERPRINT[0] = hashlib.sha256(raw).hexdigest()
+        return _validate_config_shape(_json.loads(raw.decode("utf-8")))
     except FileNotFoundError:
+        _CONFIG_LOAD_OK[0] = False
+        _CONFIG_FINGERPRINT[0] = config_fingerprint(CONFIG_PATH)
         CONFIG_WARNINGS.append(f"config 없음: {CONFIG_PATH}")
         return {}
     except Exception as e:
-        CONFIG_WARNINGS.append(f"config 파싱 실패: {e}")
-        print(f"[memlib] config 파싱 실패, 내장 기본값 사용: {e}", file=sys.stderr)
+        _CONFIG_LOAD_OK[0] = False
+        if _CONFIG_FINGERPRINT[0] is None:
+            _CONFIG_FINGERPRINT[0] = config_fingerprint(CONFIG_PATH)
+        CONFIG_WARNINGS.append(f"config 로드/검증 실패: {type(e).__name__}")
         return {}
 
 
 _CFG = _load_config()
+CONFIG_LOAD_OK = _CONFIG_LOAD_OK[0]
+CONFIG_FINGERPRINT = _CONFIG_FINGERPRINT[0]
 
 
 def _expand(path):
@@ -116,6 +259,9 @@ def mangle_project_key(path):
 
 STATE = os.path.join(ROOT, "state")
 NOW_PATH = os.path.join(STATE, "NOW.md")
+PRIVATE_STATE = os.path.join(ROOT, "_private", "state")
+PRIVATE_NOW_PATH = os.path.join(PRIVATE_STATE, "NOW.md")
+PRIVATE_THREADS_PATH = os.path.join(PRIVATE_STATE, "threads.json")
 DECISIONS = os.path.join(ROOT, "system", "decisions.md")
 TRANSCRIPTS = transcript_dir()
 _TRANSCRIPTS_LAZY[0] = TRANSCRIPTS
@@ -157,14 +303,44 @@ EPISODIC_SOURCES = ([(x["name"], x["kind"], _expand(x["base"]), x["glob"])
 JOURNAL_TYPES = tuple(_CFG.get("journal_types",
     ("decision", "state", "artifact", "correction", "lesson", "switch", "idea")))
 JOURNAL_LINE = re.compile(
-    r"^- (?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:[+-]\d{2}:?\d{2})?)"
+    r"^- (?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:[+-]\d{2}:?\d{2}))"
     r" \[(?P<track>[a-z가-힣_-]+)/(?P<type>[a-z]+)\] (?P<body>.+)$"
 )
 
+# TRACKS는 NOW 온도판 레지스트리다. 보안 분류를 거기에 겸용하면 system 같은 사건 namespace를
+# canonical 문서가 있는 track으로 오인한다. 별도 allowlist가 이 경계를 소유한다 (DR-043).
+_VIS = _CFG.get("journal_visibility", {})
+_PUBLIC_RAW = _VIS.get("public_tracks") if isinstance(_VIS, dict) else None
+_LEGACY_RAW = _VIS.get("legacy_public_tracks") if isinstance(_VIS, dict) else None
+_LEGACY_CUTOFF_RAW = _VIS.get("legacy_cutoff") if isinstance(_VIS, dict) else None
+_VISIBILITY_READY = (CONFIG_LOAD_OK and CONFIG_SCHEMA == SCHEMA_VERSION
+                     and isinstance(_PUBLIC_RAW, list)
+                     and all(isinstance(x, str) and x for x in _PUBLIC_RAW)
+                     and isinstance(_LEGACY_RAW, list)
+                     and all(isinstance(x, str) and x for x in _LEGACY_RAW)
+                     and (_LEGACY_CUTOFF_RAW is None or isinstance(_LEGACY_CUTOFF_RAW, str)))
+PUBLIC_JOURNAL_TRACKS = tuple(dict.fromkeys(_PUBLIC_RAW or ())) if _VISIBILITY_READY else ()
+LEGACY_PUBLIC_TRACKS = tuple(dict.fromkeys(_LEGACY_RAW or ())) if _VISIBILITY_READY else ()
+LEGACY_CUTOFF = (datetime.datetime.fromisoformat(_LEGACY_CUTOFF_RAW)
+                 if _VISIBILITY_READY and _LEGACY_CUTOFF_RAW else None)
+VISIBILITY_READY = _VISIBILITY_READY
+if not _VISIBILITY_READY:
+    CONFIG_WARNINGS.append(
+        "journal_visibility 사용 불가 — 새 사건은 전부 _private/state로 fail-close "
+        f"(config schema={CONFIG_SCHEMA}, engine schema={SCHEMA_VERSION})")
 
-def journal_path(dt=None):
+
+def journal_visibility(track, force_private=False):
+    """새 사건의 물리 경로를 판정한다. public으로 올리는 override는 의도적으로 없다."""
+    if force_private:
+        return "private"
+    return "public" if track in PUBLIC_JOURNAL_TRACKS else "private"
+
+
+def journal_path(dt=None, visibility="public"):
     dt = dt or datetime.datetime.now()
-    return os.path.join(STATE, f"journal-{dt:%Y-%m}.md")
+    base = STATE if visibility == "public" else PRIVATE_STATE
+    return os.path.join(base, f"journal-{dt:%Y-%m}.md")
 
 
 def validate_line(line):
@@ -179,20 +355,170 @@ def validate_line(line):
     return None
 
 
-def parse_journal():
-    """모든 journal 파일의 엔트리를 시간순으로 돌려준다."""
+def parse_journal(visibility=None, strict=False, errors=None, physical_visibilities=None):
+    """public/local journal을 합쳐 시간순으로 읽는다.
+
+    `visibility`은 public/private/None(all). 추적 journal의 legacy 사건은 migration cutoff 당시
+    고정한 public set으로 projection하므로 allowlist 확대가 과거 private body를 재승격하지 않는다.
+    private 물리 파일의 사건은 public track이어도 `--private` 하향 결정을 보존한다.
+    """
     out = []
-    if not os.path.isdir(STATE):
-        return out
-    for f in sorted(os.listdir(STATE)):
-        if not re.match(r"journal-\d{4}-\d{2}\.md$", f):
+    errors = errors if errors is not None else []
+    order = 0
+    for base, physical in ((STATE, "public"), (PRIVATE_STATE, "private")):
+        if physical_visibilities is not None and physical not in physical_visibilities:
             continue
-        for line in open(os.path.join(STATE, f), encoding="utf-8"):
-            m = JOURNAL_LINE.match(line.strip())
-            if m:
-                out.append(m.groupdict())
-    out.sort(key=lambda e: e["ts"])
+        if not os.path.isdir(base):
+            continue
+        for f in sorted(os.listdir(base)):
+            if not re.match(r"journal-\d{4}-\d{2}\.md$", f):
+                continue
+            path = os.path.join(base, f)
+            for lineno, line in enumerate(open(path, encoding="utf-8"), 1):
+                raw = line.strip()
+                m = JOURNAL_LINE.match(raw)
+                if not m:
+                    if strict and raw.startswith("- "):
+                        raise ValueError(f"journal 손상: {path}:{lineno}: {raw[:100]}")
+                    if raw.startswith("- "):
+                        errors.append(f"{path}:{lineno}: {raw[:100]}")
+                    continue
+                schema_error = validate_line(raw)
+                if schema_error:
+                    message = f"{path}:{lineno}: {schema_error}"
+                    if strict:
+                        raise ValueError("journal 손상: " + message)
+                    errors.append(message)
+                    continue
+                row = m.groupdict()
+                try:
+                    row_dt = datetime.datetime.fromisoformat(row["ts"])
+                except ValueError as e:
+                    if strict:
+                        raise ValueError(f"journal 손상: {path}:{lineno}: timestamp {row['ts']}") from e
+                    errors.append(f"{path}:{lineno}: timestamp {row['ts']}")
+                    continue
+                if row_dt.utcoffset() is None:
+                    message = f"{path}:{lineno}: timestamp timezone 없음"
+                    if strict:
+                        raise ValueError("journal 손상: " + message)
+                    errors.append(message)
+                    continue
+                if physical == "private":
+                    scope = "private"
+                elif LEGACY_CUTOFF is not None and row_dt <= LEGACY_CUTOFF:
+                    scope = "public" if row["track"] in LEGACY_PUBLIC_TRACKS else "private"
+                else:
+                    scope = journal_visibility(row["track"])
+                if visibility is None or visibility == scope:
+                    row.update(visibility=scope, source=path, order=order)
+                    out.append(row)
+                order += 1
+    out.sort(key=lambda e: (e["ts"], e["order"]))
     return out
+
+
+def lock_path():
+    """테스트가 STATE를 재지정해도 같은 인스턴스 안에서 따라가는 repo-wide state lock."""
+    return os.path.join(STATE, ".journal.lock")
+
+
+class StateLockTimeout(TimeoutError):
+    pass
+
+
+def locked(path=None, timeout=10.0):
+    """한 repo의 journal append와 snapshot publish를 직렬화하는 context manager."""
+    import contextlib
+    import fcntl
+    import time
+
+    @contextlib.contextmanager
+    def _hold():
+        p = path or lock_path()
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "a+", encoding="utf-8") as lock_file:
+            deadline = time.monotonic() + timeout
+            while True:
+                try:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise StateLockTimeout(f"state lock timeout: {p}")
+                    time.sleep(0.05)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+    return _hold()
+
+
+def atomic_write(path, text):
+    """같은 디렉터리 temp를 fsync한 뒤 replace한다. 실패하면 기존 완성본을 보존한다."""
+    import tempfile
+
+    parent = os.path.dirname(path)
+    os.makedirs(parent, exist_ok=True)
+    old_mode = os.stat(path).st_mode & 0o777 if os.path.isfile(path) else 0o644
+    fd, tmp = tempfile.mkstemp(prefix="." + os.path.basename(path) + ".", dir=parent)
+    try:
+        os.fchmod(fd, old_mode)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            fd = -1
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+        tmp = None
+        try:
+            dfd = os.open(parent, os.O_RDONLY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
+        except OSError:
+            pass  # 일부 파일시스템은 directory fsync를 지원하지 않는다. replace 원자성은 유지.
+    finally:
+        if fd != -1:
+            os.close(fd)
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except FileNotFoundError:
+                pass
+
+
+def _utf8_prefix(text, budget):
+    if budget <= 0:
+        return ""
+    return text.encode("utf-8")[:budget].decode("utf-8", "ignore")
+
+
+def _utf8_suffix(text, budget):
+    if budget <= 0:
+        return ""
+    raw = text.encode("utf-8")
+    return raw[-budget:].decode("utf-8", "ignore")
+
+
+def clip_utf8(text, max_bytes):
+    """UTF-8 경계에서 중간을 줄여 header와 최신 tail을 함께 보존한다."""
+    raw = text.encode("utf-8")
+    if len(raw) <= max_bytes:
+        return text
+    marker = f"\n\n[… 중간 절단: 원문 {len(raw)} bytes …]\n\n"
+    marker_n = len(marker.encode("utf-8"))
+    room = max(0, max_bytes - marker_n)
+    head = _utf8_prefix(text, int(room * 0.42))
+    tail = _utf8_suffix(text, room - len(head.encode("utf-8")))
+    # 가능한 한 줄 중간을 피한다. 이 조정은 잘라내는 쪽으로만 움직인다.
+    if "\n" in head:
+        head = head[:head.rfind("\n") + 1]
+    if "\n" in tail:
+        tail = tail[tail.find("\n") + 1:]
+    out = head.rstrip() + marker + tail.lstrip()
+    return _utf8_prefix(out, max_bytes)
 
 
 # ------------------------------------------------------------------- tracks
@@ -231,7 +557,66 @@ UPDATED_RE = re.compile(r"(마지막 갱신|마지막 업데이트|마지막 정
 
 # 스레드 서류철 레지스트리 (PRD §3.3). dossier=None 이면 미지정.
 # tracks와 같은 이유로 내장 기본값 없음 (DR-025).
-THREADS = [(x["key"], x["name"], x.get("dossier")) for x in _CFG.get("threads", [])]
+_PRIVATE_THREADS_FINGERPRINT = [None]
+_PRIVATE_THREADS_LOAD_OK = [True]
+_PUBLIC_THREADS = list(_CFG.get("threads", []))
+_PUBLIC_THREAD_KEYS = {row["key"] for row in _PUBLIC_THREADS}
+
+
+def _private_threads():
+    """로컬 thread 이름·dossier는 추적 config가 아니라 local private thread registry에 둔다."""
+    import json as _json
+    try:
+        raw = open(PRIVATE_THREADS_PATH, "rb").read()
+        _PRIVATE_THREADS_FINGERPRINT[0] = hashlib.sha256(raw).hexdigest()
+        rows = _json.loads(raw.decode("utf-8"))
+        if not isinstance(rows, list):
+            raise ValueError("list가 아님")
+        valid = []
+        private_keys = set()
+        for i, row in enumerate(rows):
+            if not isinstance(row, dict):
+                _PRIVATE_THREADS_LOAD_OK[0] = False
+                CONFIG_WARNINGS.append(f"private thread registry[{i}] object 아님 — skip")
+                continue
+            if not all(isinstance(row.get(k), str) and row[k] for k in ("key", "name")):
+                _PRIVATE_THREADS_LOAD_OK[0] = False
+                CONFIG_WARNINGS.append(f"private thread registry[{i}] key/name invalid — skip")
+                continue
+            if row.get("dossier") is not None and not isinstance(row.get("dossier"), str):
+                _PRIVATE_THREADS_LOAD_OK[0] = False
+                CONFIG_WARNINGS.append(f"private thread registry[{i}] dossier invalid — skip")
+                continue
+            if row["key"] in _PUBLIC_THREAD_KEYS:
+                _PRIVATE_THREADS_LOAD_OK[0] = False
+                CONFIG_WARNINGS.append(
+                    f"private thread registry[{i}] public key collision — skip")
+                continue
+            if row["key"] in private_keys:
+                _PRIVATE_THREADS_LOAD_OK[0] = False
+                CONFIG_WARNINGS.append(
+                    f"private thread registry[{i}] duplicate key — skip")
+                continue
+            private_keys.add(row["key"])
+            valid.append(row)
+        return valid
+    except FileNotFoundError:
+        _PRIVATE_THREADS_FINGERPRINT[0] = file_fingerprint(PRIVATE_THREADS_PATH)
+        return []
+    except Exception as e:
+        _PRIVATE_THREADS_LOAD_OK[0] = False
+        if _PRIVATE_THREADS_FINGERPRINT[0] is None:
+            _PRIVATE_THREADS_FINGERPRINT[0] = file_fingerprint(PRIVATE_THREADS_PATH)
+        CONFIG_WARNINGS.append(f"private thread registry 파싱 실패: {e}")
+        return []
+
+
+_PRIVATE_THREADS = _private_threads()
+PRIVATE_THREADS_FINGERPRINT = _PRIVATE_THREADS_FINGERPRINT[0]
+PRIVATE_THREADS_LOAD_OK = _PRIVATE_THREADS_LOAD_OK[0]
+_THREAD_ROWS = _PUBLIC_THREADS + [dict(x, visibility="private") for x in _PRIVATE_THREADS]
+THREADS = [(x["key"], x["name"], x.get("dossier")) for x in _THREAD_ROWS]
+THREAD_VISIBILITY = {x["key"]: x.get("visibility", "public") for x in _THREAD_ROWS}
 
 # ---------------------------------------------------------------------- NOW
 
@@ -250,6 +635,7 @@ TRACK_STALE_DAYS = _TH.get("track_stale_days", 7)
 JOURNAL_STALE_DAYS = _TH.get("journal_stale_days", 2)
 MEMORY_ROT_DAYS = _TH.get("memory_rot_days", 14)
 NOW_HOOK_MAX_BYTES = _TH.get("now_hook_max_bytes", 6000)
+NOW_MAX_BYTES = _TH.get("now_max_bytes", 6000)
 
 # ------------------------------------------------------------------- 실행 기록
 
