@@ -78,7 +78,9 @@ doctor는 훅 명령이 올바른 JSON을 뱉는 것까지 확인한다. 그 JSO
 - `[기계]` **검증 게이트가 실제로 막는가.** 세 판 다 확인해라. 하나라도 통과하면 게이트가
   없는 것과 같다.
   ```bash
-  bash tools/install_hooks.sh && python3 tools/gate.py baseline
+  bash tools/install_hooks.sh --repair
+  bash tools/install_hooks.sh --check
+  python3 tools/gate.py baseline
 
   # 1) 깨진 참조를 만들면 커밋이 막히는가
   #    경로가 system/ 아래인 이유: 리포 루트는 기본거부라 git add 자체가 안 된다
@@ -92,8 +94,12 @@ doctor는 훅 명령이 올바른 JSON을 뱉는 것까지 확인한다. 그 JSO
   echo '{}' | python3 tools/gate.py check     # "측정 불능" 차단이 떠야 한다
   cp /tmp/lc.bak tools/linkcheck.py
 
-  # 3) 기준선이 깨지면 차단인가 (삭제는 채택 + 통보, 손상은 차단)
-  cp state/.gate-baseline.json /tmp/bl.bak && printf '{ 깨짐' > state/.gate-baseline.json
+  # 3) 기준선이 깨지거나 사라지면 둘 다 차단인가 (자동 채택 금지)
+  cp state/.gate-baseline.json /tmp/bl.bak
+  rm state/.gate-baseline.json
+  python3 tools/gate.py dirty && echo '{}' | python3 tools/gate.py check
+  cp /tmp/bl.bak state/.gate-baseline.json
+  printf '{ 깨짐' > state/.gate-baseline.json
   python3 tools/gate.py dirty && echo '{}' | python3 tools/gate.py check
   cp /tmp/bl.bak state/.gate-baseline.json
   ```

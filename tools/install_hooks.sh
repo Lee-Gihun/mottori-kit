@@ -1,63 +1,115 @@
 #!/usr/bin/env bash
-# git pre-commit 후방선을 설치한다.
+# active Git pre-commit backstop의 상태를 진단하거나 명시적으로 복구한다.
 #
-# 왜 별도 설치인가: `.git/hooks/`는 clone으로 따라오지 않는다. 클론한 인스턴스는 이걸 한 번
-# 돌려야 후방선이 생긴다 (SETUP.md 참조).
-#
-# 무엇을 막나: Stop 게이트가 못 보는 경로 — Bash 편집, 외부 writer, Codex 편집, 사용자
-# interrupt. 커밋되는 index를 검사하고 새 이슈가 있으면 커밋을 막는다.
-# `--no-verify`는 여전히 우회다. 계약이 아니라 후방선이다.
+#   bash tools/install_hooks.sh --check   # read-only: current/missing/owned-drift/foreign
+#   bash tools/install_hooks.sh --repair  # foreign은 거부, owned drift는 backup 뒤 atomic 교체
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MODE="${1:-}"
+if [[ "$MODE" != "--check" && "$MODE" != "--repair" ]]; then
+  echo "usage: bash tools/install_hooks.sh --check|--repair" >&2
+  exit 2
+fi
 
-# **활성 hooksPath를 해석한다** (codex 라운드 4). `core.hooksPath`가 다른 곳을 가리키는데
-# `.git/hooks/`에 깔고 "설치됨"이라고 보고하면 후방선이 없는 채로 있다고 착각한다.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TEMPLATE="$ROOT/tools/precommit-hook.sh"
+[[ -f "$TEMPLATE" ]] || { echo "template-missing: $TEMPLATE" >&2; exit 2; }
+
 HOOKSPATH="$(git -C "$ROOT" config --get core.hooksPath || true)"
 if [[ -n "$HOOKSPATH" ]]; then
-  [[ "$HOOKSPATH" = /* ]] || HOOKSPATH="$ROOT/$HOOKSPATH"
-  case "$(cd "$HOOKSPATH" 2>/dev/null && pwd || echo "$HOOKSPATH")" in
-    "$ROOT"/*) DIR="$HOOKSPATH" ;;
-    *) echo "core.hooksPath가 리포 밖을 가리킨다: $HOOKSPATH"
-       echo "여기에는 설치하지 않는다. 설정을 확인하고 직접 배치해라."
-       exit 1 ;;
+  if [[ "$HOOKSPATH" = /* ]]; then
+    DIR="$HOOKSPATH"
+  else
+    DIR="$ROOT/$HOOKSPATH"
+  fi
+  RESOLVED="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$DIR")"
+  case "$RESOLVED" in
+    "$ROOT"|"$ROOT"/*) DIR="$RESOLVED" ;;
+    *) echo "outside-repo hooksPath: $RESOLVED" >&2; exit 2 ;;
   esac
 else
-  GITDIR="$(git -C "$ROOT" rev-parse --git-dir)"
-  [[ "$GITDIR" = /* ]] || GITDIR="$ROOT/$GITDIR"
-  DIR="$GITDIR/hooks"
+  # linked worktree의 `$GIT_DIR/hooks`는 dispatcher가 읽지 않는 admin 하위다. Git 자신에게
+  # common hooks 경로를 묻는다.
+  DIR="$(git -C "$ROOT" rev-parse --path-format=absolute --git-path hooks)"
 fi
 HOOK="$DIR/pre-commit"
 
-if [[ -e "$HOOK" ]] && ! grep -q "mottori gate" "$HOOK" 2>/dev/null; then
-  echo "이미 다른 pre-commit이 있다: $HOOK"
-  echo "덮어쓰지 않는다. 내용을 확인하고 직접 합쳐라."
-  exit 1
+# Sentinel 도입 직전 canonical 둘만 migration 대상으로 인정한다. 임의 hook에 설명문으로
+# "mottori gate"가 들어갔다고 소유권을 주장하면 --repair가 foreign 코드를 덮어쓴다.
+LEGACY_HASHES="
+28d6734242d51d3b6d63c4b31796864d659c320b85eb48fe803a5d7f807e12ee
+89fe10c571d56547e4235da07a777490f31e32fd2b6169d47bd49f5b4cda261e
+"
+
+sha256() { shasum -a 256 "$1" | awk '{print $1}'; }
+
+classify() {
+  if [[ ! -e "$HOOK" ]]; then
+    echo "missing"
+  elif cmp -s "$TEMPLATE" "$HOOK" && [[ -x "$HOOK" ]]; then
+    echo "current"
+  elif cmp -s "$TEMPLATE" "$HOOK"; then
+    echo "owned-drift"
+  elif grep -Fxq "$(sha256 "$HOOK")" <<< "$LEGACY_HASHES"; then
+    echo "owned-drift"
+  else
+    echo "foreign"
+  fi
+}
+
+STATUS="$(classify)"
+if [[ "$MODE" == "--check" ]]; then
+  echo "$STATUS: $HOOK"
+  if [[ "$STATUS" == "owned-drift" ]]; then
+    echo "template sha256: $(sha256 "$TEMPLATE")"
+    echo "installed sha256: $(sha256 "$HOOK")"
+    diff -u "$HOOK" "$TEMPLATE" | sed -n '1,40p' || true
+  fi
+  [[ "$STATUS" == "current" ]]
+  exit
+fi
+
+if [[ "$STATUS" == "foreign" ]]; then
+  echo "foreign pre-commit을 덮어쓰지 않는다: $HOOK" >&2
+  exit 2
 fi
 
 mkdir -p "$DIR"
-cat > "$HOOK" <<'EOF'
-#!/usr/bin/env bash
-# mottori gate — 커밋될 index를 검사한다. tools/install_hooks.sh가 설치했다.
-# MOTTORI_INSTANCE를 지우는 이유: 이 변수로 깨끗한 다른 클론을 가리키면 깨진 index가
-# 통과했다 (codex 라운드 4 실측). 게이트도 자기 위치와 root가 다르면 거부한다.
-unset MOTTORI_INSTANCE
-ROOT="$(git rev-parse --show-toplevel)"
-exec python3 "$ROOT/tools/gate.py" precommit
-EOF
-chmod +x "$HOOK"
-
-# **설치했다고 말하기 전에 git이 실제로 이 훅을 부르는지 확인한다.**
-if git -C "$ROOT" hook run --ignore-missing pre-commit >/dev/null 2>&1; then
-  echo "설치됨: $HOOK  (git이 실제로 호출하는 것을 확인했다)"
-else
-  # hook run은 훅이 non-zero를 내도 실패한다. 훅 파일 존재 여부로 갈라서 보고한다.
-  if [[ -x "$HOOK" ]]; then
-    echo "설치됨: $HOOK"
-    echo "주의: 확인 실행이 non-zero였다. 지금 index에 이슈가 있거나 기준선이 없을 수 있다."
-    echo "      python3 $ROOT/tools/gate.py precommit  으로 직접 확인해라."
-  else
-    echo "설치 실패: $HOOK 를 만들지 못했다." >&2
-    exit 1
-  fi
+BACKUP=""
+if [[ "$STATUS" == "owned-drift" ]]; then
+  BACKUP="$HOOK.bak.$(date +%Y%m%dT%H%M%S).$$"
+  cp -p "$HOOK" "$BACKUP"
 fi
+TMP="$DIR/.pre-commit.$$.tmp"
+cleanup() { rm -f "$TMP"; }
+trap cleanup EXIT
+cp "$TEMPLATE" "$TMP"
+chmod 755 "$TMP"
+mv -f "$TMP" "$HOOK"
+
+rollback() {
+  if [[ -n "$BACKUP" && -e "$BACKUP" ]]; then
+    cp -p "$BACKUP" "$HOOK"
+  else
+    rm -f "$HOOK"
+  fi
+}
+
+if ! cmp -s "$TEMPLATE" "$HOOK" || [[ ! -x "$HOOK" ]]; then
+  rollback
+  echo "repair 검증 실패, 원상 복구: $HOOK" >&2
+  exit 1
+fi
+
+NONCE="probe-$$-$(date +%s)"
+# `git hook run` forwards hook stdout on its own stderr channel. Capture both; checking only exit 0
+# repeats the old `--ignore-missing` false proof.
+GOT="$(git -C "$ROOT" hook run pre-commit -- --mottori-probe "$NONCE" 2>&1 || true)"
+if [[ "$GOT" != "$NONCE" ]]; then
+  rollback
+  echo "git dispatcher probe 실패, 원상 복구: $HOOK" >&2
+  exit 1
+fi
+
+echo "current: $HOOK (exact template + executable + git dispatcher probe)"
+[[ -z "$BACKUP" ]] || echo "backup: $BACKUP"

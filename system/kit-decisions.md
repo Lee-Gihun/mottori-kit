@@ -61,3 +61,9 @@ kit-decisions를 고치고 pull. **충돌 0, 새 교훈 도착, 인스턴스 것
 부수 결정: `doctor`의 업스트림 검사는 상류에서 SKIP한다. 표지는 상류 전용 내보내기 도구의 존재다. 상류에서 엔진 수정은 정상이므로 경고하면 늑대소년이 된다.
 기각 대안: 자동 마이그레이션 — config는 사람이 읽고 판단할 값(어느 원격을 허용하나)을 담는다.
 기계가 채우면 그 판단이 사라진다.
+
+### DR-006 상태 ledger는 public projection과 local overlay를 분리한다 (2026-08-26 · active)
+결정: allowlist 사건만 public journal로 보내고 나머지·`--private`는 local로 내리며, 둘을 합친 view를 정본으로 삼는다.
+맥락: tracked journal이 private-derived 사건을 재출력했고 동시 append/render에는 stale writer·truncate window가 있었다.
+안전성·마이그레이션: 오류는 private fail-close하고 lock·atomic publish·rollback으로 묶으며, journal provenance만 동결하고 legacy threads는 수동 분리한다.
+기각 대안: tracks 겸용·오류 시 public은 privacy fail-open. 참조: `PRD-session-memory.md` §3.2, §9.
