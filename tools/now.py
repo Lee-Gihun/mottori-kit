@@ -13,6 +13,7 @@ NOW.md는 생성물이다 — 손으로 고치지 말 것. 고치고 싶은 내�
 import datetime
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -254,6 +255,72 @@ def check(memory_dir=None, root=None, issues=False):
             if age > M.MEMORY_ROT_DAYS and "state/NOW.md" not in open(fp, encoding="utf-8").read():
                 W(False, f"memory-rot:{f}",
                   f"[부패 후보] {f} — project형 {age}일 무갱신 (포인터화 검토)")
+
+    # 4b) 녹취 파이프라인. 전사만 하고 멈춘 것을 잡는다.
+    #     (2026-08-25 실측: 전사·결손복구까지 하고 정독을 안 해서 재료만 쌓였다.
+    #      건너뛸 수 있으면 워크플로우가 아니다.)
+    rec_root = os.path.join(root, "_private", "recordings")
+    if os.path.isdir(rec_root):
+        for name in sorted(os.listdir(rec_root)):
+            rd = os.path.join(rec_root, name)
+            # watch_recordings 의 명명 규약(YYYY-MM-DD-슬러그)을 따르는 것만 본다.
+            # prep 같은 작업 폴더는 녹취가 아니다.
+            if not os.path.isdir(rd) or not re.match(r"^\d{4}-\d{2}-\d{2}-", name):
+                continue
+            try:
+                files = os.listdir(rd)
+            except OSError:
+                continue
+            if not any(f.endswith("-timestamped.txt") for f in files):
+                continue
+            # 정독을 이미 마친 것 (analysis.md 가 정독 산출이던 이전 판)은 제외한다.
+            # 도구 도입 전에 손으로 끝낸 건이 있다.
+            if "analysis.md" in files and "linebyline" not in files \
+                    and os.path.exists(os.path.join(rd, ".정독완료")):
+                continue
+            qa = [f for f in files if f.endswith("-QA.md")]
+            gap_rows = 0
+            if qa:
+                try:
+                    with open(os.path.join(rd, qa[0]), encoding="utf-8") as fh:
+                        gap_rows = len(re.findall(
+                            r"^\|\s*[\d:.]+\s*\|\s*[\d:.]+\s*\|", fh.read(), re.M))
+                except OSError:
+                    pass
+            if gap_rows and "결손복구.md" not in files:
+                W(True, "rec-gaps:" + name,
+                  "[녹취 결손 미복구] {} — 후보 {}건. "
+                  "python3 tools/regap.py _private/recordings/{}".format(
+                      name, gap_rows, name))
+            if "analysis-linebyline.md" not in files:
+                W(True, "rec-unread:" + name,
+                  "[녹취 정독 미완] {} — 전사만 있고 정독이 없다. "
+                  "python3 tools/analyze_recording.py _private/recordings/{}".format(
+                      name, name))
+
+    # 4c) 구글 드라이브 인박스. 올린 것은 무조건 정독까지 간다.
+    #     (기훈 2026-08-25: "구글 드라이브 inbox recording에 올리는건 무조건 정독하는거")
+    #     정독 여부는 판단 대상이 아니므로 게이트로 강제한다.
+    try:
+        if os.path.join(root, "tools") not in sys.path:
+            sys.path.insert(0, os.path.join(root, "tools"))
+        import drive_inbox as _di
+        _path, _rows = _di.survey()
+        if _path is None:
+            # 마운트를 못 찾는 것도 사건이다. 조용히 0건으로 넘어가면
+            # 인박스에 올린 것이 영영 안 보인다.
+            W(False, "drive-inbox-unmounted",
+              "[드라이브 인박스 없음] 구글 드라이브 데스크톱 동기화 확인 필요. "
+              "python3 tools/drive_inbox.py --list")
+        else:
+            for _f, _fp, _st, _why in _rows:
+                if _st != "완료":
+                    W(True, "drive-inbox:" + _f,
+                      "[인박스 미처리] {} — {}{}. python3 tools/drive_inbox.py".format(
+                          _f, _st, " ({})".format(_why) if _why else ""))
+    except Exception as _e:  # noqa: BLE001
+        W(False, "drive-inbox-error",
+          "[드라이브 인박스 검사 실패] {}".format(_e))
 
     # 5) NOW 나이
     a = _age_days(M.NOW_PATH)
