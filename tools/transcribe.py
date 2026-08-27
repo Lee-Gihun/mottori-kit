@@ -15,7 +15,7 @@
 사용:
   python3 tools/transcribe.py <audio> [--out DIR] [--lang ko] [--keep-wav]
 """
-import argparse, json, os, re, subprocess, sys, time
+import argparse, json, os, re, stat, subprocess, sys, tempfile, time
 
 FILTER = "highpass=f=80,lowpass=f=7500,dynaudnorm=f=150:g=15"
 MODEL = "mlx-community/whisper-large-v3-turbo"
@@ -23,14 +23,70 @@ GAP_SEC = 5.0          # 이 이상 벌어지면 결손 후보로 검사
 SILENCE_DB = -45.0     # mean_volume이 이보다 작으면 실제 무음으로 판정
 
 
+def _regular_input(path):
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("input is not a regular file")
+    finally:
+        os.close(fd)
+
+
+def _plain_output_directory(path):
+    parent = os.path.dirname(path)
+    try:
+        return all(
+            stat.S_ISDIR(os.lstat(candidate).st_mode)
+            for candidate in (parent, path)
+        )
+    except OSError:
+        return False
+
+
 def run(cmd, **kw):
     return subprocess.run(cmd, capture_output=True, text=True, **kw)
 
 
 def to_wav(src, dst):
-    r = run(["ffmpeg", "-y", "-i", src, "-af", FILTER, "-ac", "1", "-ar", "16000", dst])
-    if r.returncode != 0 or not os.path.exists(dst):
+    src_fd = os.open(src, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        if not stat.S_ISREG(os.fstat(src_fd).st_mode):
+            sys.exit("일반 오디오 파일이 아니다: " + src)
+        r = run(
+            ["ffmpeg", "-y", "-i", "/dev/fd/{}".format(src_fd), "-af", FILTER,
+             "-ac", "1", "-ar", "16000", dst],
+            pass_fds=(src_fd,),
+        )
+    finally:
+        os.close(src_fd)
+    if r.returncode != 0 or not os.path.isfile(dst) or os.path.getsize(dst) == 0:
         sys.exit(f"ffmpeg 실패:\n{r.stderr[-800:]}")
+
+
+def _reserved_output(path):
+    if not os.path.lexists(path):
+        return
+    info = os.lstat(path)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+        sys.exit("reserved output이 안전하지 않다: " + path)
+
+
+def _atomic_text(path, text):
+    _reserved_output(path)
+    fd, tmp = tempfile.mkstemp(prefix=".transcribe.", suffix=".tmp", dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+        tmp = None
+    finally:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 def transcribe(wav, lang):
@@ -86,65 +142,114 @@ def main():
     a = ap.parse_args()
 
     src = os.path.abspath(a.audio)
-    if not os.path.exists(src):
+    try:
+        _regular_input(src)
+    except OSError:
         sys.exit(f"파일 없음: {src}")
     stem = os.path.splitext(os.path.basename(src))[0]
     outdir = os.path.abspath(a.out) if a.out else os.path.dirname(src)
-    os.makedirs(outdir, exist_ok=True)
-    wav = os.path.join(outdir, f".{stem}.16k.wav")
-
-    t0 = time.time()
-    print(f"[1/4] 오디오 정규화: {os.path.basename(src)}", flush=True)
-    to_wav(src, wav)
-
-    print(f"[2/4] 전사 (mlx large-v3-turbo, lang={a.lang}) — 오디오 길이의 약 1/8 소요", flush=True)
-    res = transcribe(wav, a.lang)
-    segs = res.get("segments") or []
-
-    print(f"[3/4] 저장 ({len(segs)} 세그먼트)", flush=True)
+    try:
+        os.makedirs(outdir, mode=0o700, exist_ok=True)
+    except OSError as exc:
+        sys.exit("출력 디렉터리를 만들 수 없다: {} ({})".format(outdir, exc))
+    if not _plain_output_directory(outdir):
+        sys.exit("출력 경로가 일반 디렉터리가 아니다: " + outdir)
     base = os.path.join(outdir, stem)
-    with open(base + "-timestamped.txt", "w") as f:
-        for s in segs:
-            f.write(f"[{hhmmss(s['start'])}] {s['text'].strip()}\n")
-    with open(base + ".txt", "w") as f:
-        f.write("\n".join(s["text"].strip() for s in segs) + "\n")
-    with open(base + ".srt", "w") as f:
-        for i, s in enumerate(segs, 1):
-            f.write(f"{i}\n{hhmmss(s['start'], True)} --> {hhmmss(s['end'], True)}\n"
-                    f"{s['text'].strip()}\n\n")
-    with open(base + ".json", "w") as f:
-        json.dump(res, f, ensure_ascii=False, indent=1)
+    canonical_wav = os.path.join(outdir, f".{stem}.16k.wav")
+    reserved = [
+        canonical_wav,
+        base + "-timestamped.txt",
+        base + ".txt",
+        base + ".srt",
+        base + ".json",
+        base + "-QA.md",
+        base + ".spk.txt",
+    ]
+    for path in reserved:
+        _reserved_output(path)
+    wav_fd, wav = tempfile.mkstemp(prefix=".transcribe-wav.", suffix=".wav", dir=outdir)
+    os.close(wav_fd)
 
-    print("[4/5] 결손 스캔", flush=True)
-    gaps = scan_gaps(segs, wav)
-    real = [g for g in gaps if g[3] == "결손 후보"]
-    with open(base + "-QA.md", "w") as f:
-        f.write(f"# 전사 QA — {stem}\n\n")
-        f.write(f"세그먼트 {len(segs)} · 글자수 {sum(len(s['text']) for s in segs):,} · "
-                f"길이 {hhmmss(segs[-1]['end']) if segs else '0'}\n\n")
+    try:
+        t0 = time.time()
+        print(f"[1/4] 오디오 정규화: {os.path.basename(src)}", flush=True)
+        to_wav(src, wav)
+
+        print(f"[2/4] 전사 (mlx large-v3-turbo, lang={a.lang}) — 오디오 길이의 약 1/8 소요", flush=True)
+        res = transcribe(wav, a.lang)
+        segs = res.get("segments") or []
+
+        print(f"[3/4] 저장 ({len(segs)} 세그먼트)", flush=True)
+        _atomic_text(
+            base + "-timestamped.txt",
+            "".join(f"[{hhmmss(s['start'])}] {s['text'].strip()}\n" for s in segs),
+        )
+        _atomic_text(
+            base + ".txt", "\n".join(s["text"].strip() for s in segs) + "\n"
+        )
+        _atomic_text(
+            base + ".srt",
+            "".join(
+                f"{i}\n{hhmmss(s['start'], True)} --> {hhmmss(s['end'], True)}\n"
+                f"{s['text'].strip()}\n\n"
+                for i, s in enumerate(segs, 1)
+            ),
+        )
+        _atomic_text(base + ".json", json.dumps(res, ensure_ascii=False, indent=1) + "\n")
+
+        print("[4/5] 결손 스캔", flush=True)
+        gaps = scan_gaps(segs, wav)
+        real = [g for g in gaps if g[3] == "결손 후보"]
+        qa = [
+            f"# 전사 QA - {stem}\n\n",
+            f"세그먼트 {len(segs)} · 글자수 {sum(len(s['text']) for s in segs):,} · "
+            f"길이 {hhmmss(segs[-1]['end']) if segs else '0'}\n\n",
+        ]
         if not gaps:
-            f.write(f"{GAP_SEC}초 이상 공백 없음.\n")
+            qa.append(f"{GAP_SEC}초 이상 공백 없음.\n")
         else:
-            f.write(f"| 시작 | 끝 | 평균 dB | 판정 |\n|---|---|---|---|\n")
-            for st, en, db, v in gaps:
-                f.write(f"| {hhmmss(st)} | {hhmmss(en)} | {db if db is None else round(db,1)} | {v} |\n")
+            qa.append("| 시작 | 끝 | 평균 dB | 판정 |\n|---|---|---|---|\n")
+            qa.extend(
+                f"| {hhmmss(st)} | {hhmmss(en)} | "
+                f"{db if db is None else round(db,1)} | {verdict} |\n"
+                for st, en, db, verdict in gaps
+            )
         if real:
-            f.write(f"\n**결손 후보 {len(real)}건. 해당 구간을 직접 들어보고, 빠진 발화가 있으면 "
-                    f"그 구간만 잘라 재전사할 것. 결손을 화자의 침묵으로 읽지 말 것 (7/26 교훈).**\n")
-    if not a.no_diarize:
-        print("[5/5] 화자 분리 [추정]", flush=True)
-        r = run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "diarize.py"),
-                 wav, "--segments", base + ".json", "--out", base + ".spk.txt"]
-                + (["--k", str(a.speakers)] if a.speakers else []))
-        print("   " + ((r.stdout or r.stderr).strip().splitlines() or ["실패"])[-1])
+            qa.append(
+                f"\n**결손 후보 {len(real)}건. 해당 구간을 직접 들어보고, 빠진 발화가 있으면 "
+                "그 구간만 잘라 재전사할 것. 결손을 화자의 침묵으로 읽지 말 것 (7/26 교훈).**\n"
+            )
+        _atomic_text(base + "-QA.md", "".join(qa))
+        if not a.no_diarize:
+            print("[5/5] 화자 분리 [추정]", flush=True)
+            spk_fd, spk_tmp = tempfile.mkstemp(
+                prefix=".diarize.", suffix=".txt", dir=outdir
+            )
+            os.close(spk_fd)
+            r = run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "diarize.py"),
+                     wav, "--segments", base + ".json", "--out", spk_tmp]
+                    + (["--k", str(a.speakers)] if a.speakers else []))
+            if r.returncode == 0 and os.path.isfile(spk_tmp) and os.path.getsize(spk_tmp) > 0:
+                os.replace(spk_tmp, base + ".spk.txt")
+            else:
+                try:
+                    os.unlink(spk_tmp)
+                except OSError:
+                    pass
+                sys.exit("화자 분리 실패: " + ((r.stderr or r.stdout).strip() or "빈 산출물"))
+            print("   " + ((r.stdout or r.stderr).strip().splitlines() or ["완료"])[-1])
 
-    if not a.keep_wav:
-        os.remove(wav)
+        if a.keep_wav:
+            os.replace(wav, canonical_wav)
+            wav = None
 
-    print(f"\n완료 ({time.time()-t0:.0f}초): {base}-timestamped.txt")
-    if not a.no_diarize:
-        print(f"화자: {base}.spk.txt (추정 — 인용 전 청취)")
-    print(f"QA: {base}-QA.md — 공백 {len(gaps)}건 중 결손 후보 {len(real)}건")
+        print(f"\n완료 ({time.time()-t0:.0f}초): {base}-timestamped.txt")
+        if not a.no_diarize:
+            print(f"화자: {base}.spk.txt (추정 — 인용 전 청취)")
+        print(f"QA: {base}-QA.md — 공백 {len(gaps)}건 중 결손 후보 {len(real)}건")
+    finally:
+        if wav and os.path.exists(wav):
+            os.unlink(wav)
 
 
 if __name__ == "__main__":

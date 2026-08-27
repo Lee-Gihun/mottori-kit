@@ -398,9 +398,20 @@ def c_regression():
     계측기가 자기 옆의 계측기를 안 보고 있었던 셈이다.
     """
     scripts = ["test_memcheck.py", "test_state_runtime.py", "test_hook_runtime.py"]
+    kit_sync = os.path.join(ROOT, "tools", "kit_sync.py")
     # kit_sync.py는 상류에만 있는 표지다. 배포 킷에서는 installer와 그 fixture가 둘 다
     # distribution contract이므로 한쪽을 지워 3-suite green으로 축소하는 경로를 막는다.
-    if not os.path.isfile(os.path.join(ROOT, "tools", "kit_sync.py")):
+    if os.path.isfile(kit_sync):
+        upstream_suites = ("test_recording_language.py", "test_slack_pipeline.py")
+        missing = [
+            os.path.join("tools", script)
+            for script in upstream_suites
+            if not os.path.isfile(os.path.join(ROOT, "tools", script))
+        ]
+        if missing:
+            return FAIL, "상류 전용 회귀 구성 누락: " + ", ".join(missing)
+        scripts.extend(upstream_suites)
+    else:
         required = ("setup.sh", os.path.join("tools", "test_setup_migration.py"))
         missing = [path for path in required if not os.path.isfile(os.path.join(ROOT, path))]
         if missing:
