@@ -12,7 +12,7 @@
 
 | 엔진 (업스트림 소유) | 인스턴스 (여기서 쓴다) |
 |---|---|
-| `CLAUDE.md` 상시 코어 7 | `system/instance-rules.md` |
+| `AGENTS.md` 상시 코어 7 (`CLAUDE.md`가 import) | `system/instance-rules.md` |
 | `system/rituals.md` | `system/rituals.local.md` |
 | `system/kit-decisions.md` | `system/decisions.md` |
 

@@ -28,12 +28,13 @@ SessionStart 훅은 두 NOW를 합쳐 주입하며, local이 없는 clone은 그
 ## 구성
 
 ```
-tools/           엔진. 16개 중 핵심 넷은 memlib · now · recall · rec
+tools/           엔진. 핵심 넷은 memlib · now · recall · rec
   memlib.py      스키마 정본. 나머지가 전부 여기서 import
   now.py         journal append · NOW 렌더 · 드리프트 검사 · 훅 진입점
   recall.py      전사 원장 표적 검색 (Claude jsonl + Codex rollout)
   rec.py         개인 사실 원장 — 원자 노트 + 감사 사슬
-  ask_codex.sh   Codex 발주. 두 런타임 티키타카의 실행부
+  fresh_worker.py 광역 작업을 fresh+ephemeral run으로 격리하고 bounded receipt만 반환
+  ask_codex.sh   Codex 발주. 기본 fresh 경로는 fresh_worker에 위임
   doctor.py      설치 검증기
 system/          규약. PRD 둘 · rituals · 렌즈 13종 · deep-pass · WORKING-WITH-AI
 .claude/         Claude 훅 3종 + 슬래시 커맨드 4종

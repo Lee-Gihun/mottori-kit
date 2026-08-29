@@ -1,7 +1,7 @@
 # 인스턴스 규약 — CHANGEME
 
 *이 파일은 git에 안 올라간다 (`.gitignore`). 이 머신에서만 참인 것을 여기 쓴다.*
-*`CLAUDE.md` 상시 코어 1(불가침)이 이 문서를 가리킨다.*
+*`AGENTS.md` 상시 코어 1(불가침)이 이 문서를 가리킨다.*
 
 작성일: CHANGEME · context: CHANGEME
 

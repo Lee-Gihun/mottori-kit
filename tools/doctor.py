@@ -397,10 +397,11 @@ def c_regression():
     검출기가 살아 있는지를 재는 유일한 자동 수단인데 검사 목록에 없었다.
     계측기가 자기 옆의 계측기를 안 보고 있었던 셈이다.
     """
-    scripts = ["test_memcheck.py", "test_state_runtime.py", "test_hook_runtime.py"]
+    scripts = ["test_memcheck.py", "test_state_runtime.py", "test_hook_runtime.py",
+               "test_fresh_worker.py"]
     kit_sync = os.path.join(ROOT, "tools", "kit_sync.py")
     # kit_sync.py는 상류에만 있는 표지다. 배포 킷에서는 installer와 그 fixture가 둘 다
-    # distribution contract이므로 한쪽을 지워 3-suite green으로 축소하는 경로를 막는다.
+    # distribution contract이므로 한쪽을 지워 4-suite green으로 축소하는 경로를 막는다.
     if os.path.isfile(kit_sync):
         upstream_suites = ("test_recording_language.py", "test_slack_pipeline.py")
         missing = [
@@ -630,23 +631,22 @@ def c_missed_gate():
 
 
 def c_agents_parity():
-    """CLAUDE.md와 AGENTS.md가 같은가.
+    """두 런타임이 AGENTS.md 한 정본의 같은 규약을 읽는가 (KIT-DR-007).
 
-    두 런타임이 같은 규약 위에서 돌게 하려고 바이트 동일 사본을 둔다. 2026-08-24 실측:
-    두 파일이 함께 존재한 커밋 3개 전부 동일했다 — **드리프트는 한 번도 안 났다.**
-    다만 그걸 지켜온 것은 구조가 아니라 사람이 손으로 맞춘 것이고 표본은 4일이다.
-    그래서 메커니즘(포인터·심볼릭링크)을 바꾸는 대신 탐지기를 둔다. 비용이 0에 가깝다.
+    2026-08-24에는 바이트 동일 사본의 실측 drift가 0이라 구조 변경을 보류했다. 8/29 첫 실제
+    drift가 발생해 반전 조건이 발화했다. Claude의 공식 import인 exact `@AGENTS.md`가 정본이며,
+    mirror는 같은 순간에도 다음 편집에서 갈라질 수 있으므로 exact import만 PASS한다.
     """
     a, b = os.path.join(ROOT, "CLAUDE.md"), os.path.join(ROOT, "AGENTS.md")
     if not os.path.exists(a):
         return FAIL, "CLAUDE.md 없음"
     if not os.path.exists(b):
-        return WARN, "AGENTS.md 없음 — Codex가 규약을 못 읽는다"
+        return FAIL, "AGENTS.md 없음 — 두 런타임 모두 단일 정본을 못 읽는다"
     x, y = open(a, "rb").read(), open(b, "rb").read()
-    if x == y:
-        return PASS, f"바이트 동일 ({len(x)} bytes)"
-    return FAIL, (f"갈라졌다 (CLAUDE {len(x)} / AGENTS {len(y)} bytes) — "
-                  "두 런타임이 다른 규약을 읽는다. cp CLAUDE.md AGENTS.md")
+    if x in (b"@AGENTS.md", b"@AGENTS.md\n"):
+        return PASS, f"AGENTS.md 단일 정본 import ({len(y)} bytes)"
+    return FAIL, (f"단일 정본 아님 (CLAUDE {len(x)} / AGENTS {len(y)} bytes) — "
+                  "CLAUDE.md를 exact @AGENTS.md import로 고쳐라")
 
 
 def c_schema():
@@ -800,7 +800,7 @@ CHECKS = [
     ("밸브 · 연료 비추적",      c_ignored),
     ("밸브 · 추적 심볼릭링크",   c_symlinks),
     ("게이트 · 산출물 검사누락",  c_missed_gate),
-    ("규약 · CLAUDE=AGENTS",    c_agents_parity),
+    ("규약 · AGENTS 단일 정본", c_agents_parity),
     ("엔진 · config 스키마",    c_schema),
     ("엔진 · 업스트림",         c_upstream),
     ("엔진 · 킷 드리프트",      c_engine_drift),

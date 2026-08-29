@@ -5,7 +5,7 @@ PRD: system/PRD-session-memory.md (v3) §3.4. 잃어버린 게 아니라 안 뒤
 
     recall.py find "패턴" [--source all|claude|codex|dumps] [--role user|assistant]
                           [--since YYYY-MM-DD] [--around 2] [--max 8] [--thinking]
-    recall.py sessions
+    recall.py sessions [--max 40 | --all]
 
 소스 레지스트리는 tools/memlib.py EPISODIC_SOURCES가 정본이다 (claude 전사 + codex 세션
 + _private/dumps 챗 덤프). dumps 결과는 세션 내 열람 전용 — 산출물·커밋 인용 금지.
@@ -420,10 +420,16 @@ def find(pattern, role=None, since=None, around=2, max_hits=8, thinking=False, s
     return 0
 
 
-def sessions():
-    for sname, kind, fp in _source_files(None):
+def sessions(max_sessions=40):
+    files = _source_files(None)
+    files.sort(key=lambda row: os.path.getmtime(row[2]), reverse=True)
+    total = len(files)
+    shown = files if max_sessions is None else files[:max_sessions]
+    for sname, kind, fp in shown:
         sz = os.path.getsize(fp) / 1048576
         print(f"[{sname:6s}] {os.path.basename(fp)[:52]:54s} {sz:8.1f} MB")
+    if len(shown) < total:
+        print(f"({len(shown)}/{total}개 최신순 표시 · 전량은 `recall.py sessions --all`)")
     return 0
 
 
@@ -446,7 +452,9 @@ def main():
                    help="score=매치품질(기본) · recent=최신순 · oldest=파일순(이전 동작)")
     f.add_argument("--all-instances", action="store_true",
                    help="다른 인스턴스의 Codex 세션까지 검색 (기본은 이 인스턴스만 — DR-025)")
-    sub.add_parser("sessions")
+    s = sub.add_parser("sessions")
+    s.add_argument("--max", type=int, default=40, dest="max_sessions")
+    s.add_argument("--all", action="store_true")
     a = ap.parse_args()
     if a.cmd == "find":
         srcs = None if (a.source in (None, "all")) else set(a.source.split(","))
@@ -454,7 +462,9 @@ def main():
                     include_agents=a.include_agents, include_system=a.include_system,
                     all_instances=a.all_instances, order=a.order)
     if a.cmd == "sessions":
-        return sessions()
+        if a.max_sessions < 1 and not a.all:
+            s.error("--max는 1 이상이어야 한다")
+        return sessions(None if a.all else a.max_sessions)
     ap.print_help()
     return 1
 
