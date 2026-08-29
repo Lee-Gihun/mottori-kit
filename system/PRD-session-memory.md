@@ -271,6 +271,8 @@ auto-memory 메커니즘 개조 없음 · journal에 대화 미러링 없음 · 
 6. 의식 원가 ≤ 툴콜 1회, public NOW와 SessionStart additionalContext 각각 ≤ 6,000 UTF-8 bytes.
    주입은 public/local 양쪽에 최소 예산을 보장하고 절단 사실을 표시
 7. **규칙 준수율 — 다이어트 후 상시 규칙 위반이 체감 감소하는가 (기훈 관측 기준)**
+8. **광역 worker 반환량 — fresh worker 한 건이 master context에 반환하는 receipt ≤ 4,096
+   UTF-8 bytes.** native session persistence는 0이고, 전문 trace는 local-private run record에 남는다
 
 ## 5. 단계별 목표 (실행 계약은 §12)
 
@@ -409,8 +411,25 @@ positive/disabled-negative canary로만 검증한다.
 읽기 순서 고정: **public NOW + local overlay → 필요한 scope의 journal 최근 ~20줄 →
 (작업 스레드의) 서류철 → 필요 시 recall.** local overlay가 없으면 그 부재를 상태로 취급한다.
 전부 플랫폼 독립적 플레인 파일이므로 핸드오프 문서를 따로 쓰지 않는다 — 레이더 HANDOFF가
-장기 작업용이었다면, NOW가 세션 수준의 상시 HANDOFF다. AGENTS.md에 CLAUDE.md와 동일 규칙
-반영(기존 미러링 관행).
+장기 작업용이었다면, NOW가 세션 수준의 상시 HANDOFF다. 런타임 공통 규약은 `AGENTS.md`가
+단일 정본이고 Claude가 exact `@AGENTS.md`로 import한다 (8/29 첫 mirror drift 뒤 KIT-DR-007).
+
+### 10.5 fresh bounded worker (KIT-DR-007)
+
+무한 master는 기훈의 인간용 inbox로 유지할 수 있지만, 광역 독해·감사·런타임 토론은
+`tools/fresh_worker.py`의 fresh+ephemeral worker로 격리한다. 정확한 prompt snapshot, event stream,
+stderr, final result, content hash가 `_private/work/runs/`의 자기완결 run record이고, master에는
+고정 필드+UTF-8-safe result로 된 4,096-byte receipt만 반환한다. Claude v1 capability는 read-only
+review (`Read|Glob|Grep`), Codex v1은 workspace-write sandbox다. capability는 숨기지 않고 receipt와
+meta에 쓴다. resume·runtime fallback·public landing·detached scheduler·write-capable Claude는 v1
+범위 밖이다. 이 모듈을 2주간 광역 작업이 한 번도 호출하지 않으면 shallow wrapper로 판정해 제거한다.
+
+두 adapter는 훅에 의존하지 않고 dispatch prompt가 `AGENTS.md`와 필요한 public/local 정본 경로를
+명시한다. Claude는 safe mode와 strict empty MCP config로 훅·스킬·connector action을 닫는다.
+Codex는 user config를 무시하고 web·command network·apps·plugins·memories·fan-out을 닫는다.
+2026-08-29 live canary에서 built-in tool allowlist만으로 Claude의 Gmail·Drive action이 남고,
+Codex에서는 `workspace-write`만으로 desktop plugin/fan-out이 남는 것을 각각 확인해 이 경계를
+추가했다. 최종 canary는 두 runtime 모두 native session 수 불변과 의도한 tool boundary를 통과했다.
 
 ## 11. 시각화 — memory-map.html (`system/` 아래, P3 예정) [신설]
 

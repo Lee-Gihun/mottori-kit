@@ -98,6 +98,13 @@ Cochrane systematic review는 50편에 12개월을 쓰는데, 그 절차의 절�
 이건 운영 디테일이 아니라 **장기 AI 작업을 가능하게 하는 전제 조건**이다. 없으면 한 세션을 못 넘고,
 있으면 무한히 이어붙일 수 있다.
 
+**광역 독해·감사·런타임 토론은 무한 마스터 안에서 직접 돌리지 않는다 (KIT-DR-007).**
+`python3 tools/fresh_worker.py --runtime claude|codex <프롬프트파일>`로 fresh+ephemeral worker에
+맡기면 전체 event stream은 `_private/work/runs/`에 남고, 마스터에는 bounded receipt만 돌아온다.
+정확한 byte·capability 계약은 `PRD-session-memory.md` §10.5가 정본이다. 작은 대화·단일 파일
+수정까지 위임하면 오히려 왕복이 늘므로, 예상 tool 결과가 receipt 예산을 넘는 작업에만 쓴다.
+두 adapter는 user connector와 fan-out을 닫으므로 필요한 NOW·서류철·원문 경로를 prompt에 직접 쓴다.
+
 부속 규칙 세 개, 전부 레이더에서 실제로 물렸다:
 
 - **한 항목 끝날 때마다 쓴다.** 모아뒀다 마지막에 쓰면 중단 시 전부 잃는다.

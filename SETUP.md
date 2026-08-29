@@ -42,7 +42,7 @@ bash setup.sh
 `system/memory-config.json`을 만든다. 비대화 모드도 있다:
 
 ```bash
-bash setup.sh --name tinder-work --context work
+bash setup.sh --name team-work --context work
 ```
 
 `setup.sh`가 하는 일은 넷뿐이다.
@@ -145,15 +145,21 @@ python3 tools/rec.py hot
 
 ## 7. Codex 연결 (선택)
 
-`AGENTS.md`는 `CLAUDE.md`와 바이트 동일하다. Codex는 `AGENTS.md`를 자동으로 읽으므로
-두 런타임이 같은 규약 위에서 돈다. 발주는:
+`AGENTS.md`가 공통 규약의 단일 정본이고 `CLAUDE.md`는 exact `@AGENTS.md` import다. Codex는
+`AGENTS.md`를 자동으로 읽으므로 두 런타임이 같은 규약 위에서 돈다.
+
+광역 독해·감사·런타임 토론은 master 세션에 전량을 쌓지 않고 fresh worker로 격리한다:
 
 ```bash
-nohup bash tools/ask_codex.sh <프롬프트파일> > /tmp/codex.log 2>&1 &
+python3 tools/fresh_worker.py --runtime claude <프롬프트파일>
+python3 tools/fresh_worker.py --runtime codex  <프롬프트파일>
+bash tools/ask_codex.sh <프롬프트파일>   # Codex fresh worker의 호환 진입점
 ```
 
-프롬프트는 **반드시 파일로** 준다 (명령줄에 직접 쓰면 백틱이 셸 명령으로 실행된다 — 실측).
-기본은 새 세션이다. 이유는 `tools/ask_codex.sh` 머리말에 적혀 있다.
+프롬프트는 이 workspace 안의 regular UTF-8 파일이어야 하며 symlink는 거부한다. 명령줄에 내용을
+직접 쓰면 백틱이 셸 명령으로 실행될 수 있다. 기본 실행은 동기식이고, 전체 trace는
+`_private/work/runs/`에 두며 호출자에게는 bounded receipt만 반환한다. 정확한 byte·capability
+계약은 `system/PRD-session-memory.md` §10.5가 정본이다.
 
 ## 8. 마지막 — 사람에게 넘길 것
 

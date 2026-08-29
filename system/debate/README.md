@@ -19,7 +19,7 @@
 | | 자동 티키타카 | 기훈의 무한세션 |
 |---|---|---|
 | 무엇 | Claude가 `ask_codex.sh`로 부르는 논쟁 | 기훈이 Codex 앱에서 직접 하는 대화 |
-| 세션 | **매번 새 세션.** 일회용 | 하나를 계속 쓴다 |
+| 세션 | **매번 fresh+ephemeral.** 전사는 private run record로 대체 | 하나를 계속 쓴다 |
 | 맥락 전달 | 프롬프트에 적은 **파일 경로** | 그가 부르면 Codex가 조회 |
 | 결론 착지 | `system/debate/` 또는 해당 서류철 | 필요하면 그가 지시 |
 | 누가 읽나 | 착지한 파일로 읽는다 | 그가 실시간으로 읽는다 |
@@ -40,13 +40,18 @@
   "그가 읽게 하려고" 만든 기본값이 정확히 그 목적을 배반했다.)*
 - **조용한 폴백을 없앴다.** `--resume`이나 `--resume-root`를 명시했는데 락에 걸리면 **중단한다**
   (exit 2). 폴백하지 않는다. 요청이 실패했다는 사실 자체가 결과다.
-- 새 세션도 `AGENTS.md`를 자동으로 읽으므로 코어 규약은 유지된다. **손실되는 것은 대화 누적뿐이고
-  그건 애초에 디스크에 있어야 할 것이다.**
-- 그래서 **프롬프트에 파일 경로를 넉넉히 적는다.** 새 세션은 아무것도 모른다고 가정하고 쓴다.
+- `fresh_worker.py`가 native session persistence를 끄고 전체 event stream은
+  `_private/work/runs/`에, 호출자에게는 bounded receipt만 남긴다 (KIT-DR-007).
+  정확한 byte·capability 계약은 `../PRD-session-memory.md` §10.5가 정본이다.
+- 두 worker 모두 외부 action surface와 훅을 닫고, dispatch prompt 지시대로 `AGENTS.md`와 필요한
+  디스크 정본을 직접 읽는다. Claude는 safe mode+strict empty MCP, Codex는 user config 무시+web·
+  network·apps·plugins·fan-out 비활성화다. NOW가 필요한 작업은 프롬프트에 public/local 두 경로를
+  명시한다. **프롬프트에는 쟁점 파일과 직접 필요한 정본만 적는다.** `START_HERE`·journal·전사 전량을
+  방어적으로 나열하지 않는다. 깊이는 dossier→표적 recall 순으로 worker가 좁혀 읽는다.
 - 프롬프트는 파일로 만들어 stdin으로 넣는다. 명령줄에 직접 쓰면 백틱이 셸 명령으로 실행된다
   (8/22 실측: 경로가 통째로 사라진 프롬프트가 전달됐다).
 - 발주용 임시 프롬프트는 `system/debate/_p_*.md`이고 gitignore된다. 남아야 할 것은 쟁점 파일뿐이다.
-- **발주와 동시에 감시자를 붙인다. 이건 선택이 아니다.**
+- 기본은 동기 실행이다. 호출한 tool/session이 오래 살아남지 못할 장기 발주만 기존 이중 감시를 쓴다.
 
   ```bash
   nohup bash tools/ask_codex.sh <프롬프트> > /tmp/codex-<태그>.log 2>&1 &   # 세션을 넘어 산다
@@ -59,17 +64,19 @@
   8/24~25 실측: 라운드 4·5가 끝났는데 내가 안 물어봐서 몇 시간 방치됐고 기훈이
   "코덱스 답변 와도 잠수탄다"고 지적했다. 폴링을 기억에 맡기면 안 도는 규칙이다.)*
 
-## Codex가 자동으로 보는 것과 조회해야 하는 것
+## 기훈의 Codex 무한세션이 자동으로 보는 것과 worker가 조회해야 하는 것
 
-새 세션 기본값에서 특히 중요하다. 착각하면 "봤겠지" 하고 안 적게 된다.
+첫 열은 Codex 앱의 기훈 무한세션 기본값이다. 격리 worker는 훅을 끄므로 별도 열을 따른다.
+착각하면 "봤겠지" 하고 안 적게 된다.
 
-| 층 | 자동 주입 | 조회 가능 |
+| 층 | 기훈 무한세션 자동 주입 | 격리 worker |
 |---|---|---|
-| `AGENTS.md` | ○ | |
-| `NOW` · journal · 서류철 · ledger · lenses · decisions · debate | ✕ | ○ (직접 읽음) |
-| Claude 대화 원문 | ✕ | ○ (`tools/recall.py`, Claude JSONL) |
-| Claude 네이티브 메모리 | ✕ | ○ (파일로 존재) |
-| Codex 네이티브 메모리 | 일부 | ○ (`~/.codex/memories/`) |
+| `AGENTS.md` | ○ | prompt 지시 후 직접 읽음 |
+| public+local `NOW` | ○ (SessionStart hook) | 자동 ✕ · 필요 시 두 경로 직접 읽음 |
+| journal · 서류철 · ledger · lenses · decisions · debate | ✕ | prompt에 적은 표적만 직접 읽음 |
+| Claude 대화 원문 | ✕ | Claude는 미리 추출한 slice나 JSONL을 Read/Grep · Codex만 `tools/recall.py` 실행 |
+| Claude 네이티브 메모리 | ✕ | 격리상 사용 안 함 |
+| Codex 네이티브 메모리 | 일부 | 격리상 사용 안 함 |
 
 **"보인다"는 디스크에서 즉시 조회할 수 있다는 뜻이지 머릿속에 들어 있다는 뜻이 아니다.**
 공식 권고도 같다. 반드시 적용될 지식은 네이티브 메모리가 아니라 `AGENTS.md`와 디스크 문서에 둔다.

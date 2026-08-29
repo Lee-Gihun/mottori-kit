@@ -70,10 +70,14 @@ doctor는 훅 명령이 올바른 JSON을 뱉는 것까지 확인한다. 그 JSO
   ```
 - `[기계]` Codex 발주 왕복 (codex CLI가 있을 때)
   ```bash
-  echo "한 줄로 답해라: 지금 이 리포의 상시 코어는 몇 개인가." > /tmp/_p.md
-  nohup bash tools/ask_codex.sh /tmp/_p.md > /tmp/codex.log 2>&1 &
-  sleep 60 && tail -5 /tmp/codex.log
+  printf '%s\n' "한 줄로 답해라: 지금 이 리포의 상시 코어는 몇 개인가." \
+    > system/debate/_p_canary.md
+  bash tools/ask_codex.sh system/debate/_p_canary.md > /tmp/codex.log
+  tail -15 /tmp/codex.log
+  rm system/debate/_p_canary.md
   ```
+  `FRESH_WORKER v1`, `capability: workspace-write`, `status: success`가 보여야 한다. receipt는
+  4,096 bytes 이하여야 하고 전문은 출력되지 않아야 한다.
 - `[ ]` 슬래시 커맨드 `/now` `/recall` `/dossier` `/garden`이 뜨는가
 - `[기계]` **검증 게이트가 실제로 막는가.** 세 판 다 확인해라. 하나라도 통과하면 게이트가
   없는 것과 같다.

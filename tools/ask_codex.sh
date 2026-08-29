@@ -11,13 +11,13 @@
 # 즉 "그가 앱을 켜고 있을수록 resume이 실패한다"는 역설이라 기본값으로 부적합하다.
 #
 # 대신 역할을 나눈다 (기훈-codex 합의, 루트 스레드 00:54).
-#   - **자동 티키타카** = 이 스크립트. 매번 새 세션. 맥락은 프롬프트에 적은 파일 경로로 전달하고
-#     결론은 system/debate/ 또는 해당 서류철에 착지시킨다. 세션은 일회용이다.
+#   - **자동 티키타카** = 이 스크립트. fresh_worker.py의 bounded·ephemeral Codex adapter를
+#     호출해 전체 trace는 local-private run에 두고 이 호출자에게는 bounded receipt만 돌린다.
 #   - **무한세션** = 기훈이 Codex 앱에서 직접 쓰는 본진. 필요할 때 그가 이렇게 부른다.
 #     "Claude 최신 관련 대화와 메모리까지 확인하고, 디스크 정본을 기준으로 이어가."
 #
-# 새 세션도 AGENTS.md를 자동으로 읽으므로 코어 규약은 유지된다. 손실되는 것은 대화 누적뿐이고,
-# 그건 애초에 디스크에 있어야 할 것이다.
+# fresh worker의 dispatch contract가 AGENTS.md를 직접 읽게 하므로 코어 규약은 유지된다.
+# 손실되는 것은 대화 누적뿐이고, 그건 애초에 디스크에 있어야 할 것이다.
 #
 # 사용:
 #   bash tools/ask_codex.sh <프롬프트파일>                  # 새 세션 (기본)
@@ -39,7 +39,7 @@ SID="$3"
 
 if [ "$MODE" = "--fresh" ] || [ -z "$MODE" ]; then
   echo "[$STAMP] FRESH <- $PROMPT_FILE" >> "$LOG"
-  codex exec --sandbox workspace-write - < "$PROMPT_FILE"
+  python3 "$ROOT/tools/fresh_worker.py" --runtime codex "$PROMPT_FILE"
   echo "[$STAMP] DONE fresh" >> "$LOG"
   exit 0
 fi
