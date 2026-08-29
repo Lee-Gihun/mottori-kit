@@ -67,3 +67,16 @@ kit-decisions를 고치고 pull. **충돌 0, 새 교훈 도착, 인스턴스 것
 맥락: tracked journal이 private-derived 사건을 재출력했고 동시 append/render에는 stale writer·truncate window가 있었다.
 안전성·마이그레이션: 오류는 private fail-close하고 lock·atomic publish·rollback으로 묶으며, journal provenance만 동결하고 legacy threads는 수동 분리한다.
 기각 대안: tracks 겸용·오류 시 public은 privacy fail-open. 참조: `PRD-session-memory.md` §3.2, §9.
+
+### DR-007 광역 작업은 fresh bounded worker, 지시 정본은 AGENTS 하나 (2026-08-29 · active)
+결정: master는 사람의 inbox로 두고 광역 독해·감사·토론은 `fresh_worker.py`의 ephemeral run으로
+격리한다. master에는 bounded receipt만 반환하고 전문 trace는 `_private/work/runs/`에 둔다.
+정확한 byte·capability 계약은 `PRD-session-memory.md` §10.5가 정본이다.
+공통 규약은 `AGENTS.md` 하나가 정본이며 Claude는 exact `@AGENTS.md`로 import한다.
+맥락: 광역 tool trace와 누적 세션이 master context를 잠식했고, 바이트 동일한 지시 사본도 실제로
+갈라졌다. 파일 수나 NOW 크기를 줄이는 것보다 원인을 만드는 실행을 격리하는 편이 직접적이었다.
+경계: 두 adapter는 connector·web·network·plugin·fan-out을 닫고 훅에 기대지 않는다. runtime
+fallback, public trace, detached scheduler, write-capable Claude는 v1 범위 밖이다.
+기각 대안: 파일 대이동·NOW 축소는 원인인 광역 trace를 못 줄이고, DB·embedding index는 현재
+계측상 병목이 아니며, runtime fallback과 public trace는 실패·국경을 숨기므로 기각한다.
+재검토: 2주간 광역 작업 호출이 0이면 worker를 제거한다. 참조: `PRD-session-memory.md` §10.5.
