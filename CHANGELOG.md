@@ -31,6 +31,12 @@ system/instance-rules.md에 쓴다. 업스트림 `AGENTS.md`나 `CLAUDE.md`에 �
 trace는 `_private/work/runs/`에 보관한다. 호출자에게는 bounded receipt만 반환한다.
 `recall.py sessions`도 최신 40개만 기본 표시하며 `--all`일 때만 전량을 낸다.
 
+### `[알아둘 것]` 외부 문안은 본문 전에 두 줄을 보인다
+
+에이전트가 발신 산출물을 쓰기 전에 독자·승인자·목적함수와 실제 근거 경로를 먼저 보여주고 바로
+계속한다. 승인 단계가 아니다. 담백한 문체는 새 스킬이나 길이 제한이 아니라 `system/rituals.md`의
+10건 파일럿으로 들어갔다.
+
 ## v0.2 · 2026-08-24
 
 ### `[해야 함]` config schema v1 → v2
