@@ -73,3 +73,4 @@
 
 Forrester, *Industrial Dynamics* · Meadows, *Thinking in Systems* · 대기행렬 이론
 (Erlang, M/M/1) · Goodhart (1975) / Strathern의 정식화 · Senge의 시스템 원형.
+

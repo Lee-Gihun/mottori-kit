@@ -21,6 +21,10 @@ FILTER = "highpass=f=80,lowpass=f=7500,dynaudnorm=f=150:g=15"
 MODEL = "mlx-community/whisper-large-v3-turbo"
 GAP_SEC = 5.0          # 이 이상 벌어지면 결손 후보로 검사
 SILENCE_DB = -45.0     # mean_volume이 이보다 작으면 실제 무음으로 판정
+DETECT_LANGUAGES = ("ko", "en")   # 이 밖의 표는 버린다
+DETECT_WINDOW_SEC = 30.0          # whisper 판별 단위와 같은 길이
+DETECT_POINTS = (0.2, 0.5, 0.8)   # 도입부 인사말에 끌려가지 않게 본문에서 뽑는다
+DETECT_MIN_TEXT = 10              # 이보다 짧게 나온 구간은 무음으로 보고 버린다
 
 
 def _regular_input(path):
@@ -104,6 +108,84 @@ def transcribe(wav, lang):
     )
 
 
+def audio_duration(path):
+    """초 단위 길이. 오디오로 열리지 않으면 0을 준다 (판별을 건너뛰는 신호)."""
+    r = run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=nw=1:nk=1", path])
+    try:
+        return max(0.0, float((r.stdout or "").strip()))
+    except ValueError:
+        return 0.0
+
+
+def _window_wav(src, start, length, dst):
+    r = run(["ffmpeg", "-y", "-ss", f"{start:.3f}", "-t", f"{length:.3f}",
+             "-i", src, "-ac", "1", "-ar", "16000", dst])
+    return r.returncode == 0 and os.path.isfile(dst) and os.path.getsize(dst) > 0
+
+
+def detect_language(src, fallback="ko"):
+    """오디오 여러 구간을 자동판별해 다수결로 전사 언어를 정한다.
+
+    왜 파일명이 아니라 오디오인가: 언어를 파일명에 적게 하는 건 기계가 할 수 있는
+    판정을 사람에게 떠넘기는 것이고, 빠뜨리면 결손이 아니라 유창한 오출력으로
+    나타나 결손 QA에 걸리지 않는다 (8/30 GenZ readout — 영어 48분을 ko로 걸 뻔했다).
+
+    왜 한 구간이 아닌가: 영어 회의도 한국어 인사말로 열리고 그 반대도 흔하다.
+    동률이면 판별하지 못한 것으로 보고 fallback을 쓴다.
+
+    반환: (언어코드 또는 None, 표 목록). None은 "판별 실패"이지 "ko"가 아니다.
+    """
+    duration = audio_duration(src)
+    if duration < DETECT_WINDOW_SEC / 2:
+        return None, []
+
+    span = min(DETECT_WINDOW_SEC, duration)
+    if duration <= DETECT_WINDOW_SEC * 1.5:
+        offsets = [0.0]
+    else:
+        offsets = [
+            min(max(0.0, duration * point - span / 2), duration - span)
+            for point in DETECT_POINTS
+        ]
+
+    import mlx_whisper
+
+    votes = []
+    for start in offsets:
+        fd, win = tempfile.mkstemp(prefix=".detect-lang.", suffix=".wav")
+        os.close(fd)
+        try:
+            if not _window_wav(src, start, span, win):
+                continue
+            res = mlx_whisper.transcribe(
+                win,
+                path_or_hf_repo=MODEL,
+                language=None,
+                condition_on_previous_text=False,
+                temperature=0.0,
+                word_timestamps=False,
+            )
+            if len((res.get("text") or "").strip()) < DETECT_MIN_TEXT:
+                continue
+            if res.get("language") in DETECT_LANGUAGES:
+                votes.append(res["language"])
+        except Exception:
+            continue
+        finally:
+            try:
+                os.unlink(win)
+            except OSError:
+                pass
+
+    if not votes:
+        return None, votes
+    counts = {code: votes.count(code) for code in set(votes)}
+    top = max(counts.values())
+    winners = [code for code, n in counts.items() if n == top]
+    return (winners[0] if len(winners) == 1 else None), votes
+
+
 def hhmmss(t, comma=False):
     h, m = int(t // 3600), int((t % 3600) // 60)
     s, ms = int(t % 60), int((t - int(t)) * 1000)
@@ -136,6 +218,8 @@ def main():
     ap.add_argument("audio")
     ap.add_argument("--out", default=None, help="출력 디렉토리 (기본: 입력 파일 옆)")
     ap.add_argument("--lang", default="ko")
+    ap.add_argument("--detect-language", action="store_true",
+                    help="오디오에서 언어만 판별해 코드를 찍고 끝낸다 (반입 단계용)")
     ap.add_argument("--keep-wav", action="store_true")
     ap.add_argument("--no-diarize", action="store_true", help="화자 분리 생략")
     ap.add_argument("--speakers", type=int, default=0, help="화자 수를 안다면 고정 (권장)")
@@ -146,6 +230,15 @@ def main():
         _regular_input(src)
     except OSError:
         sys.exit(f"파일 없음: {src}")
+
+    if a.detect_language:
+        code, votes = detect_language(src)
+        print("표본 {}: {}".format(len(votes), ",".join(votes) or "없음"), file=sys.stderr)
+        if not code:
+            return 1
+        print(code)
+        return 0
+
     stem = os.path.splitext(os.path.basename(src))[0]
     outdir = os.path.abspath(a.out) if a.out else os.path.dirname(src)
     try:
@@ -253,4 +346,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

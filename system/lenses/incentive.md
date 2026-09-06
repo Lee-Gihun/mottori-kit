@@ -76,3 +76,4 @@
 
 Munger, "The Psychology of Human Misjudgment" · Spence (1973) job market signaling ·
 public choice 학파 (기관의 자기 존속) · Upton Sinclair: 월급이 이해를 막는다.
+

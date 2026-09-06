@@ -71,3 +71,4 @@
 
 Kahneman의 기분-판단 오염 연구 계열 · Tetlock, *Superforecasting* (캘리브레이션 실측
 방법론) · 스토아 저녁 복기 (Seneca, *De Ira* 3.36 — 트레이스 로그의 원형).
+

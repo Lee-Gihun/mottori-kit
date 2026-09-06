@@ -61,3 +61,4 @@ d에 비례해 커져 softmax가 포화된다. 2차원 예시로 직접 계산�
 
 Feynman, *Surely You're Joking* (브라질 물리교육 장) · "What I cannot create, I do not
 understand" · 밑바닥부터 구현하는 학습 전통 일반.
+

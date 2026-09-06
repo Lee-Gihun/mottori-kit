@@ -66,3 +66,4 @@
 
 Chesterton, *The Thing* (1929) "The Drift from Domesticity" · 시스템 운영의 Chesterton's
 fence 전통 · Taleb의 Lindy 효과가 사촌 개념.
+

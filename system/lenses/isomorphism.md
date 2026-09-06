@@ -74,3 +74,4 @@
 
 Gick & Holyoak (1980, 1983) analogical transfer · Polya의 유추 장 · Hofstadter,
 *Surfaces and Essences* · 콩도르세 배심 정리.
+
