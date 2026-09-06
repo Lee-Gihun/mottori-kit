@@ -67,3 +67,4 @@
 
 Anderson, "More Is Different" (1972) · 점근 분석 전통 · Polya, *How to Solve It*의
 경계 사례 · 칸트 정언명법 (보편화 검사).
+

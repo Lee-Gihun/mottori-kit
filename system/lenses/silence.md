@@ -78,3 +78,4 @@
 
 Wald의 폭격기 메모 (SRG, 1943) · Taleb, *The Black Swan* (silent evidence 장) ·
 Berkson's paradox · 출판 편향 문헌 (funnel plot).
+

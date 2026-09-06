@@ -68,3 +68,4 @@
 
 Kelly (1956) · Ole Peters의 ergodicity economics · Taleb, *Antifragile* (barbell과 ruin) ·
 Bezos 주주서한 (one-way / two-way doors).
+

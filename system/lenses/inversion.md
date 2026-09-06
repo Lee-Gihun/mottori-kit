@@ -64,3 +64,4 @@
 
 Jacobi "man muss immer umkehren" · Munger, *Poor Charlie's Almanack* (inversion 장) ·
 Klein의 premortem · Popper 반증주의가 이 렌즈의 인식론 판본.
+
