@@ -431,6 +431,36 @@ Codex는 user config를 무시하고 web·command network·apps·plugins·memori
 Codex에서는 `workspace-write`만으로 desktop plugin/fan-out이 남는 것을 각각 확인해 이 경계를
 추가했다. 최종 canary는 두 runtime 모두 native session 수 불변과 의도한 tool boundary를 통과했다.
 
+### 10.6 현재 의미 계약 수동 파일럿 (DR-049 · 2026-09-16 만료)
+
+교정이 journal·서류철에는 남았지만 다음 산출물의 현재 의미와 완료 검증에 결속되지 않은 실패를
+14일 동안 코드 없이 시험한다. 이것은 새 상시 규칙이나 정본이 아니다. 원문·유저 발화·DR이
+계속 정본이고, 계약은 작업 하나에 묶인 삭제 가능한 private projection이다. DR-045의 외부 두 줄은
+그대로 두며, 내부 계약을 사용자에게 추가로 발화하지 않는다.
+
+표본은 건수가 아니라 실패 계열로 사전 고정한다. `assembly`(현재 핵심·폐기 frame 조립),
+`binding`(이미 명시된 규칙의 실행), `observation`(rendered·interactive·lifecycle 실제 표면) 각 1건이다.
+한 private 파일에 작업 전 `PRE`와 작업 후 `RESULT`를 append한다. `PRE`는 case ID와 사전 고정한
+계열 슬롯을 첫 줄에 두고, 중심·보존, 폐기·불확실, source/handling, 관측할 표면·방법·중단 조건을
+담는다. 그 prefix의 byte length와 SHA-256을 private journal에 남겨 선행성을 증명한다. `RESULT`는
+선언 표면마다 `PASS|FAIL|UNKNOWN|STALE`, 근거, 실패 사건별 계열, agent/user catch, 준비 시간을
+남긴다. 판정이 비면 절차 실패이고,
+관측하지 못한 것은 `UNKNOWN`이지 통과가 아니다.
+
+안전 중단선은 private leak 또는 contract-caused nuance loss 각 1건이다. 합격하려면 세 계열을
+모두 채우고 준비 시간 중앙값이 5분 이하여야 하며, 폐기 frame 재등장·핵심의 avoidable omission·
+실제 표면에서 뒤집힌 PASS가 0이어야 한다. 동시에 최소 1건에서 계약이 누락·재발·거짓 완료를
+막거나 PASS 대신 정직한 UNKNOWN을 만들어 실제 판단을 바꿔야 한다. 세 건 모두 판단을 안 바꾸면
+무사고여도 폐기한다. 공동편집 중 새 방향 전환은 실패가 아니며, `PRE`에 있던 계약을 놓친 경우만
+센다.
+
+14일 안에 세 계열이 안 차면 evidence insufficient로 만료하고 자동화하지 않는다. 같은 결정론적
+assembly 동작이 세 건 중 두 번 반복될 때만 read-only renderer를 검토한다. 세 건 모두 준비가
+2분 미만이고 conflict·unknown이 없다면 자동화의 한계효용이 없다고 판정한다. closeout은
+agent/user catch를 분리 계수하고, 반복 실패가 binding이면 실행 시 심문을, observation이면 해당
+실제 surface probe를 검토한다. 종료 증거는 보존하고 후속 closeout DR이 DR-049를 supersede한다.
+파일럿 동안에는 AGENTS·CLAUDE·훅·`now.py`·`fresh_worker.py`·검사기 registry를 바꾸지 않는다.
+
 ## 11. 시각화 — memory-map.html (`system/` 아래, P3 예정) [신설]
 
 목적: 시스템이 **어떻게 작동하는지**를 overview→디테일로 한 장에서 이해.

@@ -65,3 +65,4 @@
 ## 원전
 
 한계혁명 (Jevons / Menger / Walras) · Thaler의 심리적 회계 · 탐색-활용 트레이드오프 문헌.
+

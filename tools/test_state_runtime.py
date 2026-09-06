@@ -83,6 +83,11 @@ def digest(path):
     return hashlib.sha256(open(path, "rb").read()).hexdigest()
 
 
+# now.py는 현재 시각으로 저널 파일명을 정한다. 하드코딩하면 매달 1일에 깨진다.
+# (2026-09-01 실측: 월 롤오버로 13건 동시 실패)
+JOURNAL_NOW = "journal-%s.md" % datetime.datetime.now().strftime("%Y-%m")
+
+
 def event(token, track="system", typ="state", second=0):
     return f"- 2026-08-26T23:40:{second:02d}+09:00 [{track}/{typ}] {token}\n"
 
@@ -91,7 +96,7 @@ def test_routing_and_public_immutability():
     root = instance()
     try:
         run_now(root, "log", "[system/state] PUBLIC-CANARY")
-        public_journal = os.path.join(root, "state", "journal-2026-08.md")
+        public_journal = os.path.join(root, "state", JOURNAL_NOW)
         public_now = os.path.join(root, "state", "NOW.md")
         before = (digest(public_journal), digest(public_now))
 
@@ -101,7 +106,7 @@ def test_routing_and_public_immutability():
 
         assert before == (digest(public_journal), digest(public_now)), \
             "private writes changed tracked state"
-        local_journal = os.path.join(root, "_private", "state", "journal-2026-08.md")
+        local_journal = os.path.join(root, "_private", "state", JOURNAL_NOW)
         local_now = os.path.join(root, "_private", "state", "NOW.md")
         local = read(local_journal) + read(local_now)
         assert all(x in local for x in ("FORCED-PRIVATE", "PERSONAL-PRIVATE", "UNKNOWN-PRIVATE"))
@@ -117,7 +122,7 @@ def test_legacy_filter_and_private_thread():
     ]
     root = instance(threads=threads)
     try:
-        jp = os.path.join(root, "state", "journal-2026-08.md")
+        jp = os.path.join(root, "state", JOURNAL_NOW)
         with open(jp, "w", encoding="utf-8") as f:
             f.write("# journal\n\n" + event("PUBLIC-LEGACY", "system", second=1)
                     + event("PRIVATE-LEGACY", "personal", second=2))
@@ -139,7 +144,7 @@ def test_legacy_filter_and_private_thread():
 def test_legacy_allowlist_expansion_does_not_retro_promote():
     root = instance(public_tracks=["system"], legacy_public_tracks=["system"])
     try:
-        journal = os.path.join(root, "state", "journal-2026-08.md")
+        journal = os.path.join(root, "state", JOURNAL_NOW)
         with open(journal, "w", encoding="utf-8") as f:
             f.write("# journal\n\n" + event("LEGACY-PUBLIC", "system", second=1)
                     + event("LEGACY-MUST-STAY-PRIVATE", "novel", second=2))
@@ -167,7 +172,7 @@ def test_legacy_allowlist_expansion_does_not_retro_promote():
 def test_legacy_private_rows_create_overlay_without_existing_private_dir():
     root = instance(public_tracks=["system"], legacy_public_tracks=[])
     try:
-        journal = os.path.join(root, "state", "journal-2026-08.md")
+        journal = os.path.join(root, "state", JOURNAL_NOW)
         with open(journal, "w", encoding="utf-8") as f:
             f.write("# journal\n\n" + event("LEGACY-LOCAL-ONLY", "personal", second=1))
         assert not os.path.isdir(os.path.join(root, "_private"))
@@ -186,9 +191,9 @@ def test_missing_config_fails_closed():
         r = run_now(root, "log", "[system/state] NO-CONFIG-CANARY")
         assert r.stderr.count(FAIL_CLOSE_WARNING) == 1, r.stderr
         assert "config 없음" in r.stderr
-        assert not os.path.exists(os.path.join(root, "state", "journal-2026-08.md"))
+        assert not os.path.exists(os.path.join(root, "state", JOURNAL_NOW))
         assert "NO-CONFIG-CANARY" in read(
-            os.path.join(root, "_private", "state", "journal-2026-08.md"))
+            os.path.join(root, "_private", "state", JOURNAL_NOW))
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -205,9 +210,9 @@ def test_schema_mismatch_warns_once_in_quiet_precompact():
         assert r.stdout == ""
         assert r.stderr.count(FAIL_CLOSE_WARNING) == 1, r.stderr
         assert "schema=3" in r.stderr and "engine schema=4" in r.stderr
-        assert not os.path.exists(os.path.join(root, "state", "journal-2026-08.md"))
+        assert not os.path.exists(os.path.join(root, "state", JOURNAL_NOW))
         assert "컴팩션 발생" in read(
-            os.path.join(root, "_private", "state", "journal-2026-08.md"))
+            os.path.join(root, "_private", "state", JOURNAL_NOW))
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -215,10 +220,10 @@ def test_schema_mismatch_warns_once_in_quiet_precompact():
 def test_utf8_hook_budget_and_overlay_fairness():
     root = instance()
     try:
-        public_journal = os.path.join(root, "state", "journal-2026-08.md")
+        public_journal = os.path.join(root, "state", JOURNAL_NOW)
         local_state = os.path.join(root, "_private", "state")
         os.makedirs(local_state, exist_ok=True)
-        private_journal = os.path.join(local_state, "journal-2026-08.md")
+        private_journal = os.path.join(local_state, JOURNAL_NOW)
         with open(public_journal, "w", encoding="utf-8") as f:
             f.write("# journal\n\n" + "".join(
                 event(f"PUBLIC-{i:02d}-" + "공" * 240, second=i) for i in range(30)))
@@ -240,7 +245,7 @@ def test_utf8_hook_budget_and_overlay_fairness():
 def test_multibyte_bodies_preserve_mandatory_snapshot_sections():
     root = instance()
     try:
-        journal = os.path.join(root, "state", "journal-2026-08.md")
+        journal = os.path.join(root, "state", JOURNAL_NOW)
         with open(journal, "w", encoding="utf-8") as f:
             f.write("# journal\n\n" + "".join(
                 event("🙂" * 300, second=i) for i in range(10)))
@@ -273,7 +278,7 @@ def test_corrupt_local_overlay_does_not_suppress_public_injection():
         run_now(root, "log", "[system/state] PUBLIC-SURVIVES-LOCAL-CORRUPTION")
         local_state = os.path.join(root, "_private", "state")
         os.makedirs(local_state, exist_ok=True)
-        with open(os.path.join(local_state, "journal-2026-08.md"), "w", encoding="utf-8") as f:
+        with open(os.path.join(local_state, JOURNAL_NOW), "w", encoding="utf-8") as f:
             f.write("# journal\n\n- malformed local event\n")
         r = run_now(root, "hook-context", check=False)
         assert r.returncode == 0, r.stderr
@@ -326,8 +331,8 @@ def test_invalid_budget_config_fails_closed_without_empty_public_snapshot():
             assert r.returncode == 0, r.stderr
             assert r.stderr.count(FAIL_CLOSE_WARNING) == 1, r.stderr
             assert not os.path.exists(os.path.join(root, "state", "NOW.md"))
-            assert not os.path.exists(os.path.join(root, "state", "journal-2026-08.md"))
-            assert token in read(os.path.join(root, "_private", "state", "journal-2026-08.md"))
+            assert not os.path.exists(os.path.join(root, "state", JOURNAL_NOW))
+            assert token in read(os.path.join(root, "_private", "state", JOURNAL_NOW))
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
@@ -368,7 +373,7 @@ def test_stale_recovery_and_corruption_visibility():
     root = instance()
     try:
         run_now(root, "log", "[system/state] BEFORE-RECOVERY")
-        jp = os.path.join(root, "state", "journal-2026-08.md")
+        jp = os.path.join(root, "state", JOURNAL_NOW)
         time.sleep(0.02)
         with open(jp, "a", encoding="utf-8") as f:
             f.write(event("RECOVERED-BY-HOOK", second=7))
@@ -392,7 +397,7 @@ def test_touch_then_render_clears_stale_marker():
     root = instance()
     try:
         run_now(root, "log", "[system/state] TOUCH-SEED")
-        jp = os.path.join(root, "state", "journal-2026-08.md")
+        jp = os.path.join(root, "state", JOURNAL_NOW)
         time.sleep(0.02)
         os.utime(jp, None)
         before = run_now(root, "check", "--issues")
@@ -418,7 +423,7 @@ def test_broken_visibility_config_freezes_public_snapshot():
         run_now(root, "log", "[system/state] FAIL-CLOSED-NEW-EVENT")
         assert open(public_now, "rb").read() == before
         assert "FAIL-CLOSED-NEW-EVENT" in read(
-            os.path.join(root, "_private", "state", "journal-2026-08.md"))
+            os.path.join(root, "_private", "state", JOURNAL_NOW))
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -477,7 +482,7 @@ def test_public_hook_survives_post_import_private_registry_change():
             json.dump([{"key": "a", "name": "LOCAL-A", "dossier": "a.md"}], f)
         run_now(root, "log", "[system/state] PUBLIC-BEFORE-REGISTRY-RACE")
         run_now(root, "render")
-        journal = os.path.join(root, "state", "journal-2026-08.md")
+        journal = os.path.join(root, "state", JOURNAL_NOW)
         with open(journal, "a", encoding="utf-8") as f:
             f.write(event("PUBLIC-AFTER-REGISTRY-RACE", second=8))
         script = f"""
@@ -508,7 +513,7 @@ def test_structurally_invalid_config_fails_closed_without_import_crash():
         r = run_now(root, "log", "[system/state] ROOT-LIST-CONFIG", check=False)
         assert r.returncode == 0, r.stderr
         assert "ROOT-LIST-CONFIG" in read(
-            os.path.join(root, "_private", "state", "journal-2026-08.md"))
+            os.path.join(root, "_private", "state", JOURNAL_NOW))
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -520,7 +525,7 @@ def test_structurally_invalid_config_fails_closed_without_import_crash():
             json.dump([42, {"key": "missing-name"}], f)
         r = run_now(root, "log", "--private", "[system/state] BAD-THREAD-REGISTRY", check=False)
         assert r.returncode == 0, r.stderr
-        assert "BAD-THREAD-REGISTRY" in read(os.path.join(local_state, "journal-2026-08.md"))
+        assert "BAD-THREAD-REGISTRY" in read(os.path.join(local_state, JOURNAL_NOW))
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -529,7 +534,7 @@ def test_config_change_after_import_aborts_before_public_mutation():
     root = instance()
     try:
         run_now(root, "log", "[system/state] CONFIG-RACE-SEED")
-        journal = os.path.join(root, "state", "journal-2026-08.md")
+        journal = os.path.join(root, "state", JOURNAL_NOW)
         before = open(journal, "rb").read()
         cfg_path = os.path.join(root, "system", "memory-config.json")
         script = f"""
@@ -555,7 +560,7 @@ def test_config_change_during_log_rolls_back_public_append():
     root = instance()
     try:
         run_now(root, "log", "[system/state] ROLLBACK-SEED")
-        journal = os.path.join(root, "state", "journal-2026-08.md")
+        journal = os.path.join(root, "state", JOURNAL_NOW)
         before = open(journal, "rb").read()
         cfg_path = os.path.join(root, "system", "memory-config.json")
         script = f"""
@@ -584,7 +589,7 @@ raise SystemExit(0 if rc != 0 else 9)
 def test_month_boundary_pins_one_journal_for_append_and_rollback():
     root = instance()
     try:
-        august_path = os.path.join(root, "state", "journal-2026-08.md")
+        august_path = os.path.join(root, "state", JOURNAL_NOW)
         september_path = os.path.join(root, "state", "journal-2026-09.md")
         script = f"""
 import datetime, os, sys
@@ -624,7 +629,7 @@ def test_config_change_during_render_never_publishes_new_projection():
         run_now(root, "log", "[system/state] RENDER-RACE-SEED")
         now_path = os.path.join(root, "state", "NOW.md")
         before = open(now_path, "rb").read()
-        journal = os.path.join(root, "state", "journal-2026-08.md")
+        journal = os.path.join(root, "state", JOURNAL_NOW)
         with open(journal, "a", encoding="utf-8") as f:
             f.write(event("MUST-NOT-PUBLISH", second=3))
         cfg_path = os.path.join(root, "system", "memory-config.json")
@@ -657,7 +662,7 @@ def test_identity_change_inside_atomic_publish_rolls_back_log_and_snapshot():
     root = instance()
     try:
         run_now(root, "log", "[system/state] ATOMIC-PUBLISH-SEED")
-        journal = os.path.join(root, "state", "journal-2026-08.md")
+        journal = os.path.join(root, "state", JOURNAL_NOW)
         now_path = os.path.join(root, "state", "NOW.md")
         cfg_path = os.path.join(root, "system", "memory-config.json")
         before_journal = open(journal, "rb").read()
@@ -743,7 +748,7 @@ raise SystemExit(0 if rc != 0 else 9)
         with open(cfg_path, "wb") as f:
             f.write(before_config)
         assert r.returncode == 0, r.stdout + r.stderr
-        assert not os.path.exists(os.path.join(root, "state", "journal-2026-08.md"))
+        assert not os.path.exists(os.path.join(root, "state", JOURNAL_NOW))
         assert not os.path.exists(os.path.join(root, "state", "NOW.md"))
     finally:
         shutil.rmtree(root, ignore_errors=True)
@@ -761,7 +766,7 @@ def test_source_change_during_render_cannot_false_certify():
                        check=True, capture_output=True, text=True, env=env, cwd=root)
         now_path = os.path.join(root, "state", "NOW.md")
         before = open(now_path, "rb").read()
-        journal = os.path.join(root, "state", "journal-2026-08.md")
+        journal = os.path.join(root, "state", JOURNAL_NOW)
         with open(journal, "a", encoding="utf-8") as f:
             f.write(event("SOURCE-MUST-NOT-PUBLISH", second=4))
         script = f"""
@@ -799,7 +804,7 @@ def test_source_change_during_log_rolls_back_public_append():
         env = dict(os.environ, MOTTORI_INSTANCE=root)
         subprocess.run([sys.executable, copied_now, "log", "[system/state] SOURCE-LOG-SEED"],
                        check=True, capture_output=True, text=True, env=env, cwd=root)
-        journal = os.path.join(root, "state", "journal-2026-08.md")
+        journal = os.path.join(root, "state", JOURNAL_NOW)
         before = open(journal, "rb").read()
         script = f"""
 import sys
@@ -854,7 +859,7 @@ def test_unterminated_tail_refuses_append_without_merging():
     root = instance()
     try:
         run_now(root, "log", "[system/state] COMPLETE-SEED")
-        jp = os.path.join(root, "state", "journal-2026-08.md")
+        jp = os.path.join(root, "state", JOURNAL_NOW)
         with open(jp, "ab") as f:
             f.write(b"- 2026-08-26T23:59")
         before = open(jp, "rb").read()
@@ -872,7 +877,7 @@ def test_strict_parser_rejects_schema_invalid_event():
         run_now(root, "log", "[system/state] SCHEMA-SEED")
         public_now = os.path.join(root, "state", "NOW.md")
         old = open(public_now, "rb").read()
-        jp = os.path.join(root, "state", "journal-2026-08.md")
+        jp = os.path.join(root, "state", JOURNAL_NOW)
         with open(jp, "a", encoding="utf-8") as f:
             f.write(event("INVALID-TYPE", typ="notallowed", second=9))
         r = run_now(root, "render", check=False)
@@ -892,7 +897,7 @@ def test_timezone_less_journal_event_is_corrupt():
         old = open(public_now, "rb").read()
         line = "- 2026-08-26T23:40:09 [system/state] NO-TIMEZONE"
         assert LIVE_M.validate_line(line) is not None
-        jp = os.path.join(root, "state", "journal-2026-08.md")
+        jp = os.path.join(root, "state", JOURNAL_NOW)
         with open(jp, "a", encoding="utf-8") as f:
             f.write(line + "\n")
         rendered = run_now(root, "render", check=False)
@@ -982,8 +987,8 @@ def test_parallel_writers_exactly_once():
             if p.returncode:
                 failures.append(f"exit={p.returncode} {out} {err}")
         assert not failures, failures
-        public = read(os.path.join(root, "state", "journal-2026-08.md"))
-        private = read(os.path.join(root, "_private", "state", "journal-2026-08.md"))
+        public = read(os.path.join(root, "state", JOURNAL_NOW))
+        private = read(os.path.join(root, "_private", "state", JOURNAL_NOW))
         combined = public + private
         for i in range(12):
             assert combined.count(f"PARALLEL-{i:02d}") == 1
@@ -1013,7 +1018,7 @@ def test_render_transaction_prevents_stale_last_writer():
         LIVE_M.VISIBILITY_READY = True
         LIVE_M.CONFIG_FINGERPRINT = LIVE_M.config_fingerprint(
             os.path.join(root, "system", "memory-config.json"))
-        with open(os.path.join(root, "state", "journal-2026-08.md"), "w", encoding="utf-8") as f:
+        with open(os.path.join(root, "state", JOURNAL_NOW), "w", encoding="utf-8") as f:
             f.write("# journal\n\n" + event("A-BASE", second=1))
 
         entered, release = threading.Event(), threading.Event()
