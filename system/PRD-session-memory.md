@@ -256,6 +256,8 @@ recall.py sessions        → 세션 파일 목록·기간·크기
 
 ### 3.8 안 하는 것 (non-goals, v1 계승)
 
+- 멀티에이전트 토폴로지 설계·탐색 없음 (2609.02264: 고정 토폴로지가 생성 토폴로지의 1.4pt 이내, 보상 통과 토폴로지 ≈6개; DR-053).
+
 DB·프레임워크 도입 없음 · rec.py 불가침 · 디렉토리 대개편 없음 (`state/` 하나) ·
 auto-memory 메커니즘 개조 없음 · journal에 대화 미러링 없음 · **"통찰 저장소" 구축 없음**
 (`2608.03874`: 스킬 문서화 ≈ 무이득 — 가치는 원문에 있고 recall이 그 문을 연다).
@@ -430,6 +432,8 @@ Codex는 user config를 무시하고 web·command network·apps·plugins·memori
 2026-08-29 live canary에서 built-in tool allowlist만으로 Claude의 Gmail·Drive action이 남고,
 Codex에서는 `workspace-write`만으로 desktop plugin/fan-out이 남는 것을 각각 확인해 이 경계를
 추가했다. 최종 canary는 두 runtime 모두 native session 수 불변과 의도한 tool boundary를 통과했다.
+
+**meta v2 (2026-09-16, DR-053).** run record의 `meta.json`은 `kit_rev`(각인된 킷 HEAD 또는 엔진 리포 HEAD, `kit_rev_source`)·`repo_rev`·`kit_dirty`(엔진 디렉토리 범위)·`engine_sha256`(각인 줄을 뺀 엔진 파일 내용 해시)·`kit_sync`(동기화 시 각인: dirty·engine_sha256=목적지 기준선·source_sha256=원천 manifest·matches_copy)·`agents_sha256`·`harness_sha256`(runtime·capability·계약 접두·명령 옵션·비활성 기능의 canonical JSON 해시)·`usage`(런타임의 마지막 usage 객체와 input/output/total, 없으면 null)·`read_scope`(결과 첫 줄과 UNREAD 줄, 문자열)·`scope`(write-set: prefixes·changed·violations·status ok|scope_violation|unchecked; run status에 반영은 `--strict-scope`일 때만)를 담는다. receipt 계약은 `scope:` 한 줄 추가 외 불변. common 계약에 "주장마다 출처 경로" 1줄. 정본은 이 절 + 설계 문서(`design-fresh-worker-receipt-v2.md`), 생성물은 `meta.json`.
 
 ### 10.6 현재 의미 계약 수동 파일럿 (DR-049 · 2026-09-16 만료)
 
