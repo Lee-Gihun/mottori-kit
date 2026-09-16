@@ -39,7 +39,12 @@ SID="$3"
 
 if [ "$MODE" = "--fresh" ] || [ -z "$MODE" ]; then
   echo "[$STAMP] FRESH <- $PROMPT_FILE" >> "$LOG"
-  python3 "$ROOT/tools/fresh_worker.py" --runtime codex "$PROMPT_FILE"
+  # MOTTORI_WRITE_PREFIX=<dir> 로 write-set 검사 범위를 준다(선택). 없으면 scope는 unchecked로 기록된다.
+  if [ -n "${MOTTORI_WRITE_PREFIX:-}" ]; then
+    python3 "$ROOT/tools/fresh_worker.py" --runtime codex --write-prefix "$MOTTORI_WRITE_PREFIX" "$PROMPT_FILE"
+  else
+    python3 "$ROOT/tools/fresh_worker.py" --runtime codex "$PROMPT_FILE"
+  fi
   echo "[$STAMP] DONE fresh" >> "$LOG"
   exit 0
 fi

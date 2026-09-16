@@ -100,3 +100,20 @@ fallback, public trace, detached scheduler, write-capable Claude는 v1 범위 �
 기각한다.
 참조: `system/rituals.md` 외부 문안 절. 10건 중 준수 후 구조 재작성 3건, 차갑거나 단절된 반려
 2건, 검사상 삭제할 내용을 3번 복원하면 파일럿을 철회하거나 다시 설계한다.
+
+### DR-010 worker run record는 하네스 정체·토큰·읽기 범위·write-set을 담는다 (2026-09-16 · active)
+결정: `meta.json` v2에 `kit_rev`·`kit_dirty`·`harness_sha256`·`usage`·`read_scope`·`scope`를 기록한다. receipt는
+`scope:` 한 줄 외 불변. `--write-prefix`는 선택이며 사후 탐지·기록만 하고 rollback하지 않는다. 위반이 run
+status를 바꾸는 것은 `--strict-scope`일 때만이다(실 카나리 2026-09-16: 위반 2건 전부 동시 writer).
+맥락: 같은 모델이 하네스만 바꿔 8.3→37.2%(2609.07925 §2)이므로 run을 해석하려면 하네스 정체가 영수증에
+있어야 하는데 v1에는 prompt·결과 해시뿐이었다. 리드가 워커 출처를 못 보면 오답을 믿는다(2609.06702 App. F.2).
+자연어 경계는 강제가 아니다(2609.04170 §3.3). 구현 전 설계 문서에서 독립 검증자(Codex)의 질문 4건을 닫았고, 구현 뒤 독립 리뷰 1차가 결함 7건(R1 기존 symlink 통과,
+R2 같은 크기·mtime 복원·빈 디렉터리, R3 런타임 실패가 위반을 덮음, R4 호출자 미연결, R5 인스턴스 HEAD를 킷 rev로 오라벨,
+R6 read_scope 문법, R7 fixture 빈칸)을 찾아 전부 반영했고, 2차 리뷰가 R8(hardlink 별명)·R9(없는 중첩 prefix 생성이 위반)·
+R10(case-sensitive 볼륨에서 대소문자 보정)을, 3차 리뷰가 R5 잔여(목적지 기준선과 원천 manifest의 구분)·R11(각인 미검증)을 찾아
+반영했다(fixture 31개, `tools/sync_engine.sh`가 원천 manifest·목적지 기준선을 모두 각인하고 각인을 재검증).
+기각 대안: 외부 바이너리·모델 스냅샷·환경변수를 해시에 넣는 것(매 실행 달라져 비교 불가); usage를 이벤트
+누적 합산(오합산); write-set rollback(사후 탐지가 파괴 반경을 키우지 않는다); prefix 필수화(호출자 전부가
+깨진다, 다음 버전 후보).
+참조: 원본 인스턴스의 private 작업장 papers-2026-09-13-kit(설계 문서 design-fresh-worker-receipt-v2, PROPOSALS, DR-draft,
+독립 리뷰 REVIEW 1~3차), `tools/test_fresh_worker.py` 31 fixture, `tools/sync_engine.sh`.
