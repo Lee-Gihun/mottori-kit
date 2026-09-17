@@ -31,7 +31,8 @@ def _repo():
     for name in ("memlib.py", "i18n.py", "linkcheck.py"):
         shutil.copy2(HERE / name, root / "tools" / name)
     (root / "system").mkdir()
-    # 킷은 templates/, 설치된 인스턴스는 system/ 에 config가 있다 (test_coherence와 같은 규칙).
+    # The kit stores config in templates/; an installed instance stores it in system/
+    # (the same rule used by test_coherence).
     source = next(p for p in (ROOT / "templates" / "memory-config.json",
                               ROOT / "system" / "memory-config.json") if p.is_file())
     cfg = json.loads(source.read_text(encoding="utf-8"))

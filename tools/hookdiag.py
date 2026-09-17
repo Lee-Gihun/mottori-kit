@@ -12,6 +12,8 @@ import shutil
 import subprocess
 import time
 
+import i18n
+
 
 ROLE_EVENTS = {
     "injector": ("SessionStart", "sessionStart"),
@@ -130,7 +132,7 @@ def codex_hooks_list(cwd, codex_bin=None, timeout=5.0):
     """
     binary = codex_bin or shutil.which("codex")
     if not binary:
-        raise FileNotFoundError("codex CLI 없음")
+        raise FileNotFoundError(i18n.t("hookdiag.codex_missing"))
     proc = subprocess.Popen([binary, "app-server", "--stdio"], stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
     try:
@@ -140,16 +142,16 @@ def codex_hooks_list(cwd, codex_bin=None, timeout=5.0):
         }})
         init = _receive_id(proc, 1, timeout)
         if "error" in init:
-            raise RuntimeError(f"codex initialize 실패: {init['error']}")
+            raise RuntimeError(i18n.t("hookdiag.initialize_failed", error=init["error"]))
         _send(proc, {"jsonrpc": "2.0", "method": "initialized", "params": {}})
         _send(proc, {"jsonrpc": "2.0", "id": 2, "method": "hooks/list",
                      "params": {"cwds": [os.path.abspath(cwd)]}})
         response = _receive_id(proc, 2, timeout)
         if "error" in response:
-            raise RuntimeError(f"hooks/list 실패: {response['error']}")
+            raise RuntimeError(i18n.t("hookdiag.list_failed", error=response["error"]))
         data = response.get("result", {}).get("data", [])
         if not data:
-            raise RuntimeError("hooks/list가 빈 data를 반환")
+            raise RuntimeError(i18n.t("hookdiag.list_empty"))
         return data[0]
     finally:
         try:
@@ -164,10 +166,7 @@ def codex_hooks_list(cwd, codex_bin=None, timeout=5.0):
 
 
 def compact_summary(report):
-    labels = {
-        "injector": "주입", "side_effect": "컴팩션 기록", "guard": "사전 가드",
-        "observer": "변경 관측", "enforcer": "Stop 차단", "recovery": "복구",
-    }
+    labels = {role: i18n.t(f"doctor.hook_role_{role}") for role in ROLE_EVENTS}
     parts = []
     for role in ROLE_EVENTS:
         row = report[role]

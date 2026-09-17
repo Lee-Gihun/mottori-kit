@@ -21,9 +21,10 @@ def fixture():
     return root
 
 
-def run(root, mode, lang=None):
+def run(root, mode, lang=None, env_extra=None):
     env = dict(os.environ)
     env["MOTTORI_LANG"] = lang or "ko"
+    env.update(env_extra or {})
     return subprocess.run(["bash", "tools/install_hooks.sh", mode], cwd=root,
                           capture_output=True, text=True, env=env)
 
@@ -70,10 +71,15 @@ def test_check_reports_owned_drift_and_repair_backs_it_up():
         with open(hook, "w", encoding="utf-8") as f:
             f.write(text)
         drifted_hash = hashlib.sha256(open(hook, "rb").read()).hexdigest()
+        # This fixture imitates the canonical pre-sentinel hook. Its hash changes with every template edit,
+        # so the contract (a legacy hash is owned-drift) is pinned through the env, not the in-file list (2026-09-18).
+        legacy = {"MOTTORI_LEGACY_HOOK_HASHES": drifted_hash}
 
-        checked = run(root, "--check")
-        assert checked.returncode != 0 and "소유 표류(owned-drift):" in checked.stdout
-        repaired = run(root, "--repair")
+        checked = run(root, "--check", env_extra=legacy)
+        assert checked.returncode != 0 and "소유 표류(owned-drift):" in checked.stdout, checked.stdout + checked.stderr
+        foreign = run(root, "--check")
+        assert foreign.returncode != 0 and "외부 훅(foreign):" in foreign.stdout, foreign.stdout + foreign.stderr
+        repaired = run(root, "--repair", env_extra=legacy)
         assert repaired.returncode == 0, repaired.stdout + repaired.stderr
         backups = [os.path.join(os.path.dirname(hook), name)
                    for name in os.listdir(os.path.dirname(hook))
@@ -129,8 +135,29 @@ def test_failed_repair_restores_current_hook_and_preserves_missing_hook():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_template_change_after_install_is_owned_drift_not_foreign():
+    """2026-09-18 실측 2회: 템플릿 주석 한 줄이 바뀌면 설치본 전부가 foreign이 돼 --repair도 커밋도 막혔다.
+    설치 시 스탬프로 소유권을 기록해 템플릿이 바뀌어도 owned-drift → --repair 가능해야 한다."""
+    root = fixture()
+    try:
+        repaired = run(root, "--repair")
+        assert repaired.returncode == 0, repaired.stdout + repaired.stderr
+        template = os.path.join(root, "tools", "precommit-hook.sh")
+        with open(template, "a", encoding="utf-8") as f:
+            f.write("# template comment changed after install\n")
+        checked = run(root, "--check")
+        assert checked.returncode != 0 and "owned-drift" in checked.stdout and "foreign" not in checked.stdout, \
+            checked.stdout + checked.stderr
+        repaired_again = run(root, "--repair")
+        assert repaired_again.returncode == 0, repaired_again.stdout + repaired_again.stderr
+        assert run(root, "--check").returncode == 0
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 TESTS = [
     test_repair_then_check_installs_exact_executable,
+    test_template_change_after_install_is_owned_drift_not_foreign,
     test_check_reports_owned_drift_and_repair_backs_it_up,
     test_foreign_precommit_aborts_without_overwrite,
     test_failed_repair_restores_current_hook_and_preserves_missing_hook,

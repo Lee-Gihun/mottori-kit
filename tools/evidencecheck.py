@@ -127,7 +127,7 @@ def _required_issues(rel, text, tree, local_root):
         for idx, start in enumerate(starts):
             heading = start.group(1).strip().replace("`", "")
             # v0.8 English canonical headings use [Required] / [Note]; the Korean pair keeps [해야 함] / [알아둘 것].
-            if not any(tag in heading for tag in ("[해야 함]", "[알아둘 것]", "[Required]", "[Note]")):
+            if not any(tag in heading for tag in ("[해야 함]", "[알아둘 것]", "[Required]", "[Action required]", "[Note]")):
                 continue
             end_candidates = [len(text)]
             next_h3 = starts[idx + 1].start() if idx + 1 < len(starts) else len(text)

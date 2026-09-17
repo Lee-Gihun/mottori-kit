@@ -1,11 +1,11 @@
 {
-  "_doc": "기억 시스템의 배선 데이터 정본 (DR-014). 로직은 tools/memlib.py, 데이터는 이 파일. 트랙·스레드·소스·검사목록은 전부 여기서 고친다. 자리표시자: {ROOT}=인스턴스 루트, {TRANSCRIPTS}=유도된 Claude 전사 디렉토리 (DR-025 — 경로 하드코딩 금지). setup.sh가 이 템플릿을 system/memory-config.json으로 복사한다.",
+  "_doc": "Canonical wiring data for the memory system (DR-014). Logic lives in tools/memlib.py; data lives here. Edit tracks, threads, sources, and check inventories here. Placeholders: {ROOT}=instance root, {TRANSCRIPTS}=derived Claude transcript directory (DR-025; do not hard-code paths). setup.sh copies this template to system/memory-config.json.",
   "schema_version": 4,
   "instance": {
     "name": "CHANGEME",
     "context": "work",
     "remote_allowlist": [],
-    "_note": "context는 personal 또는 work. work 인스턴스의 git 원격이 remote_allowlist 밖이면 doctor가 막는다 (DR-026 단방향 밸브). 회사 자료를 개인 GitHub으로 밀지 않기 위한 구조적 차단선이다. allowlist를 비워두면 work 인스턴스는 원격을 아예 못 가진다."
+    "_note": "context is personal or work. doctor blocks a work instance whose Git remote is outside remote_allowlist (DR-026 one-way valve). This is a structural barrier against pushing company material to a personal GitHub account. An empty allowlist means a work instance may have no remotes."
   },
   "egress": {
     "model_send": {
@@ -14,7 +14,7 @@
       ],
       "allow_prefixes": []
     },
-    "_note": "Git 비추적 등급과 모델 전송 등급은 별개다. fresh_worker는 prompt 출처나 본문이 deny 경로를 참조하면 run 생성과 model runtime 실행 전에 항상 거부한다."
+    "_note": "Git-untracked classification and model-send classification are separate. If a prompt source or body references a denied path, fresh_worker always rejects it before creating a run or invoking the model runtime."
   },
   "episodic_sources": [
     {
@@ -22,23 +22,23 @@
       "kind": "claude-jsonl",
       "base": "{TRANSCRIPTS}",
       "glob": "*.jsonl",
-      "note": "이 인스턴스의 Claude Code 전사. 경로는 인스턴스 루트에서 유도된다 (DR-025)"
+      "note": "Claude Code transcripts for this instance. The path is derived from the instance root (DR-025)"
     },
     {
       "name": "codex",
       "kind": "codex-jsonl",
       "base": "~/.codex/sessions",
       "glob": "**/*.jsonl",
-      "note": "Codex 데스크톱/CLI 세션. 전 인스턴스 공용이라 회상 결과에 다른 맥락이 섞일 수 있다"
+      "note": "Codex desktop/CLI sessions. This location is shared by all instances, so recall results may include other contexts"
     }
   ],
   "tracks": [
     {
       "key": "CHANGEME",
-      "name": "트랙 이름",
+      "name": "Track name",
       "canonical": "path/to/tracker.md",
       "also": [],
-      "_note": "트랙 = 지금 살아 있는 작업 갈래. 정본 파일 하나를 지정한다. NOW의 온도판이 이 파일의 '마지막 갱신' 줄을 읽는다. 트랙이 없으면 빈 배열로 두고 첫 트랙이 생길 때 추가한다."
+      "_note": "A track is an active line of work. Name one canonical file. The NOW status board reads that file's 'Last updated' line. Leave this array empty when there are no tracks, then add the first track when it exists."
     }
   ],
   "personal_pointer": null,
@@ -48,22 +48,22 @@
     ],
     "legacy_cutoff": null,
     "legacy_public_tracks": [],
-    "_note": "공유 가능한 새 track만 명시한다. 새 인스턴스에는 legacy가 없다. 기존 인스턴스 migration은 cutoff와 당시 public_tracks를 고정해 allowlist 확대가 과거 body를 소급 승격하지 않게 한다. 미등재·설정 오류는 _private/state로 fail-close한다."
+    "_note": "List only new tracks that may be shared. A new instance has no legacy data. Existing-instance migration freezes the cutoff and the public_tracks at that time so a later allowlist expansion cannot retroactively promote old bodies. Unlisted tracks and configuration errors fail closed to _private/state."
   },
   "threads": [],
-  "_threads_note": "공유 가능한 깊은 스레드만 둔다. private thread 이름·dossier는 _private/state/threads.json의 배열에 같은 스키마로 둔다.",
+  "_threads_note": "List only deep threads that may be shared. Store private thread names and dossiers in the array at _private/state/threads.json using the same schema.",
   "checks": {
-    "_doc": "검사기(linkcheck·coherence)의 인스턴스 고유 목록. 로직은 tools/에, 목록은 여기에.",
+    "_doc": "Instance-specific inventories for checkers such as linkcheck and coherence. Logic lives in tools/; inventories live here.",
     "linkcheck_exclude_prefixes": [],
-    "_linkcheck_note": "동결·아카이브 구역의 경로 접두어. 옛 경로를 의도적으로 담고 있는 문서는 링크 검사에서 빼야 오탐이 안 난다. 새 인스턴스는 빈 채로 시작한다.",
+    "_linkcheck_note": "Path prefixes for frozen and archived areas. Exclude documents that intentionally contain old paths to avoid false link-check failures. A new instance starts empty.",
     "hubs": [],
-    "_hubs_note": "[디렉토리, 인덱스파일] 쌍. 인덱스보다 새 파일이 디렉토리에 있는데 인덱스에 미기재면 경고한다.",
+    "_hubs_note": "[directory, index-file] pairs. Warn when a directory contains a file newer than its index that the index does not list.",
     "hub_ignore_ext": [
       ".pyc",
       ".DS_Store"
     ],
     "status_docs": [],
-    "_status_docs_note": "[파일, 허용일수] 쌍. 헤더의 첫 날짜가 그만큼 지나면 유통기한 경고."
+    "_status_docs_note": "[file, allowed-days] pairs. Warn when the first date in the header is older than the allowed age."
   },
   "journal_types": [
     "decision",

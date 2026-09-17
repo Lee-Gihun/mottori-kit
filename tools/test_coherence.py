@@ -19,7 +19,8 @@ def fixture(linkcheck_body=""):
     os.makedirs(os.path.join(root, "tools"))
     os.makedirs(os.path.join(root, "system"))
     os.makedirs(os.path.join(root, "state"))
-    # 킷은 templates/, 설치된 인스턴스는 system/ 에 config가 있다. 어느 트리에서 돌려도 같은 fixture다.
+    # The kit stores config in templates/ and an installed instance stores it in system/.
+    # This produces the same fixture in either tree.
     source = next(p for p in (os.path.join(ROOT, "templates", "memory-config.json"),
                               os.path.join(ROOT, "system", "memory-config.json"))
                   if os.path.isfile(p))

@@ -1,64 +1,74 @@
-# 파인만 렌즈
+Korean: `feynman.ko.md`
 
-> 호출: **이름을 아는가, 작동을 아는가? 장난감으로 계산해봤나?**
+# Feynman lens
 
-## 핵심 직관
+> Invocation: **Do you know the name, or do you know how it works? Have you calculated a toy case?**
 
-무언가의 이름을 아는 것과 그것을 아는 것은 다른 일이다. 이해했다는 느낌은 캐시된 문장의
-열람에서도 나오므로 믿을 수 없고, 유일하게 믿을 수 있는 시험은 재유도다: 전문용어 없이
-설명해보고, 최소 사례를 손으로 계산해본다. 막히는 지점이 정확히 이해가 끝나는 지점이다.
+## Core intuition
 
-## 작동 원리
+Knowing the name of something is not the same as knowing it. The feeling of understanding can come
+from retrieving a cached sentence, so it is unreliable. The only reliable test is rederivation: explain
+it without jargon and calculate the smallest case by hand. The point where you get stuck is exactly
+where your understanding ends.
 
-전문용어는 압축이면서 동시에 은폐다. 용어 하나가 "여기 이해 안 된 부분 있음"을 가려준다.
-용어를 금지하면 은폐가 불가능해져 구멍이 드러난다. 장난감 계산이 작동하는 이유도 같다:
-서사는 임의로 유연하지만 산수는 유연하지 않아서, 모형이 틀렸으면 숫자가 안 맞는다.
+## How it works
 
-## 변형
+Jargon is compression, but it is also concealment. One term can hide an entire area that is not
+understood. Banning the term makes concealment impossible and exposes the gap. Toy calculations work
+for the same reason: narratives are arbitrarily flexible, but arithmetic is not. If the model is wrong,
+the numbers do not agree.
 
-- **무용어 설명**: 해당 분야 단어를 하나도 안 쓰고 옆 분야 사람에게 설명한다. 못 하면 모르는 것.
-- **장난감 계산**: 2×2 행렬, n=3, 한 스텝짜리로 축소해 손이나 코드로 직접 굴린다.
-- **예측-실행-대조**: 계산 전에 결과를 먼저 등록하고, 실행하고, 차이를 심문한다.
-  차이가 0이면 배운 게 없고 크면 모형이 틀린 것 — 둘 다 정보다. 예측 등록을 빼먹으면
-  사후에 "그럴 줄 알았다"가 되어 드릴 전체가 무효가 된다.
-- **세 번째 질문 시험**: "이걸 처음 보는 사람이 던질 세 번째 질문까지 내가 답할 수 있나?"
+## Variations
 
-## 적용
+- **Jargon-free explanation**: Explain it to someone in an adjacent field without using any terms from
+  the field itself. If you cannot, you do not know it.
+- **Toy calculation**: Reduce it to a 2 by 2 matrix, n=3, or a single step, then run it by hand or in code.
+- **Predict, run, compare**: Register the result before calculating, run the calculation, then interrogate
+  the difference. If the difference is zero you learned nothing; if it is large your model was wrong.
+  Both outcomes are information. If you omit the registered prediction, hindsight turns it into "I knew
+  that would happen" and invalidates the entire drill.
+- **Third-question test**: "Can I answer the third question that someone seeing this for the first time
+  would ask?"
 
-- **설계**: 새 아키텍처 채택 전, 핵심 연산 하나를 장난감 크기로 직접 굴린다.
-  논문의 그림이 아니라 자기 손의 숫자가 채택 근거여야 한다.
-- **증거**: 논문의 핵심 주장 하나를 저자의 수식으로 재유도한다. 유도가 안 되면
-  그 주장에 대한 확신 등급을 강등한다.
-- **결정**: "이 선택이 좋은 이유"를 업계 용어 없이 설명한다. "시장이 크니까"류의
-  차용된 문장만 남으면 그 결정은 내 것이 아니라 남의 결론을 캐시한 것이다.
-- **자기**: 배웠다고 느낀 것을 24시간 뒤 백지에 재구성한다. 재구성이 실패하는 부분이
-  실제 학습의 경계다.
+## Applications
 
-장난감 예시: attention을 "attention"이란 단어 없이 — "각 위치가 다른 모든 위치에 질문을
-던지고, 답이 자기 질문과 닮은 정도로 가중평균을 만든다. 닮음 점수는 온도로 나눠 확률로
-바꾼다." 여기서 "왜 √d로 나누나"에 막히면 그 자리가 공부할 자리다. (답: 내적의 분산이
-d에 비례해 커져 softmax가 포화된다. 2차원 예시로 직접 계산하면 확인된다.)
+- **Design**: Before adopting a new architecture, run one core operation at toy scale. The adoption
+  evidence should be numbers produced by your own hands, not a figure in a paper.
+- **Evidence**: Rederive one central claim in a paper from the author's equations. If you cannot derive
+  it, lower the confidence grade for that claim.
+- **Decision**: Explain why a choice is good without industry jargon. If only borrowed phrases such as
+  "because the market is large" remain, the decision is not yours; it is someone else's cached conclusion.
+- **Self**: Reconstruct from a blank page, 24 hours later, something you felt you had learned. The parts
+  you cannot reconstruct mark the boundary of actual learning.
 
-## 실패 지형
+Toy example: explain attention without the word "attention": "Each position asks every other position a
+question, then forms a weighted average according to how closely each answer resembles its question.
+The similarity scores are divided by a temperature and converted into probabilities." If "why divide by
+the square root of d?" stops you, that is the place to study. (Answer: the variance of the dot product
+grows in proportion to d, which saturates softmax. A two-dimensional example verifies this directly.)
 
-- **설명 연극**: 유창한데 전부 비유인 경우. 비유는 이해의 증거가 아니다. 숫자가 나와야 한다.
-- **장난감 과신**: 장난감에서 성립한 것이 규모에서 깨질 수 있다 (극한 렌즈의 상전이와 접속).
-  장난감은 이해의 필요조건이지 충분조건이 아니다.
-- **완벽주의 마비**: 모든 것을 재유도하려면 시간이 모자란다. 재유도는 결정에 하중이
-  실리는 주장에만 배분한다 (한계효용과 접속).
+## Failure terrain
 
-## 간섭
+- **Explanation theater**: A fluent explanation made entirely of analogies. Analogy is not evidence of
+  understanding. It must produce numbers.
+- **Toy overconfidence**: Something true in a toy case can break at scale, as in the phase transitions
+  of the limits lens. A toy case is necessary for understanding, not sufficient.
+- **Perfectionist paralysis**: There is not enough time to rederive everything. Allocate rederivation only
+  to claims that bear weight in a decision, connecting this lens to marginal utility.
 
-- **한계효용**이 배분을 정한다: 어디까지 깊이 팔지.
-- **거울**과 짝: "이해했다는 느낌"은 자기 보고라 등급이 낮다. 재유도 결과만 승격한다.
-- **구조 대응**의 검증 단계가 이 렌즈다: 유추로 생성한 가설은 재유도를 통과해야 지식이 된다.
+## Interactions
 
-## 시금석 (사용 원장 — 적용할 때마다 한 줄 추가)
+- **Marginal utility** determines allocation: how deep to dig.
+- Pair with **mirror**: "I understand" is self-report and receives a low grade. Promote only the result
+  of rederivation.
+- This is the verification stage of **isomorphism**: a hypothesis generated by analogy becomes knowledge
+  only after it survives rederivation.
 
-*(사용 원장은 인스턴스마다 따로 쌓인다. 이 렌즈를 쓸 때마다 한 줄씩 여기 append.)*
+## Touchstone (usage ledger: append one line for each application)
 
-## 원전
+*(Each instance keeps its own usage ledger. Append one line here whenever this lens is used.)*
 
-Feynman, *Surely You're Joking* (브라질 물리교육 장) · "What I cannot create, I do not
-understand" · 밑바닥부터 구현하는 학습 전통 일반.
+## Sources
 
+Feynman, *Surely You're Joking* (the chapter on physics education in Brazil); "What I cannot create,
+I do not understand"; and the general tradition of learning by implementing from first principles.
