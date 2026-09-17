@@ -229,12 +229,39 @@ def test_matrix(document: dict, problems: Problems) -> None:
     problems.add(origins.get("hook") == hook_source_keys(), "hook command inventory differs")
 
 
+def test_issues_mode_reports_stale_paths(problems: Problems) -> None:
+    """gate 프로토콜: 현재 트리는 #issues 0, manifest에서 한 행을 지운 임시 사본은 manifest-missing 한 건."""
+    import shutil
+    import tempfile
+    builder = ROOT / "tools" / "manifest_build.py"
+    run = subprocess.run([sys.executable, str(builder), "--issues"], cwd=ROOT, capture_output=True, text=True)
+    problems.add(run.returncode == 0 and run.stdout.rstrip().endswith("#issues 0"),
+                 f"issues mode on the current tree must report 0: {run.stdout[-200:]}")
+    with tempfile.TemporaryDirectory(prefix="manifest-issues-") as tmp:
+        clone = Path(tmp) / "kit"
+        subprocess.run(["git", "clone", "-q", str(ROOT), str(clone)], check=True, capture_output=True)
+        manifest = clone / "system" / "review-manifest.yaml"
+        document = json.loads(manifest.read_text(encoding="utf-8"))
+        dropped = document["files"].pop(0)["path"]
+        manifest.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        stale = subprocess.run([sys.executable, str(clone / "tools" / "manifest_build.py"), "--issues"],
+                               cwd=clone, capture_output=True, text=True)
+        problems.add(f"manifest-missing|{dropped}\t" in stale.stdout and stale.stdout.rstrip().endswith("#issues 1"),
+                     f"issues mode must report the dropped path as missing: {stale.stdout[-300:]}")
+        manifest.unlink()
+        absent = subprocess.run([sys.executable, str(clone / "tools" / "manifest_build.py"), "--issues"],
+                                cwd=clone, capture_output=True, text=True)
+        problems.add(absent.stdout.rstrip().endswith("#issues 0") and "not applicable" in absent.stdout,
+                     f"a tree without the manifest is not applicable: {absent.stdout[-200:]}")
+
+
 def main() -> int:
     problems = Problems()
     review = load_yaml_subset(REVIEW, problems)
     matrix = load_yaml_subset(MATRIX, problems)
     test_review(review, problems)
     test_matrix(matrix, problems)
+    test_issues_mode_reports_stale_paths(problems)
     if problems.items:
         for item in problems.items:
             print("FAIL", item)

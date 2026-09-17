@@ -68,6 +68,8 @@ CHECKS = [
     ("linkcheck", [sys.executable, os.path.join(HERE, "linkcheck.py"), "--issues"]),
     ("evidencecheck", [sys.executable, os.path.join(HERE, "evidencecheck.py"), "--issues"]),
     ("now-check", [sys.executable, os.path.join(HERE, "now.py"), "check", "--issues"]),
+    # 생성 파일(review manifest)이 index보다 낡은 채 커밋되는 경로를 닫는다 (2026-09-18 CI 실측). 킷 트리에만 해당.
+    ("manifest", [sys.executable, os.path.join(HERE, "manifest_build.py"), "--issues"]),
 ]
 
 
@@ -245,11 +247,16 @@ def _verdict(cur, base, state):
         return t("gate.baseline_corrupt", path=BASELINE), False
     if state == "absent":
         return t("gate.baseline_absent"), False
-    if set(cur) != set(base):
-        only_c, only_b = sorted(set(cur) - set(base)), sorted(set(base) - set(cur))
-        only_base = t("gate.only_base", items=", ".join(only_b)) if only_b else ""
-        only_current = t("gate.only_current", items=", ".join(only_c)) if only_c else ""
-        return t("gate.checks_changed", only_base=only_base, only_current=only_current), False
+    only_b = sorted(set(base) - set(cur))
+    if only_b:
+        # 검사기가 사라진 것은 검사기를 지워서 통과시키는 경로다. 막는다.
+        return t("gate.checks_changed", only_base=t("gate.only_base", items=", ".join(only_b)),
+                 only_current=""), False
+    # 검사기가 늘어난 것은 빈 기준선으로 취급한다: 새 검사기의 이슈는 전부 "새 이슈"라 숨길 수 없고,
+    # 이슈 0이면 기준선에 그 키를 기록한다. 2026-09-18 실측: 검사기 추가 커밋이 "목록이 다르다"와
+    # "sealed tree가 clean하지 않으면 baseline 금지"에 동시에 걸려 커밋도 재기준선도 불가능한 교착이었다.
+    grown = sorted(set(cur) - set(base))
+    base = {k: base.get(k, set()) for k in cur}
 
     new = {k: sorted(cur[k] - base[k]) for k in cur}
     new = {k: v for k, v in new.items() if v}
@@ -260,7 +267,7 @@ def _verdict(cur, base, state):
         return t("gate.new_issues", detail=detail), False
 
     shrank = (all(cur[k] <= base[k] for k in cur) and any(cur[k] < base[k] for k in cur))
-    return None, shrank
+    return None, shrank or bool(grown)
 
 
 def _block(reason):

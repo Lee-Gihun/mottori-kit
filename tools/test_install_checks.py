@@ -379,16 +379,18 @@ except Exception as e:
         shutil.rmtree(root, ignore_errors=True)
 
 
-def test_gate_verdict_rejects_current_only_checker_key():
+def test_gate_verdict_checker_key_growth_and_shrink():
+    """검사기 목록: 사라지면 차단(우회 경로), 늘어나면 빈 기준선(숨길 수 없음). 2026-09-18 교착 실측으로 계약 변경."""
     import gate
-    reason, shrink = gate._verdict(
-        {"linkcheck": set(), "new-checker": set()},
-        {"linkcheck": set()},
-        "ok",
-    )
-    ok("gate key-set growth is blocked and never treated as baseline shrink",
-       reason is not None and shrink is False and "new-checker" in reason,
-       repr((reason, shrink)))
+    reason, pull = gate._verdict({"linkcheck": set(), "new-checker": set()}, {"linkcheck": set()}, "ok")
+    ok("gate key-set growth with zero issues passes and records the new key",
+       reason is None and pull is True, repr((reason, pull)))
+    reason, pull = gate._verdict({"linkcheck": set(), "new-checker": {"x|1"}}, {"linkcheck": set()}, "ok")
+    ok("gate key-set growth cannot hide issues: the new checker's issues are new issues",
+       reason is not None and pull is False and "x|1" in reason, repr((reason, pull)))
+    reason, pull = gate._verdict({"linkcheck": set()}, {"linkcheck": set(), "gone": set()}, "ok")
+    ok("gate key-set shrink (a removed checker) is still blocked",
+       reason is not None and pull is False and "gone" in reason, repr((reason, pull)))
 
 
 # ------------------------------------------------------------ M  NOW personal pointer
