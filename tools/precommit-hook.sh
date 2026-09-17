@@ -14,4 +14,20 @@ fi
 # 자기 위치와 다르면 fail-close한다.
 unset MOTTORI_INSTANCE
 ROOT="$(git rev-parse --show-toplevel)"
-exec python3 "$ROOT/tools/gate.py" precommit
+
+case "$(basename "$0")" in
+  pre-push)
+    exec python3 "$ROOT/tools/enforce.py" --root "$ROOT" prepush
+    ;;
+  pre-commit)
+    # A running owned hook verifies the complete installed pair before trusting the gate. This
+    # catches drift in the companion pre-push hook and template. Replacing this file itself remains
+    # outside a repo-local hook's authority and is reported as REVIEW in the enforcement matrix.
+    bash "$ROOT/tools/install_hooks.sh" --check >/dev/null
+    exec python3 "$ROOT/tools/gate.py" precommit
+    ;;
+  *)
+    echo "unknown mottori hook entrypoint: $0" >&2
+    exit 2
+    ;;
+esac

@@ -21,9 +21,11 @@ def fixture():
     return root
 
 
-def run(root, mode):
+def run(root, mode, lang=None):
+    env = dict(os.environ)
+    env["MOTTORI_LANG"] = lang or "ko"
     return subprocess.run(["bash", "tools/install_hooks.sh", mode], cwd=root,
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, env=env)
 
 
 def hook_path(root):
@@ -41,13 +43,16 @@ def test_repair_then_check_installs_exact_executable():
     try:
         hook = hook_path(root)
         missing = run(root, "--check")
-        assert missing.returncode != 0 and "missing:" in missing.stdout
+        assert missing.returncode != 0 and "없음(missing):" in missing.stdout
         assert not os.path.exists(hook)
 
         repaired = run(root, "--repair")
         assert repaired.returncode == 0, repaired.stdout + repaired.stderr
+        assert "정확한 템플릿" in repaired.stdout and "exact template" not in repaired.stdout
         checked = run(root, "--check")
-        assert checked.returncode == 0 and "current:" in checked.stdout
+        assert checked.returncode == 0 and "현재(current):" in checked.stdout
+        checked_en = run(root, "--check", lang="en")
+        assert checked_en.returncode == 0 and "current:" in checked_en.stdout
         assert open(hook, "rb").read() == open(
             os.path.join(root, "tools", "precommit-hook.sh"), "rb").read()
         assert os.stat(hook).st_mode & stat.S_IXUSR
@@ -67,7 +72,7 @@ def test_check_reports_owned_drift_and_repair_backs_it_up():
         drifted_hash = hashlib.sha256(open(hook, "rb").read()).hexdigest()
 
         checked = run(root, "--check")
-        assert checked.returncode != 0 and "owned-drift:" in checked.stdout
+        assert checked.returncode != 0 and "소유 표류(owned-drift):" in checked.stdout
         repaired = run(root, "--repair")
         assert repaired.returncode == 0, repaired.stdout + repaired.stderr
         backups = [os.path.join(os.path.dirname(hook), name)
@@ -100,10 +105,35 @@ def test_foreign_precommit_aborts_without_overwrite():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_failed_repair_restores_current_hook_and_preserves_missing_hook():
+    root = fixture()
+    try:
+        assert run(root, "--repair").returncode == 0
+        hook = hook_path(root)
+        push_hook = os.path.join(os.path.dirname(hook), "pre-push")
+        os.remove(push_hook)
+        before = open(hook, "rb").read()
+        before_mode = stat.S_IMODE(os.stat(hook).st_mode)
+        os.makedirs(os.path.join(root, "state"), exist_ok=True)
+        with open(os.path.join(root, "state", ".gate-baseline.json"), "w", encoding="utf-8") as f:
+            f.write("{malformed\n")
+        with open(os.path.join(root, "tools", "gate.py"), "w", encoding="utf-8") as f:
+            f.write("raise SystemExit(1)\n")
+
+        failed = run(root, "--repair")
+        assert failed.returncode == 1 and "hook 원상 복구" in failed.stderr
+        assert open(hook, "rb").read() == before
+        assert stat.S_IMODE(os.stat(hook).st_mode) == before_mode
+        assert not os.path.lexists(push_hook)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 TESTS = [
     test_repair_then_check_installs_exact_executable,
     test_check_reports_owned_drift_and_repair_backs_it_up,
     test_foreign_precommit_aborts_without_overwrite,
+    test_failed_repair_restores_current_hook_and_preserves_missing_hook,
 ]
 
 

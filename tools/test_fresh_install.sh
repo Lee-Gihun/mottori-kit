@@ -6,12 +6,127 @@
 # 돌리고(에이전트·CI가 실제로 돌리는 방식), doctor FAIL 수·linkcheck broken 수·회귀 테스트
 # 결과를 표로 낸다. 2026-09-17 실측: 이 검사기 없이 릴리스한 v0.4는 첫 설치에서
 # setup.sh가 조용히 exit 1 했고, 인자를 줘도 doctor FAIL 4·linkcheck 2·회귀 12/13이었다.
+# CRITICAL_E2E setup.sh
+# CRITICAL_E2E tools/memlib.py
+# CRITICAL_E2E tools/now.py
+# CRITICAL_E2E tools/gate.py
+# CRITICAL_E2E tools/linkcheck.py
+# CRITICAL_E2E tools/doctor.py
+# CRITICAL_E2E tools/fresh_worker.py
+# CRITICAL_E2E tools/install_hooks.sh
 #
 # 사용:  bash tools/test_fresh_install.sh            (이 킷을 임시 디렉토리에 클론해서 검사)
 #        bash tools/test_fresh_install.sh --keep     (임시 디렉토리를 지우지 않고 경로를 인쇄)
+# 내부 회귀용: --judge-linkcheck|--judge-doctor <subprocess-exit> <output-file>
 # 종료코드: doctor FAIL 0 · linkcheck broken 0 · 회귀 전부 통과면 0, 아니면 1.
 set -uo pipefail
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+judge_linkcheck() {
+  python3 - "$1" "$2" <<'PY'
+import re
+import sys
+
+path, raw_rc = sys.argv[1:]
+try:
+    subprocess_rc = int(raw_rc)
+    text = open(path, encoding="utf-8").read()
+except (OSError, UnicodeError, ValueError) as exc:
+    print(f"측정불능: linkcheck 출력 또는 종료코드를 읽을 수 없음 ({exc})")
+    raise SystemExit(1)
+
+pattern = re.compile(
+    r"\[linkcheck\] broken: (0|[1-9][0-9]*)"
+    r"(?: · pending\((?:setup 전|before setup)\): (0|[1-9][0-9]*))?"
+)
+matches = [match for line in text.splitlines() if (match := pattern.fullmatch(line))]
+if len(matches) != 1:
+    print(f"측정불능: linkcheck 요약 줄이 정확히 하나가 아님 (found={len(matches)})")
+    raise SystemExit(1)
+match = matches[0]
+if subprocess_rc != 0:
+    print(f"측정불능: linkcheck 비정상 종료 (exit={subprocess_rc})")
+    raise SystemExit(1)
+broken = int(match.group(1))
+if broken != 0:
+    print(f"측정불능: linkcheck exit=0이지만 broken={broken}")
+    raise SystemExit(1)
+print(broken)
+PY
+}
+
+judge_doctor() {
+  python3 - "$1" "$2" <<'PY'
+import json
+import sys
+
+path, raw_rc = sys.argv[1:]
+
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+try:
+    subprocess_rc = int(raw_rc)
+    with open(path, encoding="utf-8") as source:
+        payload = json.load(source, object_pairs_hook=unique_object)
+    checks = payload["checks"]
+    summary = payload["summary"]
+    if not isinstance(checks, list) or not isinstance(summary, dict):
+        raise ValueError("checks/summary type")
+    statuses = ("PASS", "FAIL", "WARN", "SKIP")
+    counted = {status: 0 for status in statuses}
+    for row in checks:
+        if not isinstance(row, dict):
+            raise ValueError("check row type")
+        if not all(isinstance(row.get(key), str) for key in ("name", "status", "detail")):
+            raise ValueError("check row schema")
+        if row["status"] not in counted:
+            raise ValueError("check status")
+        counted[row["status"]] += 1
+    fields = ("total", "pass", "fail", "warn", "skip")
+    if not all(type(summary.get(key)) is int and summary[key] >= 0 for key in fields):
+        raise ValueError("summary schema")
+    expected = {
+        "total": len(checks),
+        "pass": counted["PASS"],
+        "fail": counted["FAIL"],
+        "warn": counted["WARN"],
+        "skip": counted["SKIP"],
+    }
+    if any(summary[key] != value for key, value in expected.items()):
+        raise ValueError("summary/check mismatch")
+except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+    print(f"측정불능: doctor JSON 요약을 읽을 수 없음 ({exc})")
+    raise SystemExit(1)
+
+if subprocess_rc != 0:
+    print(f"측정불능: doctor 비정상 종료 (exit={subprocess_rc}, FAIL={summary['fail']})")
+    raise SystemExit(1)
+if summary["fail"] != 0:
+    print(f"측정불능: doctor exit=0이지만 FAIL={summary['fail']}")
+    raise SystemExit(1)
+print(summary["fail"], summary["warn"])
+PY
+}
+
+case "${1:-}" in
+  --judge-linkcheck)
+    [ "$#" -eq 3 ] || { echo "usage: $1 <subprocess-exit> <output-file>"; exit 2; }
+    judge_linkcheck "$3" "$2"
+    exit $?
+    ;;
+  --judge-doctor)
+    [ "$#" -eq 3 ] || { echo "usage: $1 <subprocess-exit> <output-file>"; exit 2; }
+    judge_doctor "$3" "$2"
+    exit $?
+    ;;
+esac
+
 KEEP=0; [ "${1:-}" = "--keep" ] && KEEP=1
 TMP="$(mktemp -d)"
 DEST="$TMP/kit fresh"          # 공백 든 경로: 2026-08-24 실측 버그(경로 유도 규칙)의 재발 방지
@@ -56,35 +171,30 @@ fi
 bash tools/install_hooks.sh --repair >/dev/null 2>&1 && step "install_hooks --repair" "ok" || { step "install_hooks --repair" "FAIL"; fail=1; }
 
 # 3. linkcheck
-lc="$(python3 tools/linkcheck.py 2>&1)"; broken="$(echo "$lc" | sed -n 's/.*broken: \([0-9]*\).*/\1/p' | tail -1)"
-[ "${broken:-x}" = "0" ] && step "linkcheck broken" "0" || { step "linkcheck broken" "${broken:-측정불능}"; echo "$lc" | grep BROKEN | head -5; fail=1; }
+lc_file="$TMP/linkcheck.out"
+python3 tools/linkcheck.py >"$lc_file" 2>&1; lc_rc=$?
+lc_judgment="$(judge_linkcheck "$lc_file" "$lc_rc")"; lc_judge_rc=$?
+if [ $lc_judge_rc -eq 0 ]; then
+  step "linkcheck broken" "$lc_judgment"
+else
+  step "linkcheck broken" "측정불능"
+  echo "$lc_judgment"
+  grep BROKEN "$lc_file" | head -5
+  fail=1
+fi
 
 # 4. doctor. 사람용 문자열을 grep하지 않고 공개 JSON 계약만 읽는다.
 doctor_json="$TMP/doctor.json"; doctor_err="$TMP/doctor.err"
 python3 tools/doctor.py --json >"$doctor_json" 2>"$doctor_err"; doctor_rc=$?
-metrics="$(python3 - "$doctor_json" <<'PY'
-import json, sys
-payload = json.load(open(sys.argv[1], encoding="utf-8"))
-summary = payload["summary"]
-print(summary["fail"], summary["warn"])
-PY
-)"; metrics_rc=$?
+metrics="$(judge_doctor "$doctor_json" "$doctor_rc")"; metrics_rc=$?
 nf=""; nw=""
 [ $metrics_rc -eq 0 ] && read -r nf nw <<< "$metrics"
-if [ "${nf:-x}" = "0" ] && [ $doctor_rc -eq 0 ]; then
+if [ "${nf:-x}" = "0" ]; then
   step "doctor FAIL / warn" "0 / ${nw:-?}"
 else
-  step "doctor FAIL / warn" "${nf:-측정불능} / ${nw:-?}"
-  if [ $metrics_rc -eq 0 ]; then
-    python3 - "$doctor_json" <<'PY'
-import json, sys
-for row in json.load(open(sys.argv[1], encoding="utf-8"))["checks"]:
-    if row["status"] == "FAIL":
-        print(f"[ FAIL ] {row['name']}  {row['detail']}")
-PY
-  else
-    tail -6 "$doctor_err"
-  fi
+  step "doctor FAIL / warn" "측정불능 / ?"
+  echo "$metrics"
+  tail -6 "$doctor_err"
   fail=1
 fi
 

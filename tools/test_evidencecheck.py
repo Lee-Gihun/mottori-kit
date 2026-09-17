@@ -195,9 +195,14 @@ def test_gate_consumes_evidencecheck_issues_end_to_end():
         new_engine_files = {
             "system/enforcement-matrix.md",
             "system/evidence-schema.md",
+            "system/test-matrix.yaml",
             "tools/evidencecheck.py",
+            "tools/enforce.py",
             "tools/i18n.py",
+            "tools/test_egress.py",
+            "tools/test_enforce.py",
             "tools/test_evidencecheck.py",
+            "tools/test_matrix_check.py",
         }
         for rel in sorted(set(path for path in listed if path) | new_engine_files):
             source = ROOT / rel
@@ -230,8 +235,13 @@ def test_gate_consumes_evidencecheck_issues_end_to_end():
         )
         assert status.returncode == 0, status.stdout + status.stderr
         assert "evidencecheck 0건" in status.stdout, status.stdout
+        installed = subprocess.run(
+            ["bash", "tools/install_hooks.sh", "--repair"], cwd=repo,
+            capture_output=True, text=True, env=env,
+        )
+        assert installed.returncode == 0, installed.stdout + installed.stderr
         hook = subprocess.run(
-            ["bash", "tools/precommit-hook.sh"],
+            [str(repo / ".git" / "hooks" / "pre-commit")],
             cwd=repo,
             capture_output=True,
             text=True,

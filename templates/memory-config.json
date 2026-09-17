@@ -7,6 +7,15 @@
     "remote_allowlist": [],
     "_note": "context는 personal 또는 work. work 인스턴스의 git 원격이 remote_allowlist 밖이면 doctor가 막는다 (DR-026 단방향 밸브). 회사 자료를 개인 GitHub으로 밀지 않기 위한 구조적 차단선이다. allowlist를 비워두면 work 인스턴스는 원격을 아예 못 가진다."
   },
+  "egress": {
+    "model_send": {
+      "deny_prefixes": [
+        "_private/"
+      ],
+      "allow_prefixes": []
+    },
+    "_note": "Git 비추적 등급과 모델 전송 등급은 별개다. fresh_worker는 prompt 출처나 본문이 deny 경로를 참조하면 run 생성과 model runtime 실행 전에 항상 거부한다."
+  },
   "episodic_sources": [
     {
       "name": "claude",

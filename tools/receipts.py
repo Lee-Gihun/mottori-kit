@@ -13,6 +13,7 @@ ROOT = Path(os.environ.get("MOTTORI_INSTANCE", Path(__file__).resolve().parent.p
 RUNS = ROOT / "_private" / "work" / "runs"
 FAILED_STATUSES = {"failed", "failed-missing-result", "interrupted", "scope_violation"}
 RECEIPT_MAX_BYTES = 4096
+WAVE_MAX_RUNS = 8
 
 
 def _parse_time(value):
@@ -211,6 +212,7 @@ def _clip_utf8(text, byte_limit):
 
 def _receipt(meta, result):
     scope = meta.get("scope") if isinstance(meta.get("scope"), dict) else {}
+    egress = meta.get("egress") if isinstance(meta.get("egress"), dict) else {}
     worktree = meta.get("worktree") if isinstance(meta.get("worktree"), dict) else {}
     patch_line = ""
     if worktree.get("mode") is not None:
@@ -230,6 +232,7 @@ def _receipt(meta, result):
         f"stream_sha256: {_meta_value(meta, 'stream_sha256')}\n"
         f"result_sha256: {_meta_value(meta, 'result_sha256')}\n"
         f"result_bytes: {_meta_value(meta, 'result_bytes')}\n"
+        f"egress: {egress.get('private_ref_count', 0)} private refs\n"
         f"scope: {scope.get('status', '-')} (changed {scope.get('changed_count', '-')}, "
         f"violations {scope.get('violation_count', '-')})\n"
         f"{patch_line}"
@@ -310,6 +313,111 @@ def cmd_cost(_args):
     return 0
 
 
+def _result_contract(row):
+    """Load the dispatcher-validated schema; never infer decision fields from result prose."""
+    error = None
+    try:
+        payload = json.loads((row["_dir"] / "result-contract.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        payload = None
+        error = f"result contract unreadable: {type(exc).__name__}"
+    required = {"schema_version", "valid", "verdict", "summary", "evidence", "unknowns", "error"}
+    valid_shape = (
+        isinstance(payload, dict)
+        and set(payload) == required
+        and payload.get("schema_version") == 1
+        and isinstance(payload.get("valid"), bool)
+        and payload.get("verdict") in {"PASS", "FAIL", "INCONCLUSIVE"}
+        and isinstance(payload.get("summary"), str) and bool(payload["summary"].strip())
+        and all(isinstance(payload.get(field), list)
+                and all(isinstance(item, str) and item.strip() for item in payload[field])
+                for field in ("evidence", "unknowns"))
+        and (payload.get("error") is None or isinstance(payload.get("error"), str))
+    )
+    if not valid_shape:
+        error = error or "result contract schema is invalid"
+        return {
+            "verdict": "INCONCLUSIVE",
+            "summary": "structured result unavailable",
+            "evidence": [],
+            "unknowns": [error],
+        }
+    if not payload["valid"]:
+        return {
+            "verdict": "INCONCLUSIVE",
+            "summary": payload["summary"],
+            "evidence": payload["evidence"],
+            "unknowns": payload["unknowns"] or [payload["error"] or "result contract invalid"],
+        }
+    if not payload["evidence"] or payload["error"] is not None:
+        return {
+            "verdict": "INCONCLUSIVE",
+            "summary": "result contract schema is invalid",
+            "evidence": [],
+            "unknowns": ["valid result contract requires evidence and a null error"],
+        }
+    return payload
+
+
+def _run_record_path(row):
+    run_path = row["_meta"].get("run")
+    if not isinstance(run_path, str) or not run_path:
+        run_path = f"_private/work/runs/{row['run_id']}"
+    return f"{run_path}/result-contract.json"
+
+
+def _field_clip(value, byte_limit):
+    raw = value.encode("utf-8")
+    if len(raw) <= byte_limit:
+        return value
+    marker = "…"
+    return _utf8_prefix(value, byte_limit - len(marker.encode("utf-8"))) + marker
+
+
+def _wave_receipt(rows):
+    header = (
+        "WAVE_RECEIPT v1\n"
+        f"runs: {len(rows)}\n"
+        "run | verdict | evidence | unknown\n"
+    )
+    rendered = []
+    for row in rows:
+        contract = _result_contract(row)
+        verdict = contract["verdict"] if row["status"] == "success" else "INCONCLUSIVE"
+        verdict_text = f"{row['status']} · {verdict} · {contract['summary']}"
+        evidence = "; ".join(contract["evidence"]) or _run_record_path(row)
+        unknowns = "; ".join(contract["unknowns"]) or "없음"
+        rendered.append(
+            f"{_field_clip(row['run_id'], 64)} | "
+            f"{_field_clip(verdict_text, 132)} | "
+            f"{_field_clip(evidence, 172)} | "
+            f"{_field_clip(unknowns, 92)}\n"
+        )
+    receipt = header + "".join(rendered)
+    if len(receipt.encode("utf-8")) > RECEIPT_MAX_BYTES:
+        raise AssertionError("wave receipt byte budget calculation failed")
+    return receipt
+
+
+def cmd_aggregate(args):
+    if len(args.ids) > WAVE_MAX_RUNS:
+        print(f"한 파도는 run {WAVE_MAX_RUNS}개까지 집계할 수 있다", file=sys.stderr)
+        return 1
+    invalid = next((run_id for run_id in args.ids
+                    if not re.fullmatch(r"[A-Za-z0-9._+-]+", run_id)), None)
+    if invalid is not None:
+        print(f"run을 찾을 수 없다: {invalid}", file=sys.stderr)
+        return 1
+    records, _ = load_runs()
+    by_id = {row["run_id"]: row for row in records}
+    missing = next((run_id for run_id in args.ids if run_id not in by_id), None)
+    if missing is not None:
+        print(f"run을 찾을 수 없다: {missing}", file=sys.stderr)
+        return 1
+    sys.stdout.write(_wave_receipt([by_id[run_id] for run_id in args.ids]))
+    return 0
+
+
 def _parser():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -323,6 +431,9 @@ def _parser():
     show.set_defaults(func=cmd_show)
     cost = sub.add_parser("cost", help="token totals and daily histogram")
     cost.set_defaults(func=cmd_cost)
+    aggregate = sub.add_parser("aggregate", help="collapse up to eight runs into one bounded receipt")
+    aggregate.add_argument("ids", nargs="+")
+    aggregate.set_defaults(func=cmd_aggregate)
     return parser
 
 

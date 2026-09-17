@@ -77,6 +77,51 @@ def write(root, rel, text):
         f.write(text)
 
 
+def run_fresh_judge(kind, subprocess_rc, output):
+    """첫 설치 게이트의 판정 함수만 실행한다."""
+    with tempfile.TemporaryDirectory(prefix="fresh-judge.") as tmp:
+        output_path = os.path.join(tmp, f"{kind}.out")
+        write(tmp, f"{kind}.out", output)
+        return subprocess.run(
+            ["bash", os.path.join(ROOT, "tools", "test_fresh_install.sh"),
+             f"--judge-{kind}", str(subprocess_rc), output_path],
+            cwd=ROOT, capture_output=True, text=True, timeout=3,
+        )
+
+
+# ------------------------------------------------------------ X12  fresh gate parsing
+def test_fresh_install_rejects_malformed_summaries():
+    if not os.path.isfile(os.path.join(ROOT, "tools", "test_fresh_install.sh")):
+        # 첫 설치 게이트는 배포 킷 전용이다 (KIT-DR-011); 설치된 인스턴스엔 판정 함수가 없다.
+        print("- X12: not applicable here (no tools/test_fresh_install.sh: installed instance)")
+        return
+    valid_doctor = json.dumps({
+        "checks": [{"name": "fixture", "status": "PASS", "detail": "ok"}],
+        "summary": {"total": 1, "pass": 1, "fail": 0, "warn": 0, "skip": 0},
+        "manual": [],
+    })
+    malformed = (
+        run_fresh_judge("linkcheck", 0, ""),
+        run_fresh_judge("linkcheck", 0,
+                        "[linkcheck] broken: 0\n[linkcheck] broken: 0\n"),
+        run_fresh_judge("doctor", 0, "{broken json\n"),
+    )
+    ok("X12 malformed summaries -> 3/3 unmeasurable FAIL",
+       all(r.returncode != 0 and "측정불능" in (r.stdout + r.stderr) for r in malformed),
+       "\n".join(r.stdout + r.stderr for r in malformed))
+
+    abnormal = run_fresh_judge("doctor", 7, valid_doctor)
+    ok("X12 nonzero doctor with FAIL 0 is unmeasurable FAIL",
+       abnormal.returncode != 0 and "측정불능" in (abnormal.stdout + abnormal.stderr),
+       abnormal.stdout + abnormal.stderr)
+
+    normal_link = run_fresh_judge("linkcheck", 0, "[linkcheck] broken: 0\n")
+    normal_doctor = run_fresh_judge("doctor", 0, valid_doctor)
+    ok("X12 normal summaries keep PASS",
+       normal_link.returncode == 0 and normal_doctor.returncode == 0,
+       normal_link.stdout + normal_link.stderr + normal_doctor.stdout + normal_doctor.stderr)
+
+
 # ------------------------------------------------------------ J · F  linkcheck
 def test_linkcheck_exit_codes_and_pending():
     root = make_repo(with_config=False)
@@ -130,6 +175,53 @@ def test_scope_hash_matches_with_spaced_filename():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_linkcheck_extracted_tree_uses_only_ignored_root_fallback():
+    root = make_repo(with_config=True)
+    tree = tempfile.mkdtemp(prefix="linkcheck-extracted.")
+    try:
+        write(root, "_private/local.md", "# local only\n")
+        write(tree, "README.md", "[local](_private/local.md)\n")
+        filelist = os.path.join(tree, "files.txt")
+        with open(filelist, "w", encoding="utf-8") as f:
+            f.write("README.md\n")
+        r = run(root, "tools/linkcheck.py", "--tree", tree, "--filelist", filelist)
+        ok("L extracted tree accepts ignored local-only ROOT fallback",
+           r.returncode == 0 and "broken: 0" in r.stdout, r.stdout[-300:])
+
+        write(root, "tracked.md", "# tracked but absent from extracted tree\n")
+        subprocess.run(["git", "add", "tracked.md"], cwd=root, check=True)
+        write(tree, "README.md", "[tracked](tracked.md)\n")
+        r = run(root, "tools/linkcheck.py", "--tree", tree, "--filelist", filelist)
+        ok("L extracted tree rejects tracked worktree-only fallback",
+           r.returncode == 1 and "BROKEN README.md -> tracked.md" in r.stdout,
+           r.stdout[-300:])
+    finally:
+        shutil.rmtree(tree, ignore_errors=True)
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_linkcheck_exclude_config_applies_only_without_all():
+    root = make_repo(with_config=True)
+    try:
+        config_path = os.path.join(root, "system", "memory-config.json")
+        config = json.load(open(config_path, encoding="utf-8"))
+        config.setdefault("checks", {})["linkcheck_exclude_prefixes"] = ["archive/"]
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f)
+        write(root, "archive/old.md", "[missing](gone.md)\n")
+        subprocess.run(["git", "add", "archive/old.md"], cwd=root, check=True)
+
+        normal = run(root, "tools/linkcheck.py")
+        all_files = run(root, "tools/linkcheck.py", "--all")
+        ok("linkcheck exclude key hides archive in default mode",
+           normal.returncode == 0 and "broken: 0" in normal.stdout, normal.stdout)
+        ok("linkcheck --all overrides exclude key",
+           all_files.returncode == 1 and "BROKEN archive/old.md -> gone.md" in all_files.stdout,
+           all_files.stdout)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 # ------------------------------------------------------------ E · git  doctor severities
 def test_doctor_codex_armed_and_git_version():
     root = make_repo(with_config=True)
@@ -158,7 +250,7 @@ def fake_sh(*cmd, cwd=None):
     if cmd[:2] == ("git", "--version"): return R(fake_sh.version)
     return R(os.path.join(os.sep, "tmp", "x"))
 doctor.sh = fake_sh
-for v, tag in (("git version 2.4.12", "too_old"), ("git version 2.35.9", "old"), ("git version 2.36.0", "new"), ("git version 2.50.1 (Apple Git-155)", "apple"), ("weird", "unparsable")):
+for v, tag in (("git version 2.4.12", "too_old"), ("git version 2.5.0", "minimum"), ("git version 2.35.9", "old"), ("git version 2.36.0", "new"), ("git version 2.50.1 (Apple Git-155)", "apple"), ("weird", "unparsable")):
     fake_sh.version = v
     print(tag, doctor.c_git()[0])
 '''
@@ -169,10 +261,72 @@ for v, tag in (("git version 2.4.12", "too_old"), ("git version 2.35.9", "old"),
         ok("E codex command invalid → FAIL", out.get("invalid") == "FAIL", r.stdout)
         ok("E codex loader error → FAIL", out.get("loader") == "FAIL", r.stdout)
         ok("git 2.4 → FAIL", out.get("too_old") == "FAIL", r.stdout)
+        ok("git 2.5 minimum → PASS", out.get("minimum") == "PASS", r.stdout)
         ok("git 2.35 → PASS", out.get("old") == "PASS", r.stdout)
         ok("git 2.36 → PASS", out.get("new") == "PASS", r.stdout)
         ok("git 2.50 (Apple) → PASS", out.get("apple") == "PASS", r.stdout)
         ok("git unparsable → WARN", out.get("unparsable") == "WARN", r.stdout)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_doctor_remote_allowlist_is_host_and_path_bounded():
+    import doctor
+    allowlist = ["https://github.com/trusted/repo"]
+    ok("valve exact remote is allowed",
+       doctor._allowed("https://github.com/trusted/repo.git", allowlist))
+    ok("valve child path is allowed",
+       doctor._allowed("https://github.com/trusted/repo/child.git", allowlist))
+    ok("valve embedded trusted URL on hostile host is rejected",
+       not doctor._allowed(
+           "https://evil.invalid/https://github.com/trusted/repo", allowlist))
+    ok("valve sibling path is rejected",
+       not doctor._allowed("https://github.com/trusted/repository", allowlist))
+
+
+def test_doctor_precommit_accepts_localized_status_tokens():
+    import doctor
+    original = doctor.sh
+
+    class Result:
+        stderr = ""
+
+        def __init__(self, code, output):
+            self.returncode = code
+            self.stdout = output
+
+    try:
+        for output in ("current: /hooks\n", "현재(current): /hooks\n"):
+            doctor.sh = lambda *args, value=output: Result(0, value)
+            status, _ = doctor.c_precommit_install()
+            ok(f"doctor accepts localized current token {output.split(':', 1)[0]}",
+               status == doctor.PASS, repr((status, output)))
+        for output in ("missing: /hooks\n", "없음(missing): /hooks\n"):
+            doctor.sh = lambda *args, value=output: Result(1, value)
+            status, _ = doctor.c_precommit_install()
+            ok(f"doctor accepts localized missing token {output.split(':', 1)[0]}",
+               status == doctor.WARN, repr((status, output)))
+    finally:
+        doctor.sh = original
+
+
+def test_doctor_work_context_rejects_tracked_private_symlink():
+    root = make_repo(with_config=True)
+    try:
+        config_path = os.path.join(root, "system", "memory-config.json")
+        config = json.load(open(config_path, encoding="utf-8"))
+        config["instance"]["context"] = "work"
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f)
+        write(root, "_private/secret.md", "secret\n")
+        os.symlink("_private/secret.md", os.path.join(root, "leak.md"))
+        subprocess.run(["git", "add", "leak.md"], cwd=root, check=True)
+        code = ("import sys; sys.path.insert(0, 'tools'); import doctor; "
+                "status, detail = doctor.c_symlinks(); print(status); print(detail)")
+        result = run(root, "-c", code)
+        ok("doctor work context rejects every tracked symlink",
+           result.returncode == 0 and result.stdout.splitlines()[0] == "FAIL"
+           and "leak.md" in result.stdout, result.stdout + result.stderr)
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -225,6 +379,18 @@ except Exception as e:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_gate_verdict_rejects_current_only_checker_key():
+    import gate
+    reason, shrink = gate._verdict(
+        {"linkcheck": set(), "new-checker": set()},
+        {"linkcheck": set()},
+        "ok",
+    )
+    ok("gate key-set growth is blocked and never treated as baseline shrink",
+       reason is not None and shrink is False and "new-checker" in reason,
+       repr((reason, shrink)))
+
+
 # ------------------------------------------------------------ M  NOW personal pointer
 def test_now_renders_unspecified_personal_pointer():
     root = make_repo(with_config=True)
@@ -240,8 +406,16 @@ def test_now_renders_unspecified_personal_pointer():
 
 
 if __name__ == "__main__":
-    for fn in (test_linkcheck_exit_codes_and_pending, test_scope_hash_matches_with_spaced_filename,
-               test_doctor_codex_armed_and_git_version, test_gate_check_blocks_when_measure_raises,
+    for fn in (test_fresh_install_rejects_malformed_summaries,
+               test_linkcheck_exit_codes_and_pending, test_scope_hash_matches_with_spaced_filename,
+               test_linkcheck_extracted_tree_uses_only_ignored_root_fallback,
+               test_linkcheck_exclude_config_applies_only_without_all,
+               test_doctor_codex_armed_and_git_version,
+               test_doctor_remote_allowlist_is_host_and_path_bounded,
+               test_doctor_precommit_accepts_localized_status_tokens,
+               test_doctor_work_context_rejects_tracked_private_symlink,
+               test_gate_check_blocks_when_measure_raises,
+               test_gate_verdict_rejects_current_only_checker_key,
                test_now_renders_unspecified_personal_pointer):
         try:
             fn()

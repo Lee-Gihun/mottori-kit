@@ -29,6 +29,17 @@ def test_capability_roles_do_not_collapse():
     assert report["injector"]["command_valid"] is True
 
 
+def test_gate_unit_rejects_current_only_checker_key():
+    import gate
+    reason, shrink = gate._verdict(
+        {"linkcheck": set(), "new-checker": set()},
+        {"linkcheck": set()},
+        "ok",
+    )
+    assert reason is not None and "new-checker" in reason
+    assert shrink is False
+
+
 def test_doctor_rejects_declared_hook_with_invalid_command():
     import doctor
     root = tempfile.mkdtemp(prefix="hook-doctor-")
@@ -327,6 +338,7 @@ def test_precommit_now_check_reads_extracted_index_tree():
 
 TESTS = [
     test_capability_roles_do_not_collapse,
+    test_gate_unit_rejects_current_only_checker_key,
     test_doctor_rejects_declared_hook_with_invalid_command,
     test_codex_trust_and_matcher_are_separate_stages,
     test_installer_check_is_read_only_and_repair_is_exact,

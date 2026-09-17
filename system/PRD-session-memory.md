@@ -438,6 +438,8 @@ Codex에서는 `workspace-write`만으로 desktop plugin/fan-out이 남는 것�
 
 **meta v2 (2026-09-16, DR-053).** run record의 `meta.json`은 `kit_rev`(각인된 킷 HEAD 또는 엔진 리포 HEAD, `kit_rev_source`)·`repo_rev`·`kit_dirty`(엔진 디렉토리 범위)·`engine_sha256`(각인 줄을 뺀 엔진 파일 내용 해시)·`kit_sync`(동기화 시 각인: dirty·engine_sha256=목적지 기준선·source_sha256=원천 manifest·matches_copy)·`agents_sha256`·`harness_sha256`(runtime·capability·계약 접두·명령 옵션·비활성 기능의 canonical JSON 해시)·`usage`(런타임의 마지막 usage 객체와 input/output/total, 없으면 null)·`read_scope`(결과 첫 줄과 UNREAD 줄, 문자열)·`scope`(write-set: prefixes·changed·violations·status ok|scope_violation|unchecked; run status에 반영은 `--strict-scope`일 때만)를 담는다. receipt 계약은 `scope:` 한 줄 추가 외 불변. common 계약에 "주장마다 출처 경로" 1줄. 정본은 이 절 + 설계 문서(`design-fresh-worker-receipt-v2.md`), 생성물은 `meta.json`.
 
+**파도 집계 receipt.** `python3 tools/receipts.py aggregate <run-id>...`는 한 파도의 run을 최대 8개까지 입력 순서대로 한 receipt로 접고, 전체 UTF-8 크기를 4,096 bytes 이하로 제한한다. 각 run은 `run ID | 판정 한 줄 | 증거 경로 | 미지` 한 행을 가진다. 판정에는 `meta.json`의 status와 결과의 판정 문구를 함께 쓰고, 증거가 결과에 명시되지 않았으면 해당 run의 `result.txt` 또는 `meta.json` 경로를 쓴다. 미지가 명시되지 않았으면 `미기재`라고 밝혀 누락을 없음으로 바꾸지 않는다.
+
 ### 10.6 현재 의미 계약 수동 파일럿 (DR-049 · 2026-09-16 만료)
 
 교정이 journal·서류철에는 남았지만 다음 산출물의 현재 의미와 완료 검증에 결속되지 않은 실패를
@@ -511,3 +513,40 @@ recall, wf_gardener, build_memory_map) · `system/`(decisions.md, rituals.md, me
 
 *v1 본문의 §3.2~3.5(상태 층 상세)·성공 기준 1~3·그릴링 1라운드는 v2에 계승·요약됐다.
 전문이 필요하면 git 이력에서 v1을 본다. **판정 대상: D1~D15. 판정 즉시 Phase 1 착수.***
+
+## 구현 정합 현황 (2026-09-17 감사)
+
+아래 표는 계약을 바꾸지 않고 현재 구현과의 차이를 표시한다. `미구현`은 대응 동작이 없거나 계약과
+반대로 동작하는 경우, `부분 구현`은 일부 경로나 규율만 있는 경우다. 이 표를 두는 이유는 구현되지
+않은 계약을 현재 동작처럼 읽는 것을 막으면서도 원래 요구와 닫는 테스트를 보존하기 위해서다.
+
+| PRD 절 | 계약 | 상태 | 현재 코드 근거 | 처리 |
+|---|---|---|---|---|
+| session-memory §3.1.1 L108 | 소유자 발화의 정본은 전사 원문이다 | 부분 구현 | tools/recall.py:287-420 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §3.1.1 L109 | 소유자 결정 정본은 decisions DR와 decision journal이다 | 부분 구현 | tools/memlib.py:265,721; tools/now.py:151-188 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §3.1.1 L110 | public/local 충돌 시 local이 이긴다 | 부분 구현 | tools/now.py:648-696 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §3.1.1 L111 | 개인 사실은 ledger 조회 없이 단언 금지다 | 부분 구현 | AGENTS.md:33-35; tools/rec.py:135-168 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §3.1.1 L112 | 스레드 진행 정본은 해당 서류철이다 | 부분 구현 | tools/memlib.py:558-619; tools/now.py:222-234 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §3.1.1 L120 | 컴팩션 요약을 기본 제외하고 요약본으로 구분한다 | 미구현 | tools/recall.py:373-378 | 원 계약 보존, 미구현 표시 |
+| session-memory §3.2 L132-134 | private 파생 system 사건은 호출자가 --private로 내린다 | 부분 구현 | tools/now.py:923-927 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §3.3 L170-173 | 깊은 스레드마다 정본 문서 하나를 지정한다 | 부분 구현 | tools/memlib.py:558-619 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §3.3 L175-179 | 서류철은 다섯 칸과 근거·크기 상한을 갖는다 | 부분 구현 | tools/wf_gardener.js:67-77 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §3.3 L181-183 | 떠나기 전 서류철 델타를 5줄 이내 append한다 | 부분 구현 | .claude/commands/dossier.md:6-7 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §3.3 L184-185 | 복귀 시 서류철부터 읽고 미열람 답변을 금지한다 | 부분 구현 | .claude/commands/dossier.md:1-7 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §3.4 L196-197 | recall sessions는 파일 목록·기간·크기를 낸다 | 부분 구현 | tools/recall.py:423-433 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §3.5 L219-221 | 중복·모순과 선택적 스레드 교차 연결을 표면화한다 | 부분 구현 | tools/wf_gardener.js:79-88 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §4 L273-275 | 복귀 깊이 실패와 known-item 실패를 journal에 기록한다 | 부분 구현 | tools/recall.py:411-419 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §8 L359-364 | DR은 decisions.md 단일 append·5줄·고정 schema다 | 부분 구현 | tools/memlib.py:265,721 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §8 L362-363 | decision journal은 dr:NNN을 가리킨다 | 미구현 | tools/memlib.py:299-307,346-355 | 원 계약 보존, 미구현 표시 |
+| session-memory §9 L368-370 | 스키마 정본은 tools/memlib.py 하나다 | 부분 구현 | tools/memlib.py:1-6; tools/now.py:20-21; tools/recall.py:26-27 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §9 L372-373 | journal은 timezone·허용 type·한 줄 문법·ref schema다 | 부분 구현 | tools/memlib.py:299-355 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §9 L377-378 | NOW 고정 순서에 열린 루프를 포함한다 | 미구현 | tools/memlib.py:623-630; tools/now.py:302-326 | 원 계약 보존, 미구현 표시 |
+| session-memory §9 L379 | 서류철 다섯 헤더를 고정한다 | 미구현 | tools/memlib.py:558-619 | 원 계약 보존, 미구현 표시 |
+| session-memory §10.1 L393 | SessionStart는 startup·resume·compact에서 주입한다 | 부분 구현 | .claude/settings.json:3-12; .codex/hooks.json:3-12 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §10.1 L397 | 전 훅은 fail-safe하고 즉시 반환한다 | 부분 구현 | .claude/settings.json:8,18; .codex/hooks.json:8,18 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §10.3 L412 | 집행 뒤 decision journal과 DR을 남긴다 | 부분 구현 | tools/wf_gardener.js:1-100 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §10.4 L416-420 | 핸드오프 읽기 순서는 NOW→journal→dossier→recall이다 | 부분 구현 | AGENTS.md:25-42 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §10.5 L429-430 | resume·fallback·public landing·detached·write Claude는 없다 | 부분 구현 | tools/fresh_worker.py:1-12,201-248 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §10.5 L432-434 | adapter prompt가 AGENTS와 필요한 정본 경로를 명시한다 | 부분 구현 | tools/fresh_worker.py:171-188 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §12 L493-494 | 확장 아이디어는 실행하지 않고 journal idea로 적립한다 | 부분 구현 | tools/memlib.py:301-304 | 원 계약 보존, 부분 구현 표시 |
+| session-memory §12 L497-501 | Phase 보고는 고정 필드와 소유자 확인 3개 이하를 담는다 | 부분 구현 | tools/fresh_worker.py:171-181 | 원 계약 보존, 부분 구현 표시 |
