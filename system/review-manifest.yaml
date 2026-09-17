@@ -166,6 +166,20 @@
       "reviewed_at": null
     },
     {
+      "path": ".github/workflows/gates.yml",
+      "kind": null,
+      "owner": "kit",
+      "consumers": [],
+      "depends_on": [
+        "tools/evidencecheck.py",
+        "tools/linkcheck.py",
+        "tools/manifest_build.py",
+        "tools/test_fresh_install.sh",
+        "tools/test_language.py"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": ".gitignore",
       "kind": "rule",
       "owner": "kit",
@@ -1388,6 +1402,7 @@
         ".claude/commands/recall.md",
         ".claude/settings.json",
         ".codex/hooks.json",
+        ".github/workflows/gates.yml",
         ".gitignore",
         "AGENTS.ko.md",
         "AGENTS.md",
