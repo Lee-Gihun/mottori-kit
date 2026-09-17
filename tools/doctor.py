@@ -9,7 +9,7 @@ doctor는 그 침묵을 깨는 쪽 계기다.
 원칙 하나. **검사 못 하는 것을 숨기지 않는다.** 자동 검사 가능한 것만 보고하면
 "전부 PASS"가 거짓말이 된다. MANUAL 칸이 이 도구의 반증 가능 칸이다 (WORKING-WITH-AI §4).
 
-사용: python3 tools/doctor.py [--verbose]
+사용: python3 tools/doctor.py [--verbose] [--json]
 종료코드: FAIL이 하나라도 있으면 1.
 """
 import json
@@ -18,11 +18,14 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+from i18n import language, t
 ROOT = os.path.dirname(HERE)
 VERBOSE = "--verbose" in sys.argv
+JSON_OUTPUT = "--json" in sys.argv
 
 PASS, FAIL, WARN, SKIP = "PASS", "FAIL", "WARN", "SKIP"
 results = []
@@ -32,7 +35,7 @@ def check(name, fn):
     try:
         status, detail = fn()
     except Exception as e:
-        status, detail = FAIL, f"검사 자체가 터짐: {type(e).__name__}: {e}"
+        status, detail = FAIL, t("doctor.check_crashed", error_type=type(e).__name__, error=e)
     results.append((status, name, detail))
 
 
@@ -42,42 +45,90 @@ def sh(*cmd, cwd=ROOT):
     return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, env=env)
 
 
+def _config_warning(message):
+    if language() == "ko":
+        return message
+    match = re.match(r"config 없음: (.*)", message)
+    if match:
+        return t("doctor.config_warn_missing", path=match.group(1))
+    match = re.match(r"config 로드/검증 실패: (.*)", message)
+    if match:
+        return t("doctor.config_warn_load", error_type=match.group(1))
+    match = re.match(r"journal_visibility .*\(config schema=(.*), engine schema=(.*)\)", message)
+    if match:
+        return t("doctor.config_warn_visibility", config=match.group(1), engine=match.group(2))
+    if message == "tracks 미정의 — NOW 온도판이 빈다":
+        return t("doctor.config_warn_tracks")
+    match = re.match(r"private thread registry\[(\d+)\] (.*) — skip", message)
+    if match:
+        problems = {
+            "object 아님": "doctor.config_warn_problem_object",
+            "key/name invalid": "doctor.config_warn_problem_key",
+            "dossier invalid": "doctor.config_warn_problem_dossier",
+            "public key collision": "doctor.config_warn_problem_collision",
+            "duplicate key": "doctor.config_warn_problem_duplicate",
+        }
+        problem = t(problems.get(match.group(2), "doctor.config_warn_unknown"))
+        return t("doctor.config_warn_private", index=match.group(1), problem=problem)
+    if message.startswith("private thread registry 파싱 실패:"):
+        return t("doctor.config_warn_private_parse")
+    return t("doctor.config_warn_unknown")
+
+
+def _hook_summary(report, runtime=None):
+    role_keys = {
+        "injector": "doctor.hook_role_injector",
+        "side_effect": "doctor.hook_role_side_effect",
+        "guard": "doctor.hook_role_guard",
+        "observer": "doctor.hook_role_observer",
+        "enforcer": "doctor.hook_role_enforcer",
+        "recovery": "doctor.hook_role_recovery",
+    }
+    parts = []
+    for role in role_keys:
+        row = report[role]
+        declared = "yes" if row["declared"] else "no"
+        command = "valid" if row.get("command_valid") else "invalid"
+        armed = row.get("armed", "unknown")
+        extra = "/matcher-unreachable" if row.get("declared") and row.get("matcher_reachable") is False else ""
+        parts.append(f"{t(role_keys[role])}={declared}/{command}/{armed}{extra}")
+    evidence = _canary_evidence(runtime) if runtime else "fired/effect=unknown"
+    return " · ".join(parts) + " · " + evidence
+
+
 # ----------------------------------------------------------------- 런타임
 
 def c_python():
     v = sys.version_info
     ok = v >= (3, 8)
-    return (PASS if ok else FAIL), f"python {v.major}.{v.minor}.{v.micro}" + ("" if ok else " (3.8+ 필요)")
+    return (PASS if ok else FAIL), f"python {v.major}.{v.minor}.{v.micro}" + ("" if ok else t("doctor.python_old"))
 
 
 def c_node():
     p = shutil.which("node")
-    return (PASS, os.path.realpath(p)) if p else (WARN, "node 없음 — 정원사(wf_gardener.js)만 못 쓴다")
+    return (PASS, os.path.realpath(p)) if p else (WARN, t("doctor.node_missing"))
 
 
 def c_codex():
     p = shutil.which("codex")
-    return (PASS, p) if p else (WARN, "codex CLI 없음 — 티키타카(ask_codex.sh) 불가. 권한/설치 확인")
+    return (PASS, p) if p else (WARN, t("doctor.codex_missing"))
 
 
 def c_claude():
     p = shutil.which("claude")
-    return (PASS, p) if p else (WARN, "claude CLI 없음 — 헤드리스 검증(claude -p) 불가")
+    return (PASS, p) if p else (WARN, t("doctor.claude_missing"))
 
 
 def c_git():
     r = sh("git", "rev-parse", "--show-toplevel")
     if r.returncode:
-        return WARN, "git 저장소가 아니다 — linkcheck가 추적 파일을 못 센다"
-    # install_hooks.sh는 `git hook run`(2.36+)과 `rev-parse --path-format`(2.31+)을 쓴다. 옛 git에서는
-    # 후방선 설치가 롤백되고 exit 1 한다 (2026-09-17 문서 감사). 어디서 막히는지 여기서 먼저 말한다.
+        return WARN, t("doctor.not_git")
     v = sh("git", "--version").stdout.strip()
     m = re.search(r"(\d+)\.(\d+)", v)
     if not m:
-        return WARN, f"{r.stdout.strip()} · git 버전을 못 읽음 ({v!r}) — 2.36 이상인지 직접 확인"
-    if (int(m.group(1)), int(m.group(2))) < (2, 36):
-        # 고칠 수 있는 결함이다(git 업그레이드). warn으로 두면 후방선 없이 FAIL 0이 가능하다 (독립 리뷰 3).
-        return FAIL, f"{r.stdout.strip()} · {v} — 2.36 미만: `install_hooks.sh --repair`(pre-commit 후방선)가 안 된다. git을 올려라"
+        return WARN, t("doctor.git_unreadable", root=r.stdout.strip(), version=v)
+    if (int(m.group(1)), int(m.group(2))) < (2, 5):
+        return FAIL, t("doctor.git_old", root=r.stdout.strip(), version=v)
     return PASS, r.stdout.strip() + f" · {v}"
 
 
@@ -88,20 +139,21 @@ def c_memlib():
     # 같은 디렉토리의 두 표기(심볼릭 링크 경유 vs 물리 경로)는 불일치가 아니다 (2026-09-17 실측: macOS
     # /var → /private/var 아래 임시 클론에서 setup이 export한 논리 경로와 도구의 realpath가 달랐다).
     if os.path.realpath(M.ROOT) != os.path.realpath(ROOT):
-        return FAIL, f"ROOT 불일치: memlib={M.ROOT} vs 실제={ROOT}"
+        return FAIL, t("doctor.root_mismatch", memlib=M.ROOT, actual=ROOT)
     return PASS, f"ROOT={M.ROOT}"
 
 
 def c_config():
     import memlib as M
     if not os.path.exists(M.CONFIG_PATH):
-        return FAIL, f"없음: {M.CONFIG_PATH} — `bash setup.sh` 또는 templates/에서 복사"
+        return FAIL, t("doctor.config_missing", path=M.CONFIG_PATH)
     raw = open(M.CONFIG_PATH, encoding="utf-8").read()
     if "CHANGEME" in raw:
-        return FAIL, "CHANGEME가 남아 있다 — 인스턴스 이름·트랙을 아직 안 채웠다"
+        return FAIL, t("doctor.config_changeme")
     if M.CONFIG_WARNINGS:
-        return WARN, " · ".join(M.CONFIG_WARNINGS)
-    return PASS, f"트랙 {len(M.TRACKS)}개 · 스레드 {len(M.THREADS)}개 · 소스 {len(M.EPISODIC_SOURCES)}개"
+        return WARN, " · ".join(_config_warning(w) for w in M.CONFIG_WARNINGS)
+    return PASS, t("doctor.config_counts", tracks=len(M.TRACKS), threads=len(M.THREADS),
+                   sources=len(M.EPISODIC_SOURCES))
 
 
 def c_transcripts():
@@ -114,35 +166,35 @@ def c_transcripts():
     import memlib as M
     if not os.path.isdir(M.TRANSCRIPTS):
         fresh = len(M.parse_journal()) < 5
-        msg = (f"없음: {M.TRANSCRIPTS}\n      ")
         if fresh:
-            return WARN, msg + "이 디렉토리에서 Claude Code 세션을 아직 안 돌렸다 (신규 설치면 정상). 첫 세션 뒤 다시 확인해라"
-        return FAIL, msg + "journal은 쌓였는데 전사가 없다 — 경로 맹글링 규칙이 이 경로에 안 맞는다"
+            return WARN, t("doctor.transcripts_fresh", path=M.TRANSCRIPTS)
+        return FAIL, t("doctor.transcripts_stale", path=M.TRANSCRIPTS)
     n = len([f for f in os.listdir(M.TRANSCRIPTS) if f.endswith(".jsonl")])
-    return (PASS if n else WARN), f"{M.TRANSCRIPTS} · 세션 {n}개"
+    return (PASS if n else WARN), t("doctor.transcript_sessions", path=M.TRANSCRIPTS, count=n)
 
 
 def c_state():
     import memlib as M
     if not os.path.isdir(M.STATE):
-        return FAIL, f"없음: {M.STATE}"
+        return FAIL, t("doctor.missing", path=M.STATE)
     if not os.access(M.STATE, os.W_OK):
-        return FAIL, f"쓰기 불가: {M.STATE}"
+        return FAIL, t("doctor.not_writable", path=M.STATE)
     j = M.journal_path()
     errors = []
     entries = M.parse_journal(errors=errors)
     if errors:
-        return FAIL, f"journal 손상 {len(errors)}건 · 첫 항목: {errors[0]}"
-    return PASS, f"journal {'있음' if os.path.exists(j) else '없음(첫 log에 생성)'} · 엔트리 {len(entries)}줄"
+        return FAIL, t("doctor.journal_damaged", count=len(errors), first=errors[0])
+    state = t("doctor.journal_present") if os.path.exists(j) else t("doctor.journal_absent")
+    return PASS, t("doctor.journal_state", state=state, count=len(entries))
 
 
 def c_now():
     import memlib as M
     if not os.path.exists(M.NOW_PATH):
-        return WARN, "NOW.md 없음 — `python3 tools/now.py render`로 생성"
+        return WARN, t("doctor.now_missing")
     size = os.path.getsize(M.NOW_PATH)
-    return ((PASS, f"{size} UTF-8 bytes (상한 {M.NOW_MAX_BYTES})") if size <= M.NOW_MAX_BYTES else
-            (FAIL, f"{size} bytes > 상한 {M.NOW_MAX_BYTES} — render/예산 계약 위반"))
+    return ((PASS, t("doctor.now_size", size=size, limit=M.NOW_MAX_BYTES)) if size <= M.NOW_MAX_BYTES else
+            (FAIL, t("doctor.now_oversize", size=size, limit=M.NOW_MAX_BYTES)))
 
 
 # ------------------------------------------------------------------- 훅
@@ -167,40 +219,39 @@ def _wiring(runtime):
     """JSON declaration만 본다. trust/firing/effect를 이 결과로 승격하지 않는다."""
     cmds = _hook_cmds(runtime)
     if cmds is None:
-        return (WARN, f"{'/'.join(HOOK_FILES[runtime])} 없음 — 이 런타임은 훅 미설치")
+        return WARN, t("doctor.hook_file_missing", path="/".join(HOOK_FILES[runtime]))
     import hookdiag
     p = os.path.join(ROOT, *HOOK_FILES[runtime])
     report = hookdiag.static_report(runtime, json.load(open(p, encoding="utf-8")))
     essential = [role for role in ("injector", "side_effect") if not report[role]["declared"]]
     if essential:
-        return FAIL, "필수 capability 누락: " + ", ".join(essential)
+        return FAIL, t("doctor.capability_missing", items=", ".join(essential))
     invalid = [role for role, row in report.items()
                if row["declared"] and not row["command_valid"]]
     if invalid:
-        return FAIL, "선언됐지만 command invalid: " + ", ".join(invalid)
+        return FAIL, t("doctor.command_invalid", items=", ".join(invalid))
     hard = [f"{e}: {c}" for e, cs in cmds.items() for c in cs
             if re.search(r"/(Users|home)/[^/]+/", c)]
     if hard:
-        return FAIL, "절대경로 하드코딩 — 다른 머신에서 조용히 죽는다:\n      " + "\n      ".join(hard)
+        return FAIL, t("doctor.absolute_path", items="\n      ".join(hard))
     startup = "\n".join(cmds.get("SessionStart", []))
     authority_markers = ("state/NOW.md", "_private/state/NOW.md", "unavailable")
     missing_authority = [x for x in authority_markers if x not in startup]
     if missing_authority:
-        return FAIL, ("SessionStart 실패 fallback이 public+local 권위 계약을 못 말한다: "
-                      + ", ".join(missing_authority))
-    detail = hookdiag.compact_summary(report) + " · command path=relative"
+        return FAIL, t("doctor.authority_missing", items=", ".join(missing_authority))
+    detail = _hook_summary(report, runtime) + " · command path=relative"
     if runtime == "codex":
         gaps = [r for r in ("observer", "enforcer") if not report[r]["declared"]]
         guard_matchers = report["guard"].get("matchers", [])
         dead_guard = bool(guard_matchers) and not any(
             hookdiag.matcher_reachable(m) for m in guard_matchers)
         if dead_guard:
-            detail += " · PreToolUse matcher가 Codex 도구명에 0-hit"
+            detail += t("doctor.pretool_dead")
         if gaps:
-            detail += " · repo gate lifecycle 부재(후방선=pre-commit)"
+            detail += t("doctor.codex_lifecycle_missing")
         return (WARN if gaps or dead_guard else PASS), detail
     missing_gate = [r for r in ("observer", "enforcer", "recovery") if not report[r]["declared"]]
-    return ((WARN, detail + " · Claude gate lifecycle 누락: " + ", ".join(missing_gate))
+    return ((WARN, detail + t("doctor.claude_lifecycle_missing", items=", ".join(missing_gate)))
             if missing_gate else (PASS, detail))
 
 
@@ -221,9 +272,9 @@ def c_hook_codex_armed():
     except FileNotFoundError as e:
         return SKIP, str(e)
     except Exception as e:
-        return WARN, f"hooks/list 조회 불가: {type(e).__name__}: {e}"
+        return WARN, t("doctor.hooks_list_failed", error_type=type(e).__name__, error=e)
     required = [r for r in ("injector", "side_effect") if not report[r]["armed"]]
-    detail = hookdiag.compact_summary(report)
+    detail = _hook_summary(report, "codex")
     invalid = [role for role, row in report.items()
                if row["declared"] and not row["command_valid"]]
     if invalid:
@@ -235,10 +286,9 @@ def c_hook_codex_armed():
         # codex를 한 번 띄워야만 생기므로(CHECKLIST C) 기계가 못 고치는 FAIL이 된다. 안 고쳐지는
         # FAIL은 사람이 FAIL 자체를 무시하게 만든다 (2026-08-24 교훈). 그래서 warn + 할 일.
         return WARN, (detail + " · unarmed: " + ", ".join(required)
-                      + "\n      이 디렉토리에서 `codex`를 한 번 띄워 훅 신뢰를 승인해라 (CHECKLIST C). "
-                        "승인 전엔 Codex 세션에 상태가 주입되지 않는다")
+                      + t("doctor.codex_unarmed"))
     if report["guard"]["declared"] and not report["guard"]["matcher_reachable"]:
-        return WARN, detail + " · guard armed지만 matcher-unreachable"
+        return WARN, detail + t("doctor.guard_unreachable")
     return PASS, detail
 
 
@@ -250,23 +300,26 @@ def c_hook_codex_run():
     cmds = _hook_cmds("codex") or {}
     cs = cmds.get("SessionStart") or []
     if not cs:
-        return SKIP, "Codex 훅 없음"
+        return SKIP, t("doctor.codex_hook_missing")
     sub = os.path.join(ROOT, "system") if os.path.isdir(os.path.join(ROOT, "system")) else ROOT
     outs = {}
-    for label, cwd in (("루트", ROOT), ("서브디렉토리", sub), ("리포 밖", "/tmp")):
+    labels = (t("doctor.root_label"), t("doctor.subdir_label"), t("doctor.outside_label"))
+    for label, cwd in ((labels[0], ROOT), (labels[1], sub),
+                       (labels[2], tempfile.gettempdir())):
         r = subprocess.run(["bash", "-c", cs[0]], capture_output=True, text=True, cwd=cwd)
         try:
             ctx = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
         except Exception:
-            return FAIL, f"{label}에서 유효 JSON이 아니다: {r.stdout[:80]!r}"
+            return FAIL, t("doctor.invalid_json_at", label=label, stdout=r.stdout[:80])
         if r.returncode != 0:
-            return FAIL, f"{label}에서 exit {r.returncode} — 훅은 항상 0이어야 한다"
-        outs[label] = "실패분기" if ctx.startswith("[kit]") else f"{len(ctx)}자"
-    if outs["루트"] == "실패분기" or outs["서브디렉토리"] == "실패분기":
-        return FAIL, f"인스턴스 안에서 주입 실패: {outs}"
-    if outs["리포 밖"] != "실패분기":
-        return WARN, "리포 밖에서도 주입됐다 — git root 폴백이 엉뚱한 곳을 잡을 수 있다"
-    return PASS, "command-valid only · 루트/서브디렉토리 JSON OK · dispatcher/fired/effect=unknown"
+            return FAIL, t("doctor.nonzero_at", label=label, code=r.returncode)
+        outs[label] = t("doctor.failure_branch") if ctx.startswith("[kit]") else t("doctor.chars", count=len(ctx))
+    if outs[labels[0]] == t("doctor.failure_branch") or outs[labels[1]] == t("doctor.failure_branch"):
+        return FAIL, t("doctor.injection_failed", details=outs)
+    if outs[labels[2]] != t("doctor.failure_branch"):
+        return WARN, t("doctor.outside_injected")
+    return (PASS, t("doctor.codex_command_ok").replace("fired/effect=unknown", "")
+            + _canary_evidence("codex"))
 
 
 def c_hook_success():
@@ -274,23 +327,25 @@ def c_hook_success():
     cmds = _hook_cmds() or {}
     cs = cmds.get("SessionStart") or []
     if not cs:
-        return FAIL, "SessionStart 훅 없음"
+        return FAIL, t("doctor.session_hook_missing")
     env = dict(os.environ, CLAUDE_PROJECT_DIR=ROOT)
     r = subprocess.run(["bash", "-c", cs[0]], capture_output=True, text=True, env=env, cwd=ROOT)
     try:
         d = json.loads(r.stdout)
         ctx = d["hookSpecificOutput"]["additionalContext"]
     except Exception as e:
-        return FAIL, f"유효 JSON이 아니다: {e} · stdout[:120]={r.stdout[:120]!r}"
+        return FAIL, t("doctor.invalid_json", error=e, stdout=r.stdout[:120])
     if ctx.startswith("[kit]"):
         import memlib as M
         if not os.path.exists(M.CONFIG_PATH):
             # setup 전엔 config·NOW가 없어 fallback이 뜨는 것이 정상이다. 고장과 미초기화를 가른다
             # (2026-09-17 독립 감사 H).
-            return WARN, "실패 분기 확인만 완료 — setup 전(config 없음). `bash setup.sh` 뒤 다시 본다"
+            return WARN, t("doctor.pre_setup_failure")
         tail = (r.stderr.strip().splitlines() or [""])[-1][:160]
-        return FAIL, "실패 분기로 떨어졌다 — now.py가 안 돈다" + (f" · stderr: {tail}" if tail else "")
-    return PASS, f"command-valid only · {len(ctx.encode('utf-8'))} UTF-8 bytes · fired/effect=unknown"
+        stderr = f" · stderr: {tail}" if tail else ""
+        return FAIL, t("doctor.now_failed", stderr=stderr)
+    return (PASS, f"command-valid only · {len(ctx.encode('utf-8'))} UTF-8 bytes · "
+            + _canary_evidence("claude"))
 
 
 def c_hook_failure():
@@ -302,51 +357,164 @@ def c_hook_failure():
     env = dict(os.environ, CLAUDE_PROJECT_DIR="/nonexistent-instance-xyz")
     r = subprocess.run(["bash", "-c", cs[0]], capture_output=True, text=True, env=env, cwd="/")
     if r.returncode != 0:
-        return FAIL, f"실패 분기가 exit {r.returncode} — 훅은 항상 0이어야 세션을 안 막는다"
+        return FAIL, t("doctor.failure_nonzero", code=r.returncode)
     try:
         ctx = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
     except Exception as e:
-        return FAIL, f"실패 분기가 유효 JSON이 아니다: {e}"
+        return FAIL, t("doctor.failure_invalid_json", error=e)
     missing = [x for x in ("state/NOW.md", "_private/state/NOW.md", "unavailable") if x not in ctx]
     if missing:
-        return FAIL, "실패 분기의 권위 안내 누락: " + ", ".join(missing)
-    return (PASS if "[kit]" in ctx else WARN), "실패 시 모델에게 경고가 주입된다"
+        return FAIL, t("doctor.failure_authority_missing", items=", ".join(missing))
+    return (PASS if "[kit]" in ctx else WARN), t("doctor.failure_warns_model")
+
+
+def _canary_evidence(runtime):
+    """Return the last persisted model-backed canary result without running a model."""
+    path = os.path.join(ROOT, "state", "hook-canary.json")
+    try:
+        payload = json.load(open(path, encoding="utf-8"))
+        if payload.get("schema_version") != 1:
+            raise ValueError("schema_version")
+        row = payload.get("runtimes", {}).get(runtime)
+        if not isinstance(row, dict):
+            return "fired/effect=unknown"
+        checked_at = row["checked_at"]
+        status = row["status"]
+        fired = row["dispatcher_fired"]
+        effect = row["effect"]
+        if status not in (PASS, FAIL) or fired not in ("verified", "not_verified") \
+                or effect not in ("verified", "not_verified"):
+            raise ValueError("result fields")
+        return f"fired={fired} · effect={effect} · last canary={checked_at} ({status})"
+    except FileNotFoundError:
+        return "fired/effect=unknown"
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
+        return f"fired/effect=unknown (canary 결과 판독 실패: {type(error).__name__})"
+
+
+def _precompact_fixture_config():
+    return {
+        "schema_version": 4,
+        "instance": {"name": "doctor-fixture", "context": "personal", "remote_allowlist": []},
+        "tracks": [],
+        "threads": [],
+        "personal_pointer": None,
+        "journal_visibility": {
+            "public_tracks": ["system"],
+            "legacy_cutoff": None,
+            "legacy_public_tracks": [],
+        },
+        "journal_types": ["decision", "state", "artifact", "correction", "lesson", "switch", "idea"],
+        "thresholds": {
+            "now_tail_events": 12,
+            "now_recent_decisions": 8,
+            "track_stale_days": 7,
+            "journal_stale_days": 2,
+            "memory_rot_days": 14,
+            "now_max_bytes": 6000,
+            "now_hook_max_bytes": 6000,
+        },
+    }
+
+
+def _simulate_precompact(runtime):
+    """Run the declared PreCompact command in a disposable instance and inspect its journal."""
+    cmds = _hook_cmds(runtime) or {}
+    commands = cmds.get("PreCompact") or []
+    if not commands:
+        return FAIL, t("doctor.precompact_missing", runtime=runtime)
+    if len(commands) != 1:
+        return FAIL, t("doctor.precompact_multiple", runtime=runtime, count=len(commands))
+
+    source_tools = os.path.join(ROOT, "tools")
+    required = [os.path.join(source_tools, name) for name in ("now.py", "memlib.py")]
+    missing = [path for path in required if not os.path.isfile(path)]
+    if missing:
+        return FAIL, t("doctor.precompact_tools_missing", items=", ".join(missing))
+
+    with tempfile.TemporaryDirectory(prefix=f"doctor-{runtime}-precompact-") as fixture:
+        os.makedirs(os.path.join(fixture, "tools"))
+        os.makedirs(os.path.join(fixture, "system"))
+        os.makedirs(os.path.join(fixture, "state"))
+        for source in required:
+            shutil.copy2(source, os.path.join(fixture, "tools", os.path.basename(source)))
+        with open(os.path.join(fixture, "system", "memory-config.json"),
+                  "w", encoding="utf-8") as config_file:
+            json.dump(_precompact_fixture_config(), config_file, ensure_ascii=False)
+
+        if runtime == "codex":
+            init = subprocess.run(["git", "init", "-q", fixture], capture_output=True, text=True)
+            if init.returncode:
+                return FAIL, t("doctor.precompact_git_failed",
+                               detail=(init.stderr or init.stdout).strip()[:120])
+
+        env = dict(os.environ, CLAUDE_PROJECT_DIR=fixture, MOTTORI_INTERNAL_RUN="1")
+        env.pop("MOTTORI_INSTANCE", None)
+        payload = json.dumps({"hook_event_name": "PreCompact", "cwd": fixture})
+        run = subprocess.run(["bash", "-c", commands[0]], cwd=fixture, env=env, input=payload,
+                             capture_output=True, text=True)
+        journals = []
+        state_dir = os.path.join(fixture, "state")
+        for name in os.listdir(state_dir):
+            if re.match(r"journal-\d{4}-\d{2}\.md$", name):
+                journals.append(os.path.join(state_dir, name))
+        marker = "[system/state] 컴팩션 발생"
+        effect = any(marker in open(path, encoding="utf-8").read() for path in journals)
+        if run.returncode != 0:
+            tail = (run.stderr or run.stdout).strip().splitlines()
+            detail = f" · {tail[-1][:120]}" if tail else ""
+            return FAIL, t("doctor.precompact_exit", code=run.returncode, detail=detail)
+        if not effect:
+            error_log = os.path.join(state_dir, ".hook-errors.log")
+            fallback_lines = (open(error_log, encoding="utf-8").read().strip().splitlines()
+                              if os.path.isfile(error_log) else [])
+            fallback = fallback_lines[-1] if fallback_lines else "없음"
+            return FAIL, t("doctor.precompact_no_effect", fallback=fallback[:120])
+        return PASS, t("doctor.precompact_effect", marker=t("doctor.precompact_marker"))
+
+
+def c_precompact_claude():
+    return _simulate_precompact("claude")
+
+
+def c_precompact_codex():
+    return _simulate_precompact("codex")
 
 
 def c_global_hook():
     """UserPromptSubmit 타임스탬프 훅은 전역 설정에 산다 — 클론으로 안 따라온다."""
     p = os.path.expanduser("~/.claude/settings.json")
     if not os.path.exists(p):
-        return WARN, "전역 설정 없음 — 턴마다 현재 시각 주입이 꺼져 있다"
+        return WARN, t("doctor.global_missing")
     try:
         cfg = json.load(open(p, encoding="utf-8"))
     except Exception as e:
-        return WARN, f"전역 설정 파싱 실패: {e}"
+        return WARN, t("doctor.global_parse_failed", error=e)
     ups = cfg.get("hooks", {}).get("UserPromptSubmit", [])
     has = any("date" in h.get("command", "") for b in ups for h in b.get("hooks", []))
-    return (PASS, "시각 주입 훅 있음") if has else \
-           (WARN, "시각 주입 훅 없음 — 모델이 '오늘'을 모른다. SETUP.md의 전역 설정 절 참조")
+    return (PASS, t("doctor.time_hook_present")) if has else \
+           (WARN, t("doctor.time_hook_missing"))
 
 
 def c_precommit_install():
     """active hook path의 설치본을 tracked template과 exact 비교한다. 절대 복구하지 않는다."""
     script = os.path.join(ROOT, "tools", "install_hooks.sh")
     if not os.path.exists(script):
-        return WARN, "installer 없음"
+        return WARN, t("doctor.installer_missing")
     r = sh("bash", script, "--check")
     detail = (r.stdout + r.stderr).strip().splitlines()
     first = detail[0] if detail else f"exit={r.returncode}"
     if r.returncode == 0 and first.startswith("current:"):
         return PASS, first
     if first.startswith("missing:"):
-        return WARN, first + " · `bash tools/install_hooks.sh --repair` 필요"
+        return WARN, t("doctor.repair_needed", detail=first)
     return FAIL, first
 
 
 def c_commands():
     d = os.path.join(ROOT, ".claude", "commands")
     if not os.path.isdir(d):
-        return WARN, "슬래시 커맨드 없음"
+        return WARN, t("doctor.commands_missing")
     got = sorted(f[:-3] for f in os.listdir(d) if f.endswith(".md"))
     return PASS, "/" + " /".join(got)
 
@@ -371,8 +539,8 @@ def c_tools_run():
             # 측정이 실제로 끝난 것이다 (DR-039). 2026-08-26 음성 시험에서 드러난 구멍.
             last = (r.stdout.strip().splitlines() or [""])[-1]
             if not re.match(r"^#issues \d+$", last):
-                bad.append(f"{args[0]} 트레일러 없음/비말미: {last[:40]!r}")
-    return (FAIL, " · ".join(bad)) if bad else (PASS, "now/linkcheck/coherence 실행 OK (트레일러 확인)")
+                bad.append(t("doctor.trailer_missing", tool=args[0], last=last[:40]))
+    return (FAIL, " · ".join(bad)) if bad else (PASS, t("doctor.tools_ok"))
 
 
 def c_links():
@@ -381,17 +549,17 @@ def c_links():
     r = sh(sys.executable, "tools/linkcheck.py")
     if r.returncode not in (0, 1) or "Traceback" in r.stderr:
         first = (r.stderr.strip().splitlines() or ["?"])[-1]
-        return FAIL, f"검사기가 죽었다 (exit={r.returncode}): {first[:100]}"
+        return FAIL, t("doctor.checker_crashed", code=r.returncode, detail=first[:100])
     m = re.search(r"broken: (\d+)", r.stdout)
     if not m:
-        return FAIL, f"linkcheck 출력을 못 읽었다: {(r.stdout + r.stderr)[:120]!r}"
+        return FAIL, t("doctor.linkcheck_unreadable", output=(r.stdout + r.stderr)[:120])
     n = int(m.group(1))
     if not n:
         refs = re.search(r"refs=(\d+)", r.stdout)
-        return PASS, f"참조 {refs.group(1) if refs else '?'}개 · 깨짐 0"
+        return PASS, t("doctor.links_ok", refs=refs.group(1) if refs else "?")
     detail = [l for l in r.stdout.splitlines() if l.startswith("BROKEN")][:5]
-    more = f"\n      … 외 {n - len(detail)}개" if n > len(detail) else ""
-    return FAIL, f"깨진 참조 {n}개:\n      " + "\n      ".join(detail) + more
+    more = t("doctor.more", count=n - len(detail)) if n > len(detail) else ""
+    return FAIL, t("doctor.links_broken", count=n, details="\n      ".join(detail), more=more)
 
 
 def c_coherence():
@@ -402,15 +570,14 @@ def c_coherence():
     # 도구가 죽은 것과 도구가 문제를 못 찾은 것은 완전히 다른 사건이다.
     if r.returncode not in (0, 1) or "Traceback" in r.stderr or "Error" in r.stderr:
         first = (r.stderr.strip().splitlines() or ["?"])[-1]
-        return FAIL, f"검사기가 죽었다 (exit={r.returncode}): {first[:100]}"
+        return FAIL, t("doctor.checker_crashed", code=r.returncode, detail=first[:100])
     m = re.search(r"(?:총|이슈) (\d+)건", r.stdout)
     if m is None and ("이상 없음" in r.stdout or "링크 OK" in r.stdout):
-        return PASS, r.stdout.strip().splitlines()[0][:90]
+        return PASS, t("doctor.coherence_ok", count=0)
     if m is None:
-        return FAIL, f"출력을 못 읽었다 — 형식이 바뀌었거나 도구가 이상하다: {(r.stdout+r.stderr).strip()[:90]!r}"
+        return FAIL, t("doctor.output_unreadable", output=(r.stdout+r.stderr).strip()[:90])
     n = int(m.group(1))
-    head = r.stdout.strip().splitlines()[0]
-    return (PASS if not n else WARN), head[:110]
+    return (PASS if not n else WARN), t("doctor.coherence_ok", count=n)
 
 
 def c_regression():
@@ -419,27 +586,37 @@ def c_regression():
     검출기가 살아 있는지를 재는 유일한 자동 수단인데 검사 목록에 없었다.
     계측기가 자기 옆의 계측기를 안 보고 있었던 셈이다.
     """
-    scripts = ["test_memcheck.py", "test_state_runtime.py", "test_hook_runtime.py",
-               "test_fresh_worker.py", "test_install_checks.py"]
+    # 공용 엔진 suite: 킷과 인스턴스 양쪽에 대상이 있다. test_i18n·test_doctor_json은 doctor 자신을
+    # 돌리므로 여기 넣으면 재귀한다 (전수 실행은 test_fresh_install.sh와 스웜 계약이 맡는다).
+    scripts = ["test_memcheck.py", "test_memlib_journal.py", "test_state_runtime.py",
+               "test_hook_runtime.py", "test_fresh_worker.py", "test_install_checks.py",
+               "test_recall.py", "test_rec.py",
+               "test_hookdiag.py", "test_install_hooks.py", "test_coherence.py",
+               "test_evidencecheck.py"]
     kit_sync = os.path.join(ROOT, "tools", "kit_sync.py")
     # kit_sync.py는 상류에만 있는 표지다. 배포 킷에서는 installer와 그 fixture가 둘 다
     # distribution contract이므로 한쪽을 지워 4-suite green으로 축소하는 경로를 막는다.
     if os.path.isfile(kit_sync):
-        upstream_suites = ("test_recording_language.py", "test_slack_pipeline.py")
+        upstream_suites = ("test_recording_language.py", "test_slack_pipeline.py",
+                           "test_instance_tools.py")
         missing = [
             os.path.join("tools", script)
             for script in upstream_suites
             if not os.path.isfile(os.path.join(ROOT, "tools", script))
         ]
         if missing:
-            return FAIL, "상류 전용 회귀 구성 누락: " + ", ".join(missing)
+            return FAIL, t("doctor.upstream_suites_missing", items=", ".join(missing))
         scripts.extend(upstream_suites)
     else:
-        required = ("setup.sh", os.path.join("tools", "test_setup_migration.py"))
+        # 배포 킷 전용 suite: setup.sh·review manifest·skill 문서처럼 킷 트리에만 대상이 있다
+        # (인스턴스엔 kit_sync NOT_SYNCED로 남는다). 하나라도 지우면 fail-close.
+        kit_suites = ("test_setup_migration.py", "test_portability.py", "test_manifests.py",
+                      "test_skill_parity.py")
+        required = ("setup.sh",) + tuple(os.path.join("tools", s) for s in kit_suites)
         missing = [path for path in required if not os.path.isfile(os.path.join(ROOT, path))]
         if missing:
-            return FAIL, "배포 킷 회귀 구성 누락: " + ", ".join(missing)
-        scripts.append("test_setup_migration.py")
+            return FAIL, t("doctor.kit_suites_missing", items=", ".join(missing))
+        scripts.extend(kit_suites)
     passed, bad = [], []
     for script in scripts:
         r = sh(sys.executable, "tools/" + script)
@@ -448,8 +625,25 @@ def c_regression():
         else:
             tail = (r.stdout + r.stderr).strip().splitlines()[-3:]
             bad.append(script + ": " + " | ".join(tail))
-    return ((FAIL, "회귀 실패:\n      " + "\n      ".join(bad)) if bad else
-            (PASS, f"suite {len(passed)}개 green: " + ", ".join(passed)))
+    return ((FAIL, t("doctor.regression_failed", details="\n      ".join(bad))) if bad else
+            (PASS, t("doctor.regression_ok", count=len(passed), items=", ".join(passed))))
+
+
+def c_worker_receipts():
+    """최근 bounded worker run의 비용과 실패율을 영수증 원장에서 다시 계산한다."""
+    import receipts as R
+    records, errors = R.load_runs(os.path.join(ROOT, "_private", "work", "runs"))
+    recent = R.recent_runs(records, days=7)
+    totals = R._totals(recent)
+    runs = totals["runs"]
+    failures = totals["failures"]
+    rate = failures / runs * 100 if runs else 0.0
+    usage = R._usage_text(totals["usage"])
+    detail = t("doctor.receipts_detail", runs=runs, usage=usage,
+               failures=failures, rate=f"{rate:.1f}")
+    if errors:
+        return WARN, detail + t("doctor.receipts_unreadable", count=len(errors))
+    return (WARN if rate > 50 else PASS), detail
 
 
 def c_recall():
@@ -457,19 +651,19 @@ def c_recall():
     if r.returncode:
         return FAIL, r.stderr.strip()[:150]
     n = len(re.findall(r"\.jsonl", r.stdout)) or len(r.stdout.strip().splitlines())
-    return (PASS if n else WARN), f"소스 조회 OK ({n}줄)"
+    return (PASS if n else WARN), t("doctor.recall_ok", count=n)
 
 
 def c_ledger():
     import memlib as M
     d = os.path.join(M.ROOT, "_private", "ledger", "facts")
     if not os.path.isdir(d):
-        return SKIP, "원장 미개설 (rec.py는 첫 기록 때 만든다)"
+        return SKIP, t("doctor.ledger_missing")
     n = len([f for f in os.listdir(d) if f.endswith(".md")])
     r = sh(sys.executable, "tools/rec.py", "check")
     m = re.search(r"문제: (\d+)건", r.stdout)
     bad = int(m.group(1)) if m else 0
-    return (PASS if not bad else WARN), f"사실 {n}건 · 정합성 문제 {bad}건"
+    return (PASS if not bad else WARN), t("doctor.ledger_counts", facts=n, issues=bad)
 
 
 def c_portrait():
@@ -481,12 +675,12 @@ def c_portrait():
     """
     import portrait as P
     if not os.path.exists(P.PORTRAIT):
-        return SKIP, "인물 원장 없음"
+        return SKIP, t("doctor.portrait_missing")
     since = P._last_update()
     if not since:
-        return WARN, "원장에 날짜가 없어 신선도를 못 잰다"
+        return WARN, t("doctor.portrait_undated")
     n = len([e for e in P._entries() if e[0] > since and e[2] in P.HARVEST_TYPES])
-    msg = f"마지막 {since} · 미수확 판정급 {n}건 (임계 {P.STALE_THRESHOLD})"
+    msg = t("doctor.portrait_counts", date=since, count=n, threshold=P.STALE_THRESHOLD)
     if n >= P.STALE_THRESHOLD:
         return WARN, msg + " — python3 tools/portrait.py candidates"
     return PASS, msg
@@ -546,17 +740,14 @@ def c_valve():
         # 조용한 SKIP은 "괜찮다"로 읽힌다. 무엇을 안 재는지 말하고 원격 수도 보인다.
         # (config는 이 tree 안에 있어 스스로 고칠 수 있다 — 이 검사는 차단이 아니라 진술이다.
         #  실제 차단은 .gitignore 기본거부와 pull-only 자격증명이다. DR-026)
-        extra = f" · 원격 {len(remotes)}개 있음" if remotes else ""
-        return SKIP, (f"context={M.INSTANCE_CONTEXT} — 원격 검사 안 함{extra}. "
-                      "회사 자료를 다루면 context를 work로 바꿔라")
+        extra = t("doctor.remote_extra", count=len(remotes)) if remotes else ""
+        return SKIP, t("doctor.valve_skip", context=M.INSTANCE_CONTEXT, extra=extra)
     if not remotes:
-        return PASS, "원격 없음 — 회사 자료가 나갈 경로가 아예 없다"
+        return PASS, t("doctor.no_remotes")
     bad = [u for u in remotes if not _allowed(u, M.REMOTE_ALLOWLIST)]
     if bad:
-        return FAIL, ("work 인스턴스가 allowlist 밖 원격을 가졌다:\n      "
-                      + "\n      ".join(bad)
-                      + "\n      원격을 지우거나 allowlist에 넣어라")
-    return PASS, f"원격 {len(remotes)}개 전부 allowlist 안 (host 기준)"
+        return FAIL, t("doctor.bad_remotes", items="\n      ".join(bad))
+    return PASS, t("doctor.remotes_ok", count=len(remotes))
 
 
 def c_symlinks():
@@ -571,11 +762,11 @@ def c_symlinks():
     import memlib as M
     r = subprocess.run(["git", "ls-files", "-s", "-z"], capture_output=True, text=True, cwd=ROOT)
     if r.returncode:
-        return SKIP, "git 저장소 아님"
+        return SKIP, t("doctor.not_git")
     links = [rec.split("\t", 1)[1] for rec in r.stdout.split("\0")
              if rec.startswith("120000") and "\t" in rec]
     if not links:
-        return PASS, "추적 심볼릭 링크 0"
+        return PASS, t("doctor.symlinks_zero")
     priv = os.path.realpath(os.path.join(ROOT, "_private"))
     into_private = []
     for l in links:
@@ -587,17 +778,16 @@ def c_symlinks():
         if os.path.realpath(full).startswith(priv) or "_private" in raw:
             into_private.append(f"{l[-52:]}  ->  {raw[-52:]}")
     if into_private:
-        more = f"\n      … 외 {len(into_private) - 3}개" if len(into_private) > 3 else ""
-        head = (f"_private을 가리키는 추적 링크 {len(into_private)}개 — 대상 경로 문자열이"
-                " 원격에 올라간다 (내용은 안 간다. 구조와 파일명만):\n      "
-                + "\n      ".join(into_private[:3]) + more)
+        more = t("doctor.more", count=len(into_private) - 3) if len(into_private) > 3 else ""
+        head = t("doctor.private_symlinks", count=len(into_private),
+                 items="\n      ".join(into_private[:3]), more=more)
         # 심각도는 인스턴스에 달렸다. work면 회사 구조가 나가는 것이라 차단이고,
         # personal이면 자기 프라이빗 원격에 자기 파일명이 가는 것이라 경고다.
         # (2026-08-24: 안 고쳐질 FAIL을 계속 띄우면 사람이 FAIL을 무시하게 된다 — 오늘의 교훈.)
         if M.INSTANCE_CONTEXT == "work":
             return FAIL, head
-        return WARN, head + "\n      정리하려면: git rm --cached <경로> (파일은 디스크에 남는다)"
-    return WARN, f"추적 심볼릭 링크 {len(links)}개 (대상이 _private 밖)"
+        return WARN, head + t("doctor.symlink_cleanup")
+    return WARN, t("doctor.symlinks_outside", count=len(links))
 
 
 def _linkcheck_scope():
@@ -635,14 +825,14 @@ def c_missed_gate():
     """
     import memlib as M
     if sh("git", "rev-parse", "--is-inside-work-tree").returncode:
-        return SKIP, "git 저장소 아님"
+        return SKIP, t("doctor.not_git")
     if not os.path.exists(M.TOOL_RUNS):
-        return WARN, "검사 실행 기록 자체가 없다 (계기 미가동)"
+        return WARN, t("doctor.no_run_log")
     # 인증서는 linkcheck가 **자기가 읽은 파일들**로 만든 해시다 (codex 라운드 3).
     # index 해시로는 untracked 추가와 unstaged 수정을 못 잡았다.
     cur_scope = _linkcheck_scope()
     if M.ran_at_head("linkcheck", cur_scope, require_ok=True):
-        return PASS, "지금 파일 상태에서 linkcheck 통과 기록 있음"
+        return PASS, t("doctor.linkcheck_recorded")
     # 미검증 상태다. 새 파일이 끼어 있을 때만 문제로 본다 — 단순 수정마다 울면 꺼진다.
     added = [x for x in sh("git", "show", "--diff-filter=A", "--name-only", "--format=",
                            "HEAD").stdout.splitlines() if x.strip()]
@@ -650,9 +840,8 @@ def c_missed_gate():
                      if l.startswith(("A ", "??"))]
     new_files = added + untracked_new
     if not new_files:
-        return WARN, "지금 상태는 미검증 (새 파일은 없다) — `python3 tools/linkcheck.py`"
-    return FAIL, (f"새 파일 {len(new_files)}개가 있는 상태인데 linkcheck 기록이 없다:\n      "
-                  + ", ".join(new_files[:4]) + "\n      `python3 tools/linkcheck.py`")
+        return WARN, t("doctor.unverified_no_new")
+    return FAIL, t("doctor.unverified_new", count=len(new_files), items=", ".join(new_files[:4]))
 
 
 def c_agents_parity():
@@ -664,14 +853,13 @@ def c_agents_parity():
     """
     a, b = os.path.join(ROOT, "CLAUDE.md"), os.path.join(ROOT, "AGENTS.md")
     if not os.path.exists(a):
-        return FAIL, "CLAUDE.md 없음"
+        return FAIL, t("doctor.claude_md_missing")
     if not os.path.exists(b):
-        return FAIL, "AGENTS.md 없음 — 두 런타임 모두 단일 정본을 못 읽는다"
+        return FAIL, t("doctor.agents_md_missing")
     x, y = open(a, "rb").read(), open(b, "rb").read()
     if x in (b"@AGENTS.md", b"@AGENTS.md\n"):
-        return PASS, f"AGENTS.md 단일 정본 import ({len(y)} bytes)"
-    return FAIL, (f"단일 정본 아님 (CLAUDE {len(x)} / AGENTS {len(y)} bytes) — "
-                  "CLAUDE.md를 exact @AGENTS.md import로 고쳐라")
+        return PASS, t("doctor.agents_ok", bytes=len(y))
+    return FAIL, t("doctor.agents_mismatch", claude=len(x), agents=len(y))
 
 
 def c_schema():
@@ -683,15 +871,12 @@ def c_schema():
     """
     import memlib as M
     if M.CONFIG_SCHEMA > M.SCHEMA_VERSION:
-        return FAIL, (f"config schema v{M.CONFIG_SCHEMA} > 엔진 v{M.SCHEMA_VERSION} — "
-                      "옛 엔진이 새 privacy 필드를 무시할 수 있다. 엔진부터 갱신해라")
+        return FAIL, t("doctor.schema_newer", config=M.CONFIG_SCHEMA, engine=M.SCHEMA_VERSION)
     gap = M.schema_gap()
     if gap is None:
-        return PASS, f"schema v{M.CONFIG_SCHEMA} (엔진 기대 v{M.SCHEMA_VERSION})"
+        return PASS, t("doctor.schema_ok", config=M.CONFIG_SCHEMA, engine=M.SCHEMA_VERSION)
     cur, want, todo = gap
-    return FAIL, (f"config schema v{cur} < 엔진 기대 v{want} — 아래를 config에 반영해라:\n      "
-                  + "\n      ".join(todo)
-                  + f'\n      반영 후 "schema_version": {want} 로 올린다')
+    return FAIL, t("doctor.schema_old", config=cur, engine=want, todo="\n      ".join(todo))
 
 
 def c_upstream():
@@ -702,11 +887,11 @@ def c_upstream():
     """
     r = sh("git", "rev-parse", "--is-inside-work-tree")
     if r.returncode:
-        return SKIP, "git 저장소 아님"
+        return SKIP, t("doctor.not_git")
     # 상류(엔진을 저작하는 인스턴스)에서는 엔진 수정이 정상이다. 표지는 kit_sync.py의 존재 —
     # 내보내기 도구는 상류에만 산다 (kit_sync.py의 EXCLUDED 참조).
     if os.path.exists(os.path.join(ROOT, "tools", "kit_sync.py")):
-        return SKIP, "여기가 상류다 (kit_sync 보유) — 엔진 수정이 정상"
+        return SKIP, t("doctor.upstream_here")
     # 추적 파일 중 수정된 것 = 전부 엔진 (인스턴스 소유는 추적 안 되므로)
     mod = [l[3:] for l in sh("git", "status", "--porcelain").stdout.splitlines()
            if l[:2].strip() in ("M", "MM", "AM", "D")]
@@ -714,13 +899,13 @@ def c_upstream():
     behind = up.stdout.strip() if up.returncode == 0 else None
     msgs = []
     if mod:
-        msgs.append("로컬에서 수정된 엔진 파일 — 다음 pull에서 충돌하거나 되돌아간다:\n      "
-                    + ", ".join(mod[:6]))
+        msgs.append(t("doctor.engine_modified", items=", ".join(mod[:6])))
     if behind and behind != "0":
-        msgs.append(f"업스트림보다 {behind}커밋 뒤처짐 — `git pull` 후 doctor를 다시 돌려라")
+        msgs.append(t("doctor.upstream_behind", count=behind))
     if msgs:
         return WARN, "\n      ".join(msgs)
-    return PASS, ("엔진 로컬 수정 0" + (f" · 업스트림 동기" if behind == "0" else " · 업스트림 미설정"))
+    status = t("doctor.upstream_sync") if behind == "0" else t("doctor.upstream_unset")
+    return PASS, t("doctor.upstream_ok", status=status)
 
 
 def c_engine_drift():
@@ -731,11 +916,11 @@ def c_engine_drift():
     """
     kit = os.environ.get("MOTTORI_KIT") or os.path.expanduser("~/mottori-kit")
     if not os.path.isdir(os.path.join(kit, "tools")) or os.path.realpath(kit) == os.path.realpath(ROOT):
-        return SKIP, "비교할 킷 사본 없음"
+        return SKIP, t("doctor.kit_missing")
     try:
         import kit_sync
     except Exception as e:
-        return SKIP, f"kit_sync 없음 ({e})"
+        return SKIP, t("doctor.kit_sync_missing", error=e)
     # 탈개인화 치환을 거친 뒤 비교한다. 안 그러면 **의도된 차이**가 드리프트로 잡혀
     # 매번 warn이 뜨고, 그러면 진짜 드리프트가 났을 때 아무도 안 본다.
     mine, theirs = os.path.join(ROOT, "tools"), os.path.join(kit, "tools")
@@ -757,9 +942,9 @@ def c_engine_drift():
         except UnicodeDecodeError:
             pass
     if diff:
-        return WARN, (f"공유 {len(shared)}개 중 {len(diff)}개 갈라짐: {', '.join(diff)}"
-                      "\n      `python3 tools/kit_sync.py` 로 차이를 보고 `--apply`로 내보낸다")
-    return PASS, f"공유 도구 {len(shared)}개 바이트 동일 ({kit})"
+        return WARN, t("doctor.kit_diverged", shared=len(shared), different=len(diff),
+                       items=", ".join(diff))
+    return PASS, t("doctor.kit_same", count=len(shared), kit=kit)
 
 
 def c_ignored():
@@ -770,7 +955,7 @@ def c_ignored():
     """
     r = sh("git", "rev-parse", "--is-inside-work-tree")
     if r.returncode:
-        return SKIP, "git 저장소 아님"
+        return SKIP, t("doctor.not_git")
     import memlib as M
     probes = ["state/NOW.md", "state/journal-x.md", "_private/x.md",
               "system/memory-config.json", "company/tracker.md", "notes.md"]
@@ -781,105 +966,119 @@ def c_ignored():
 
     if M.INSTANCE_CONTEXT != "work":
         # 개인 인스턴스는 트랙 문서를 일부러 추적한다. 규칙 부재는 정상이고 노출만 본다.
-        return (PASS, f"context=personal — 노출 {len(exposed)}개 (트랙 문서 추적은 정상)") \
-            if len(exposed) < 20 else (WARN, f"untracked 노출 {len(exposed)}개")
+        return (PASS, t("doctor.personal_exposure", count=len(exposed))) \
+            if len(exposed) < 20 else (WARN, t("doctor.untracked_exposure", count=len(exposed)))
 
     msgs = []
     still = [x for x in not_ignored if x not in tracked]
     if still:
-        msgs.append("ignore 규칙이 안 잡는 경로: " + ", ".join(still))
+        msgs.append(t("doctor.ignore_misses", items=", ".join(still)))
     if exposed:
-        msgs.append(f"untracked 노출 {len(exposed)}개 — 커밋 한 번이면 나간다: "
-                    + ", ".join(exposed[:4]))
+        msgs.append(t("doctor.exposed_paths", count=len(exposed), items=", ".join(exposed[:4])))
     if tracked:
-        msgs.append("이미 추적 중: " + ", ".join(tracked))
+        msgs.append(t("doctor.already_tracked", items=", ".join(tracked)))
     if msgs:
         return FAIL, "\n      ".join(msgs)
-    return PASS, f"probe {len(probes)}개 전부 ignore · untracked 노출 0"
+    return PASS, t("doctor.ignore_ok", count=len(probes))
 
 # -------------------------------------------------------------------- 실행
 
 CHECKS = [
-    ("런타임 · python",        c_python),
-    ("런타임 · node",          c_node),
-    ("런타임 · codex CLI",     c_codex),
-    ("런타임 · claude CLI",    c_claude),
-    ("런타임 · git",           c_git),
-    ("배선 · memlib ROOT",     c_memlib),
-    ("배선 · config",          c_config),
-    ("배선 · 전사 경로 유도",   c_transcripts),
-    ("배선 · state/",          c_state),
-    ("배선 · NOW.md",          c_now),
-    ("훅 · 배선 claude",        c_hook_wiring),
-    ("훅 · 배선 codex",         c_hook_wiring_codex),
-    ("훅 · codex armed",        c_hook_codex_armed),
-    ("훅 · codex 명령 유효성",   c_hook_codex_run),
-    ("훅 · claude 명령 유효성",  c_hook_success),
-    ("훅 · 실패 분기",          c_hook_failure),
-    ("훅 · claude 전역 시각",   c_global_hook),
-    ("훅 · pre-commit 설치본",  c_precommit_install),
-    ("훅 · 슬래시 커맨드",      c_commands),
-    ("도구 · 실행",            c_tools_run),
-    ("도구 · 링크 무결성",      c_links),
-    ("도구 · 정합성",          c_coherence),
-    ("도구 · 회귀 픽스처",      c_regression),
-    ("도구 · recall 소스",     c_recall),
-    ("도구 · 원장",            c_ledger),
-    ("도구 · 인물 원장",       c_portrait),
-    ("밸브 · 원격 검사",        c_valve),
-    ("밸브 · 연료 비추적",      c_ignored),
-    ("밸브 · 추적 심볼릭링크",   c_symlinks),
-    ("게이트 · 산출물 검사누락",  c_missed_gate),
-    ("규약 · AGENTS 단일 정본", c_agents_parity),
-    ("엔진 · config 스키마",    c_schema),
-    ("엔진 · 업스트림",         c_upstream),
-    ("엔진 · 킷 드리프트",      c_engine_drift),
+    (t("doctor.check.runtime_python"),        c_python),
+    (t("doctor.check.runtime_node"),          c_node),
+    (t("doctor.check.runtime_codex"),         c_codex),
+    (t("doctor.check.runtime_claude"),        c_claude),
+    (t("doctor.check.runtime_git"),           c_git),
+    (t("doctor.check.wiring_root"),           c_memlib),
+    (t("doctor.check.wiring_config"),         c_config),
+    (t("doctor.check.wiring_transcripts"),    c_transcripts),
+    (t("doctor.check.wiring_state"),          c_state),
+    (t("doctor.check.wiring_now"),            c_now),
+    (t("doctor.check.hook_claude"),           c_hook_wiring),
+    (t("doctor.check.hook_codex"),            c_hook_wiring_codex),
+    (t("doctor.check.hook_armed"),            c_hook_codex_armed),
+    (t("doctor.check.hook_codex_command"),    c_hook_codex_run),
+    (t("doctor.check.hook_claude_command"),   c_hook_success),
+    (t("doctor.check.hook_failure"),          c_hook_failure),
+    (t("doctor.check.hook_precompact_claude"), c_precompact_claude),
+    (t("doctor.check.hook_precompact_codex"), c_precompact_codex),
+    (t("doctor.check.hook_time"),             c_global_hook),
+    (t("doctor.check.hook_precommit"),        c_precommit_install),
+    (t("doctor.check.hook_commands"),         c_commands),
+    (t("doctor.check.tools_run"),             c_tools_run),
+    (t("doctor.check.tools_links"),           c_links),
+    (t("doctor.check.tools_coherence"),       c_coherence),
+    (t("doctor.check.tools_regression"),      c_regression),
+    (t("doctor.check.tools_receipts"),        c_worker_receipts),
+    (t("doctor.check.tools_recall"),          c_recall),
+    (t("doctor.check.tools_ledger"),          c_ledger),
+    (t("doctor.check.tools_portrait"),        c_portrait),
+    (t("doctor.check.valve_remote"),          c_valve),
+    (t("doctor.check.valve_ignored"),         c_ignored),
+    (t("doctor.check.valve_symlinks"),        c_symlinks),
+    (t("doctor.check.gate_missed"),           c_missed_gate),
+    (t("doctor.check.agents"),                c_agents_parity),
+    (t("doctor.check.schema"),                c_schema),
+    (t("doctor.check.upstream"),              c_upstream),
+    (t("doctor.check.drift"),                 c_engine_drift),
 ]
 
 # 자동 검사 불가 — 이 목록이 이 도구의 반증 가능 칸이다.
 # 여기 있는 것을 "확인했다"고 말하면 거짓이다. 사람이 해야 한다.
 MANUAL = [
-    ("SessionStart dispatcher와 모델 effect가 실제로 이어졌는가",
-     "routine doctor는 declared/command-valid/armed까지만 잰다. 명시적으로 비용을 쓸 때만\n"
-     "       python3 tools/hook_canary.py --all\n"
-     "     양 런타임의 fresh positive와 hooks-disabled negative를 함께 통과해야 fired/effect를 검증한다."),
-    ("PreCompact 훅이 컴팩션 때 실제로 도는가",
-     "컴팩션을 인위적으로 못 일으킨다. 확인법: 다음 컴팩션 후 state/journal-*.md 끝에 "
-     "'[system/state] 컴팩션 발생' 줄이 붙었는지 본다."),
-    ("Codex가 AGENTS.md를 읽고 규약을 따르는가",
-     "확인법: 발주 1회 후 응답이 규약(한국어·em-dash 금지·판정 형식)을 지키는지 본다."),
-    ("회사 정책상 이 도구들을 써도 되는가",
-     "전사·녹취(tools/transcribe.py 등)는 녹음 동의와 데이터 반출 정책에 걸릴 수 있다. "
-     "회사 규정을 확인하기 전에는 녹취 도구를 돌리지 마라."),
+    (t("doctor.manual.session_title"), t("doctor.manual.session_how")),
+    (t("doctor.manual.precompact_title"), t("doctor.manual.precompact_how")),
+    (t("doctor.manual.codex_title"), t("doctor.manual.codex_how")),
+    (t("doctor.manual.policy_title"), t("doctor.manual.policy_how")),
 ]
 
 
 def main():
-    print(f"doctor — {ROOT}\n")
+    results.clear()
+    if not JSON_OUTPUT:
+        print(t("doctor.heading", root=ROOT))
     for name, fn in CHECKS:
         check(name, fn)
-    width = max(len(n) for _, n, _ in results)
-    icon = {PASS: "  ok  ", FAIL: " FAIL ", WARN: " warn ", SKIP: "  --  "}
-    for status, name, detail in results:
-        line = f"[{icon[status]}] {name.ljust(width)}"
-        if detail and (status != PASS or VERBOSE):
-            line += f"  {detail}"
-        elif detail and status == PASS:
-            line += f"  {detail}"
-        print(line)
-
     n = {s: sum(1 for st, _, _ in results if st == s) for s in (PASS, FAIL, WARN, SKIP)}
-    print(f"\n검사 {len(results)}개 — ok {n[PASS]} · FAIL {n[FAIL]} · warn {n[WARN]} · 해당없음 {n[SKIP]}")
+    if JSON_OUTPUT:
+        payload = {
+            "checks": [
+                {"name": name, "status": status, "detail": detail}
+                for status, name, detail in results
+            ],
+            "summary": {
+                "total": len(results),
+                "pass": n[PASS],
+                "fail": n[FAIL],
+                "warn": n[WARN],
+                "skip": n[SKIP],
+            },
+            "manual": [{"name": title, "detail": how} for title, how in MANUAL],
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        width = max(len(name) for _, name, _ in results)
+        icon = {PASS: "  ok  ", FAIL: " FAIL ", WARN: " warn ", SKIP: "  --  "}
+        for status, name, detail in results:
+            line = f"[{icon[status]}] {name.ljust(width)}"
+            if detail and (status != PASS or VERBOSE):
+                line += f"  {detail}"
+            elif detail and status == PASS:
+                line += f"  {detail}"
+            print(line)
 
-    print(f"\n자동 검사 불가 {len(MANUAL)}개 (사람이 확인해야 한다):")
-    for i, (title, how) in enumerate(MANUAL, 1):
-        print(f"  {i}. {title}")
-        print(f"     {how}")
+        print(t("doctor.summary", total=len(results), ok=n[PASS], fail=n[FAIL],
+                warn=n[WARN], skip=n[SKIP]))
+
+        print(t("doctor.manual_heading", count=len(MANUAL)))
+        for i, (title, how) in enumerate(MANUAL, 1):
+            print(f"  {i}. {title}")
+            print(f"     {how}")
 
     __import__("sys").path.insert(0, HERE)
     import memlib as _M; _M.log_run("doctor", f"fail={n[FAIL]} warn={n[WARN]}")
-    if n[FAIL]:
-        print(f"\nFAIL {n[FAIL]}개를 먼저 고쳐라. 그 전에는 이 인스턴스의 상태 자동화를 믿지 마라.")
+    if n[FAIL] and not JSON_OUTPUT:
+        print(t("doctor.finish_fail", count=n[FAIL]))
     return 1 if n[FAIL] else 0
 
 

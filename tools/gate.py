@@ -53,6 +53,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import memlib as M
+from i18n import t
 
 # **실행 root를 자기 파일에서 유도한다** (codex 라운드 4). `MOTTORI_INSTANCE`로 깨끗한 다른
 # 클론을 가리키면 깨진 index가 통과했다. 훅은 이 변수를 지우고, 게이트는 불일치면 거부한다.
@@ -62,6 +63,7 @@ BASELINE = os.path.join(M.STATE, ".gate-baseline.json")
 
 CHECKS = [
     ("linkcheck", [sys.executable, os.path.join(HERE, "linkcheck.py"), "--issues"]),
+    ("evidencecheck", [sys.executable, os.path.join(HERE, "evidencecheck.py"), "--issues"]),
     ("now-check", [sys.executable, os.path.join(HERE, "now.py"), "check", "--issues"]),
 ]
 
@@ -150,6 +152,11 @@ def measure(tree=None, filelist=None):
         c = list(cmd)
         if tree and name == "linkcheck":
             c += ["--tree", tree] + (["--filelist", filelist] if filelist else [])
+        if tree and name == "evidencecheck":
+            # 커밋될 index의 검사기와 문서를 함께 쓴다. run과 인스턴스 DR만 로컬 overlay에서 찾는다.
+            staged_checker = os.path.join(tree, "tools", "evidencecheck.py")
+            c = [sys.executable, staged_checker, "--issues", "--tree", tree,
+                 "--local-root", M.ROOT]
         if tree and name == "now-check":
             # pre-commit은 worktree가 아니라 index에서 꺼낸 엔진과 상태를 검사해야 한다.
             # 인스턴스 저장소(visa)는 config/state가 tracked라 extracted tree가 정본이고,
@@ -189,27 +196,24 @@ def _verdict(cur, base, state):
     """(막을 이유 or None, 기준선을 당길지). **채택은 절대 안 한다.**"""
     dead = sorted(k for k, v in cur.items() if v is None)
     if dead:
-        return (f"검사기가 결과를 못 냈다: {', '.join(dead)}. "
-                "측정 불능은 통과가 아니다 — 죽었는지 확인해라."), False
+        return t("gate.checker_dead", items=", ".join(dead)), False
     if state == "corrupt":
-        return f"게이트 기준선이 깨졌다 ({BASELINE}). 확인하고 `python3 tools/gate.py baseline`.", False
+        return t("gate.baseline_corrupt", path=BASELINE), False
     if state == "absent":
-        return ("게이트 기준선이 없다. 지운 것과 처음 설치한 것을 기계가 구분할 수 없어서 "
-                "자동으로 채택하지 않는다. `python3 tools/gate.py baseline`을 직접 돌려라."), False
+        return t("gate.baseline_absent"), False
     if set(cur) != set(base):
         only_c, only_b = sorted(set(cur) - set(base)), sorted(set(base) - set(cur))
-        return ("검사기 목록이 기준선과 다르다 — "
-                + (f"기준선에만: {', '.join(only_b)} " if only_b else "")
-                + (f"현재에만: {', '.join(only_c)}" if only_c else "")
-                + ". 검사기를 지워서 통과시키는 경로다. `gate.py baseline`으로 명시 이관해라."), False
+        only_base = t("gate.only_base", items=", ".join(only_b)) if only_b else ""
+        only_current = t("gate.only_current", items=", ".join(only_c)) if only_c else ""
+        return t("gate.checks_changed", only_base=only_base, only_current=only_current), False
 
     new = {k: sorted(cur[k] - base[k]) for k in cur}
     new = {k: v for k, v in new.items() if v}
     if new:
-        detail = " · ".join(f"{k}: " + "; ".join(v[:4]) + (f" 외 {len(v)-4}건" if len(v) > 4 else "")
+        detail = " · ".join(f"{k}: " + "; ".join(v[:4])
+                            + (t("gate.more", count=len(v)-4) if len(v) > 4 else "")
                             for k, v in new.items())
-        return ("이번 턴에 없던 이슈가 생겼다 — " + detail
-                + ". 고치고 끝내라. 의도한 변화면 `python3 tools/gate.py baseline`."), False
+        return t("gate.new_issues", detail=detail), False
 
     shrank = (all(cur[k] <= base[k] for k in cur) and any(cur[k] < base[k] for k in cur))
     return None, shrank
@@ -275,14 +279,13 @@ def cmd_check():
         if payload.get("stop_hook_active"):
             return 0
         if not _root_ok():
-            return _block(f"게이트 실행 root가 도구 위치와 다르다 ({M.ROOT} vs {SELF_ROOT}). "
-                          "MOTTORI_INSTANCE가 걸려 있는지 확인해라.")
+            return _block(t("gate.root_block", root=M.ROOT, tool=SELF_ROOT))
         if not (os.path.exists(DIRTY()) or os.path.exists(PENDING())):
             return 0
 
         with _lock() as got:
             if not got:
-                return _block("게이트 잠금을 못 얻었다. 다른 검사가 도는 중이거나 잠금이 남았다.")
+                return _block(t("gate.lock_block"))
             token = _read(DIRTY())
             base, state = _load_baseline()
             cur = measure()
@@ -312,8 +315,7 @@ def cmd_check():
             _mark(PENDING())
         with contextlib.suppress(Exception):
             M.log_run("gate", f"error@Stop:{type(e).__name__}")
-        return _block(f"게이트 자신이 실패했다 ({type(e).__name__}). 검사기를 고치거나 "
-                      "`python3 tools/gate.py status`로 원인을 봐라.")
+        return _block(t("gate.self_failed", error_type=type(e).__name__))
 
 
 def _read(p):
@@ -350,7 +352,7 @@ def cmd_resume():
                 M.log_run("gate", "resume-warn")
                 print(json.dumps({"hookSpecificOutput": {
                     "hookEventName": "UserPromptSubmit",
-                    "additionalContext": "[게이트] 지난 턴이 검증을 통과하지 못했다. " + reason}},
+                    "additionalContext": t("gate.resume_failed", reason=reason)}},
                     ensure_ascii=False))
                 return 0
             if not moved:
@@ -365,8 +367,7 @@ def cmd_resume():
         with contextlib.suppress(Exception):
             print(json.dumps({"hookSpecificOutput": {
                 "hookEventName": "UserPromptSubmit",
-                "additionalContext": f"[게이트] 게이트 자신이 실패했다 ({type(e).__name__}). "
-                                     "지난 턴의 검증 상태를 알 수 없다. `python3 tools/gate.py status`."}},
+                "additionalContext": t("gate.resume_self_failed", error_type=type(e).__name__)}},
                 ensure_ascii=False))
         return 0
 

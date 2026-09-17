@@ -36,7 +36,7 @@ def make_repo(with_config=True):
     """엔진 파일 몇 개와 md 문서를 가진 임시 git 리포. tools/는 실제 엔진을 복사한다."""
     root = tempfile.mkdtemp(prefix="install-checks.")
     os.makedirs(os.path.join(root, "tools"))
-    for name in ("memlib.py", "linkcheck.py", "doctor.py", "gate.py", "now.py", "hookdiag.py",
+    for name in ("memlib.py", "i18n.py", "linkcheck.py", "doctor.py", "gate.py", "now.py", "hookdiag.py",
                  "coherence.py"):
         src = os.path.join(HERE, name)
         if os.path.exists(src):
@@ -135,7 +135,7 @@ def test_doctor_codex_armed_and_git_version():
     root = make_repo(with_config=True)
     try:
         code = r'''
-import sys, types; sys.path.insert(0, "tools")
+import os, sys, types; sys.path.insert(0, "tools")
 import doctor, hookdiag
 def fake_list(_root, **kw): return {"hooks": [], "errors": []}
 def report(armed, valid=True):
@@ -156,9 +156,9 @@ class R:
     def __init__(self, out, rc=0): self.stdout=out; self.returncode=rc; self.stderr=""
 def fake_sh(*cmd, cwd=None):
     if cmd[:2] == ("git", "--version"): return R(fake_sh.version)
-    return R("/tmp/x")
+    return R(os.path.join(os.sep, "tmp", "x"))
 doctor.sh = fake_sh
-for v, tag in (("git version 2.35.9", "old"), ("git version 2.36.0", "new"), ("git version 2.50.1 (Apple Git-155)", "apple"), ("weird", "unparsable")):
+for v, tag in (("git version 2.4.12", "too_old"), ("git version 2.35.9", "old"), ("git version 2.36.0", "new"), ("git version 2.50.1 (Apple Git-155)", "apple"), ("weird", "unparsable")):
     fake_sh.version = v
     print(tag, doctor.c_git()[0])
 '''
@@ -168,7 +168,8 @@ for v, tag in (("git version 2.35.9", "old"), ("git version 2.36.0", "new"), ("g
         ok("E codex armed → PASS", out.get("armed") == "PASS", r.stdout)
         ok("E codex command invalid → FAIL", out.get("invalid") == "FAIL", r.stdout)
         ok("E codex loader error → FAIL", out.get("loader") == "FAIL", r.stdout)
-        ok("git 2.35 → FAIL", out.get("old") == "FAIL", r.stdout)
+        ok("git 2.4 → FAIL", out.get("too_old") == "FAIL", r.stdout)
+        ok("git 2.35 → PASS", out.get("old") == "PASS", r.stdout)
         ok("git 2.36 → PASS", out.get("new") == "PASS", r.stdout)
         ok("git 2.50 (Apple) → PASS", out.get("apple") == "PASS", r.stdout)
         ok("git unparsable → WARN", out.get("unparsable") == "WARN", r.stdout)
@@ -208,7 +209,8 @@ try:
     d2 = json.loads(out2)
     h = d2.get("hookSpecificOutput", {})
     print("resume", rc2 == 0 and h.get("hookEventName") == "UserPromptSubmit"
-          and "게이트" in h.get("additionalContext", "") and os.path.exists(gate.PENDING()))
+          and ("게이트" in h.get("additionalContext", "") or "gate" in h.get("additionalContext", "").lower())
+          and os.path.exists(gate.PENDING()))
 except Exception as e:
     print("resume", False, repr(out2[:120]))
 '''

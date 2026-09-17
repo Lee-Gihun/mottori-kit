@@ -99,9 +99,9 @@ FLOWS = [
 ]
 
 
-def _sh(cmd):
+def _run(cmd):
     try:
-        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=M.ROOT)
         return (r.stdout + r.stderr).strip()
     except Exception as e:
         return str(e)
@@ -116,7 +116,8 @@ def gauges():
     if os.path.isdir(M.TRANSCRIPTS):
         tsize = sum(os.path.getsize(os.path.join(M.TRANSCRIPTS, f))
                     for f in os.listdir(M.TRANSCRIPTS) if f.endswith(".jsonl")) // 1048576
-    chk = _sh(f"python3 {HERE}/now.py check | tail -1")
+    check_output = _run([sys.executable, os.path.join(HERE, "now.py"), "check"])
+    chk = (check_output.splitlines() or [""])[-1]
     warn = "warn" if "경고" in chk else ""
     drs = 0
     if os.path.exists(M.DECISIONS):
