@@ -22,7 +22,9 @@ ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "system" / "review-manifest.yaml"
 MANIFEST_REL = "system/review-manifest.yaml"
 DELIVERY_PATHS = {
+    "REPORT.md",
     "system/enforcement-matrix.yaml",
+    "system/language-pending.txt",
     "system/reviews/content-audit.tsv",
     "system/review-manifest.yaml",
     "system/test-matrix.yaml",
@@ -33,6 +35,7 @@ DELIVERY_PATHS = {
     "tools/test_context_budget.py",
     "tools/test_egress.py",
     "tools/test_enforce.py",
+    "tools/test_language.py",
     "tools/test_manifests.py",
     "tools/test_matrix_check.py",
     "tools/test_mutation.py",
@@ -40,6 +43,18 @@ DELIVERY_PATHS = {
     "tools/test_worker_batch.py",
     "tools/worker_batch.py",
 }
+
+
+def locale_paths() -> set[str]:
+    """Return locale documents delivered before Git indexes a worker patch."""
+    paths = {path.relative_to(ROOT).as_posix() for path in ROOT.glob("*.ko.md")}
+    for base in (ROOT / "system", ROOT / "templates", ROOT / ".claude" / "commands"):
+        if base.is_dir():
+            paths.update(path.relative_to(ROOT).as_posix() for path in base.rglob("*.ko.md"))
+    instance_locales = {
+        "system/decisions.ko.md", "system/instance-rules.ko.md", "system/rituals.local.ko.md"
+    }
+    return {path for path in paths if path not in instance_locales and not path.startswith("system/debate/_")}
 
 
 def git_paths() -> set[str]:
@@ -52,6 +67,7 @@ def git_paths() -> set[str]:
         path for path in DELIVERY_PATHS
         if path == MANIFEST_REL or (ROOT / path).is_file()
     )
+    paths.update(locale_paths())
     return paths
 
 
@@ -106,12 +122,24 @@ def build() -> dict:
     rows = []
     for path in sorted(paths):
         old = existing.get(path, {})
+        if path.endswith(".ko.md"):
+            canonical = existing.get(path[:-len(".ko.md")] + ".md", {})
+            default_kind = canonical.get("kind", "evidence")
+            default_consumers = canonical.get("consumers", ["human"])
+        elif path == "tools/test_language.py":
+            default_kind, default_consumers = "tool", ["tool"]
+        elif path == "system/language-pending.txt":
+            default_kind, default_consumers = "evidence", ["human", "tool"]
+        elif path == "REPORT.md":
+            default_kind, default_consumers = "evidence", ["human"]
+        else:
+            default_kind, default_consumers = None, []
         rows.append(
             {
                 "path": path,
-                "kind": old.get("kind"),
+                "kind": old.get("kind", default_kind),
                 "owner": "kit",
-                "consumers": old.get("consumers", []),
+                "consumers": old.get("consumers", default_consumers),
                 "depends_on": dependencies(path, paths),
                 "reviewed_at": None,
             }

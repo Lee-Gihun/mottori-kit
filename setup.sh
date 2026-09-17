@@ -20,6 +20,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 export MOTTORI_INSTANCE="$ROOT"
 cd "$ROOT"
 say() { python3 "$ROOT/tools/i18n.py" "$@"; }
+DOC_LANG="$(python3 -c 'import sys; sys.path.insert(0, "tools"); import i18n; print(i18n.language())')"
+DOC_SUFFIX=""
+[ "$DOC_LANG" = "ko" ] && DOC_SUFFIX=".ko"
 
 NAME=""; CONTEXT=""; FORCE=0
 while [ $# -gt 0 ]; do
@@ -206,15 +209,15 @@ fi
 
 # --- 3. 인스턴스 소유 문서 (업스트림 파일과 쌍을 이룬다) ---
 if [ ! -f "$RULES" ]; then
-  cp templates/instance-rules.md "$RULES"
+  cp "templates/instance-rules${DOC_SUFFIX}.md" "$RULES"
   say setup.rules_created "path=$RULES"
 fi
 if [ ! -f system/decisions.md ]; then
-  cp templates/decisions.md system/decisions.md
+  cp "templates/decisions${DOC_SUFFIX}.md" system/decisions.md
   say setup.decisions_created
 fi
 if [ ! -f system/rituals.local.md ]; then
-  cp templates/rituals.local.md system/rituals.local.md
+  cp "templates/rituals.local${DOC_SUFFIX}.md" system/rituals.local.md
   say setup.rituals_created
 fi
 

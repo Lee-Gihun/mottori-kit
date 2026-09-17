@@ -1,57 +1,58 @@
-# 근거 표지 스키마
+# Evidence marker schema
 
-근거 표지는 결정이나 변경의 근거를 기계가 찾을 수 있게 하는 포인터다. 검사기는 모든 표지의
-문법과 로컬 대상의 존재만 판정한다. 외부 원본의 존재와 표지가 주장을 실제로 뒷받침하는지는
-독립 검토가 판정한다.
+Evidence markers are pointers that let a machine find the basis for a decision or change. The checker judges
+only marker syntax and the existence of local targets. Independent review determines whether an external source
+exists and whether the marker actually supports the claim.
 
-## 허용 문법
+## Allowed syntax
 
-| 종류 | 문법 | 예 |
+| Kind | Syntax | Examples |
 |---|---|---|
-| 논문 | `paper:<arXiv id 또는 DOI>` | `paper:2609.09134`, `paper:10.1000/example` |
-| 실험 | `experiment:<id>` | `experiment:fresh-install-20260917` |
-| 실행 | `run:<run id>` | `run:20260917T163052+0900-codex-f58c6c0b` |
-| 결정 | `decision:<DR-nnn 또는 KIT-DR-nnn>` | `decision:DR-001`, `decision:KIT-DR-012` |
-| 테스트 | `test:<tools/test_x.py::name>` | `test:tools/test_evidencecheck.py::test_malformed_marker_fails` |
+| Paper | `paper:<arXiv id or DOI>` | `paper:2609.09134`, `paper:10.1000/example` |
+| Experiment | `experiment:<id>` | `experiment:fresh-install-20260917` |
+| Run | `run:<run id>` | `run:20260917T163052+0900-codex-f58c6c0b` |
+| Decision | `decision:<DR-nnn or KIT-DR-nnn>` | `decision:DR-001`, `decision:KIT-DR-012` |
+| Test | `test:<tools/test_x.py::name>` | `test:tools/test_evidencecheck.py::test_malformed_marker_fails` |
 
-arXiv ID는 신형 `YYMM.number`와 구형 `archive/YYMMNNN`을 허용하고 버전 접미사 `vN`을 허용한다.
-DOI는 `10.` 접두와 registrant 번호, `/` 뒤 suffix가 모두 있어야 한다. experiment ID는 영문자,
-숫자, `.`, `_`, `-`를 쓴다. run ID는 여기에 `+`도 허용한다. 문장 부호와 경계를 모호하게 하지
-않도록 표지는 인라인 코드로 감싸는 것을 권장한다.
+An arXiv ID may use modern `YYMM.number` or legacy `archive/YYMMNNN` syntax and may have a `vN` version suffix.
+A DOI requires the `10.` prefix, a registrant number, and a suffix after `/`. Experiment IDs use ASCII letters,
+digits, `.`, `_`, and `-`; run IDs also permit `+`. Inline code is recommended to keep punctuation and
+boundaries unambiguous.
 
-## 로컬 존재 판정
+## Local existence checks
 
-- `decision:KIT-DR-nnn`은 `system/kit-decisions.md`의 `### DR-nnn` 제목으로 해석한다.
-- `decision:DR-nnn`은 로컬 루트의 `system/decisions.md` 제목으로 해석한다.
-- `test:tools/test_x.py::name`은 검사 트리의 파일과 Python 함수 이름이 모두 있어야 한다.
-- `run:<run id>`는 로컬 루트의 `_private/work/runs/<run id>/` 디렉터리가 있어야 한다.
-- `paper:`와 `experiment:`은 이 저장소 밖에 원본이 있을 수 있으므로 문법만 검사하고
-  `REVIEW 외부 존재 미판정`으로 표시한다. 이 표시는 차단 이슈가 아니다.
+- `decision:KIT-DR-nnn` resolves to the `### DR-nnn` heading in `system/kit-decisions.md`.
+- `decision:DR-nnn` resolves to the heading in `system/decisions.md` at the local root.
+- `test:tools/test_x.py::name` requires both the file in the checked tree and the named Python function.
+- `run:<run id>` requires `_private/work/runs/<run id>/` at the local root.
+- `paper:` and `experiment:` may have sources outside this repository, so only syntax is checked. They are
+  reported as `REVIEW external existence not checked`, which is not a blocking issue.
 
-pre-commit에서는 추출한 index를 검사 트리로 쓰되, git 밖에 있는 run과 인스턴스 DR은 현재 로컬
-루트에서 찾는다.
+During pre-commit, the extracted index is the checked tree, while runs and instance decision records that live
+outside Git are resolved from the current local root.
 
-## 필수 위치
+## Required locations
 
-- `system/kit-decisions.md`의 모든 DR은 `맥락:` 절에 허용 표지 하나 이상을 둔다. 근거 포인터를
-  소급해서 만들 수 없는 기존 DR은 본문을 고치지 않고 독립된 `evidence: none` 표지를 둔다.
-- `CHANGELOG.md`의 `[해야 함]`과 `[알아둘 것]` 항목은 절 안에 허용 표지 하나 이상을 둔다. 근거가
-  없으면 숨기지 않고 정확히 `evidence: none`이라고 쓴다.
-- `system/enforcement-matrix.md`에서 상태가 `ENFORCED`인 행은 같은 행에 `test:` 표지를 둔다.
+- Every DR in `system/kit-decisions.md` has at least one allowed marker in its Context section. An existing DR
+  whose evidence pointer cannot be reconstructed keeps its body unchanged and uses a separate `evidence: none`
+  marker.
+- Every `[Action required]` and `[Know]` item in `CHANGELOG.md` has at least one allowed marker in its section.
+  If there is no evidence, state exactly `evidence: none` instead of hiding that absence.
+- Every `ENFORCED` row in `system/enforcement-matrix.md` has a `test:` marker on the same row.
 
-`evidence: none`은 CHANGELOG의 두 필수 태그와 기존 DR 맥락에만 쓰는 명시적 예외다. 근거가
-있다는 뜻이 아니며 표지 적합성을 증명하거나 다른 필수 위치를 면제하지 않는다.
+`evidence: none` is an explicit exception only for the two required CHANGELOG tags and existing DR contexts. It
+does not mean evidence exists, prove marker suitability, or exempt any other required location.
 
-## 검사기 출력 계약
+## Checker output contract
 
-`python3 tools/evidencecheck.py`는 이슈가 있으면 exit 1, 없으면 exit 0이다. `--issues`는 이슈 유무와
-무관하게 exit 0이며 다음 형식을 쓴다.
+`python3 tools/evidencecheck.py` exits 1 when issues exist and 0 otherwise. `--issues` always exits 0 and uses
+this format:
 
 ```text
-<안정 ID>\t<표시 문구>
-~review|<파일>|<표지>\tREVIEW <표시 문구>
+<stable ID>\t<display text>
+~review|<file>|<marker>\tREVIEW <display text>
 #issues <N>
 ```
 
-트레일러는 항상 마지막 줄이다. `~review|` 행은 이슈 수에 포함되지 않는다. `tools/gate.py`와
-pre-commit 훅은 차단 이슈 집합만 다른 검사기와 같은 방식으로 소비한다.
+The trailer is always the last line. `~review|` rows do not count as issues. `tools/gate.py` and the pre-commit
+hook consume only blocking issues, in the same way as other checkers.

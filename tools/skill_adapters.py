@@ -37,8 +37,9 @@ def render_adapter(runtime, source_text, label):
     if runtime == "claude":
         preamble = (
             common
-            + "아래 정본 workflow v1을 따라 논문에서 킷 제안을 만들어줘. 입력은 \"$ARGUMENTS\"다.\n"
-            + "정본의 사람 판정 게이트와 킷 파일 수정 0건 경계를 지켜라.\n\n"
+            + "Follow canonical workflow v1 below to create kit proposals from papers. "
+            + "The input is \"$ARGUMENTS\".\n"
+            + "Preserve the human-judgment gate and zero kit-file-write boundary.\n\n"
         )
     elif runtime == "codex":
         preamble = (

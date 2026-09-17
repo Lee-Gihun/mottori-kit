@@ -13,7 +13,9 @@ ROOT = Path(__file__).resolve().parent.parent
 REVIEW = ROOT / "system" / "review-manifest.yaml"
 MATRIX = ROOT / "system" / "enforcement-matrix.yaml"
 DELIVERY_PATHS = {
+    "REPORT.md",
     "system/enforcement-matrix.yaml",
+    "system/language-pending.txt",
     "system/reviews/content-audit.tsv",
     "system/review-manifest.yaml",
     "system/test-matrix.yaml",
@@ -24,6 +26,7 @@ DELIVERY_PATHS = {
     "tools/test_context_budget.py",
     "tools/test_egress.py",
     "tools/test_enforce.py",
+    "tools/test_language.py",
     "tools/test_manifests.py",
     "tools/test_matrix_check.py",
     "tools/test_mutation.py",
@@ -31,6 +34,17 @@ DELIVERY_PATHS = {
     "tools/test_worker_batch.py",
     "tools/worker_batch.py",
 }
+
+
+def locale_paths() -> set[str]:
+    paths = {path.relative_to(ROOT).as_posix() for path in ROOT.glob("*.ko.md")}
+    for base in (ROOT / "system", ROOT / "templates", ROOT / ".claude" / "commands"):
+        if base.is_dir():
+            paths.update(path.relative_to(ROOT).as_posix() for path in base.rglob("*.ko.md"))
+    instance_locales = {
+        "system/decisions.ko.md", "system/instance-rules.ko.md", "system/rituals.local.ko.md"
+    }
+    return {path for path in paths if path not in instance_locales and not path.startswith("system/debate/_")}
 KINDS = {"rule", "evidence", "tool", "hook", "template", "generated"}
 OWNERS = {"kit", "instance"}
 CONSUMERS = {"human", "claude", "codex", "tool"}
@@ -68,6 +82,7 @@ def expected_paths() -> set[str]:
         path for path in DELIVERY_PATHS
         if path == "system/review-manifest.yaml" or (ROOT / path).is_file()
     )
+    paths.update(locale_paths())
     text = set()
     for path in paths:
         candidate = ROOT / path
