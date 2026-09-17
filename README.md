@@ -3,7 +3,18 @@
 무한 세션에서 상태와 깊이를 잃지 않기 위한 **에이전트 워크스페이스 엔진**.
 Claude Code와 Codex가 같은 규약 위에서 돌고, 컴팩션을 넘어 작업이 이어진다.
 
-`git clone` → `bash setup.sh` → `python3 tools/doctor.py`. 5분이면 쓸 수 있다.
+`git clone` → `bash setup.sh` → `bash tools/install_hooks.sh --repair` → `python3 tools/doctor.py`.
+명령 넷은 1분 안에 끝난다 (`tools/test_fresh_install.sh`가 임시 클론에서 이 순서를 그대로 재고,
+2026-09-17 기준 통과한다). 그 뒤 국경 선언(`system/instance-rules.md`)과 CHECKLIST의 사람 확인
+항목은 네가 쓰는 시간이다.
+
+**English quickstart.** Requires Python 3.8+, git 2.36+, macOS or Linux; `claude`, `codex` and `node` are
+optional. Run `bash setup.sh --name <name> --context personal|work` (`work` makes `doctor` reject pushes to
+remotes outside the allowlist), then `bash tools/install_hooks.sh --repair`, then `python3 tools/doctor.py`:
+`FAIL` must be zero, `warn` is acceptable, `--` means not applicable. Replace every `CHANGEME` in
+`system/instance-rules.md`. Nothing under `state/` or `_private/` is ever committed, so back those up yourself;
+to update, `git pull`, re-run the hook check, refresh the gate baseline, and run `doctor` again (SETUP.md §5a).
+The rest of the documentation is in Korean.
 
 ---
 
@@ -35,12 +46,28 @@ tools/           엔진. 핵심 넷은 memlib · now · recall · rec
   rec.py         개인 사실 원장 — 원자 노트 + 감사 사슬
   fresh_worker.py 광역 작업을 fresh+ephemeral run으로 격리하고 bounded receipt만 반환
   ask_codex.sh   Codex 발주. 기본 fresh 경로는 fresh_worker에 위임
-  doctor.py      설치 검증기
+  doctor.py      설치 검증기 (검사 34개 + 사람이 확인할 4개)
+  test_fresh_install.sh  낯선 첫 설치를 임시 클론에서 재현하는 검사기
 system/          규약. PRD 둘 · rituals · 렌즈 13종 · deep-pass · WORKING-WITH-AI
-.claude/         Claude 훅 3종 + 슬래시 커맨드 4종
+.claude/         Claude 훅 (SessionStart · PreCompact · UserPromptSubmit · PostToolUse · Stop) + 슬래시 커맨드 4종
 .codex/          Codex 훅 2종 (SessionStart · PreCompact)
 templates/       인스턴스가 채울 것들
 ```
+
+## 철학 한 줄
+
+**사람의 주의는 가장 비싼 자원이고, 토큰은 가장 싼 자원이다.** 이 킷은 그 교환을 대신한다.
+사람은 무한 스레드 하나만 상대하고, 그 아래에서 여러 작업이 병렬로 돌다가 끊겨도 이어지며,
+올라오는 것은 전문(transcript)이 아니라 영수증이다. (소유자 판정 2026-09-17, KIT-DR-012)
+
+*Human attention is the most expensive resource; tokens are the cheapest. The kit makes that trade
+for you: you face one endless thread, many tasks run and survive underneath it, and what comes back
+up is a receipt, not a transcript.*
+
+그 교환이 안전하려면 두 규칙이 따라온다. **판정은 영수증으로만** (토큰으로 산 독립 검증의 결과가
+한 줄로 올라와야 사람이 전문을 안 읽는다). **통과와 원인은 따로 검증한다** (게이트는 통과만 말하고,
+왜 실패했는지는 독립 검토가 다시 본다. 2026-09-17 실측: 설치 게이트가 PASS를 만든 날, 독립 감사가
+디스패처의 원인 가설 둘을 정정했다).
 
 ## 설계 원칙 넷
 
@@ -77,8 +104,9 @@ templates/       인스턴스가 채울 것들
 ```bash
 git clone <이 리포> ~/work
 cd ~/work
-bash setup.sh
-python3 tools/doctor.py
+bash setup.sh --name work --context work     # 인자 없이 돌리면 묻는다. tty 없으면 기본값
+bash tools/install_hooks.sh --repair         # pre-commit 후방선 (.git/hooks는 clone에 안 온다)
+python3 tools/doctor.py                      # FAIL 0이면 완료. warn은 상황별 정상, --는 해당 없음
 ```
 
-자세한 절차는 `SETUP.md`. 설치 후 사람이 확인할 것은 `CHECKLIST.md`.
+자세한 절차는 `SETUP.md`. 설치 후 사람이 확인할 것은 `CHECKLIST.md`. 업데이트는 `SETUP.md` §5a.

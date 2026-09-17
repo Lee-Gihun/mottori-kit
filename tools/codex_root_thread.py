@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""기훈의 Codex 루트 스레드 id를 찾아 출력한다.
+"""소유자의 Codex 루트 스레드 id를 찾아 출력한다.
 
-판별 기준은 최신 수정 시각이 아니라 **기훈이 직접 친 발화의 수**다. mtime으로 고르면
+판별 기준은 최신 수정 시각이 아니라 **소유자가 직접 친 발화의 수**다. mtime으로 고르면
 ask_codex.sh가 방금 만든 발주 세션이 잡힌다 (2026-08-22 실측). 제외 대상:
 
 - 서브에이전트 rollout: 첫 줄 session_meta의 thread_source == "subagent" 또는 source.subagent
@@ -18,7 +18,7 @@ SYS = re.compile(r"^\s*<|^\s*#\s*AGENTS\.md instructions|^You are an agent in a 
 
 
 def authored_turns(path):
-    """(기훈 발화 수, session_id) 또는 None (서브에이전트·판독 불가)."""
+    """(소유자 발화 수, session_id) 또는 None (서브에이전트·판독 불가)."""
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
             meta = json.loads(f.readline())

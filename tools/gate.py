@@ -305,8 +305,15 @@ def cmd_check():
                         os.remove(p)
             M.log_run("gate", "pass@Stop", ok=True)
             return 0
-    except Exception:
-        return 0
+    except Exception as e:
+        # 게이트 자신의 예외는 측정 실패다. 조용히 0을 내면 후방선이 fail-open이 된다
+        # (2026-09-17 독립 감사 K: measure()가 터져도 무출력 성공). pending을 남겨 다음 턴이 회수한다.
+        with contextlib.suppress(Exception):
+            _mark(PENDING())
+        with contextlib.suppress(Exception):
+            M.log_run("gate", f"error@Stop:{type(e).__name__}")
+        return _block(f"게이트 자신이 실패했다 ({type(e).__name__}). 검사기를 고치거나 "
+                      "`python3 tools/gate.py status`로 원인을 봐라.")
 
 
 def _read(p):
@@ -351,7 +358,16 @@ def cmd_resume():
                     with contextlib.suppress(OSError):
                         os.remove(p)
             return 0
-    except Exception:
+    except Exception as e:
+        # 막지는 않되 침묵하지 않는다. pending을 유지해 다음 Stop이 다시 검사하게 한다 (독립 감사 K).
+        with contextlib.suppress(Exception):
+            _mark(PENDING())
+        with contextlib.suppress(Exception):
+            print(json.dumps({"hookSpecificOutput": {
+                "hookEventName": "UserPromptSubmit",
+                "additionalContext": f"[게이트] 게이트 자신이 실패했다 ({type(e).__name__}). "
+                                     "지난 턴의 검증 상태를 알 수 없다. `python3 tools/gate.py status`."}},
+                ensure_ascii=False))
         return 0
 
 

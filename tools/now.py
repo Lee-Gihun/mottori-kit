@@ -31,6 +31,10 @@ class LoadedInputChanged(RuntimeInputChanged):
     """An import-time identity changed; continuing could cross the privacy boundary."""
 
 
+class _SkipCheck(Exception):
+    """check() 안에서 '이 인스턴스엔 해당 검사가 없다'를 경고 없이 빠져나가는 신호."""
+
+
 class ConfigChanged(LoadedInputChanged):
     """The privacy routing policy changed during a state transaction."""
 
@@ -199,7 +203,9 @@ def _track_rows():
         warn = " ⚠" if (age is not None and age > M.TRACK_STALE_DAYS) else ""
         rows.append(f"- **{name}** — {snippet or '(갱신줄 없음)'} "
                     f"(파일 {age}일 전{warn}) → `{rel}`")
-    rows.append(f"- **개인** — 정본 `{M.PERSONAL_POINTER}` (개인 영역: NOW에 내용 비표시)")
+    # personal_pointer가 null인 새 인스턴스에서 `None`을 인쇄하지 않는다 (2026-09-17 독립 감사 M).
+    pointer = f"정본 `{M.PERSONAL_POINTER}`" if M.PERSONAL_POINTER else "정본 미지정 (config personal_pointer)"
+    rows.append(f"- **개인** — {pointer} (개인 영역: NOW에 내용 비표시)")
     return rows
 
 
@@ -851,11 +857,16 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
                       name, name))
 
     # 4c) 구글 드라이브 인박스. 올린 것은 무조건 정독까지 간다.
-    #     (기훈 2026-08-25: "구글 드라이브 inbox recording에 올리는건 무조건 정독하는거")
+    #     (인스턴스 규칙 2026-08-25: "inbox recording에 올리는건 무조건 정독하는거")
     #     정독 여부는 판단 대상이 아니므로 게이트로 강제한다.
+    #     인박스 어댑터(tools/drive_inbox.py)는 개인 장비용이라 킷에 안 실린다. 어댑터가 없는
+    #     인스턴스에서는 이 검사 자체가 없는 것이지 실패가 아니다 (2026-09-17 문서 감사: 킷 클론의
+    #     `now.py check`가 매번 "인박스 검사 실패" 경고를 냈다).
     try:
         if os.path.join(root, "tools") not in sys.path:
             sys.path.insert(0, os.path.join(root, "tools"))
+        if not os.path.exists(os.path.join(root, "tools", "drive_inbox.py")):
+            raise _SkipCheck()
         import drive_inbox as _di
         _path, _rows = _di.survey()
         if _path is None:
@@ -870,6 +881,8 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
                     W(True, "drive-inbox:" + _f,
                       "[인박스 미처리] {} — {}{}. python3 tools/drive_inbox.py".format(
                           _f, _st, " ({})".format(_why) if _why else ""))
+    except _SkipCheck:
+        pass
     except Exception as _e:  # noqa: BLE001
         W(False, "drive-inbox-error",
           "[드라이브 인박스 검사 실패] {}".format(_e))

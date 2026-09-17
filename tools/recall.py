@@ -14,7 +14,7 @@ PRD: system/PRD-session-memory.md (v3) §3.4. 잃어버린 게 아니라 안 뒤
 - 표적 질의만. 전체 읽기 금지 (수동 통독은 이득이 소멸한다, 2607.20064).
 - 결과를 컨텍스트에 통째로 붓지 말 것 (리드아웃 붕괴, 2607.01538).
   현재 질문에 묶인 몇 줄로 번역해 쓴다 (2608.12847).
-- 기훈 발화의 원문이 걸린 판정에는 요약이 아니라 이 도구다 (발화=원점).
+- 소유자 발화의 원문이 걸린 판정에는 요약이 아니라 이 도구다 (발화=원점).
 """
 import argparse
 import datetime
@@ -103,7 +103,7 @@ def _source_files(names, all_instances=False):
 
 
 # 발화 정규화 (DR-020, 2026-08-22 Codex와의 토론 라운드 1~3에서 확정)
-# role=user는 "기훈의 발화"와 동의어가 아니다. 두 종류의 오염이 있다.
+# role=user는 "소유자의 발화"와 동의어가 아니다. 두 종류의 오염이 있다.
 #   (1) 시스템 주입: 플러그인 목록·환경 컨텍스트·AGENTS.md 전문·로컬 커맨드 래퍼가 user로 기록
 #   (2) 부모 이력 복제: Codex 서브에이전트 rollout이 부모 대화를 통째로 복사해 별도 파일로 저장.
 #       같은 발화가 N곳에서 잡히고 타임스탬프는 spawn 시각으로 다시 찍혀 시점 판정까지 오염된다.
@@ -287,7 +287,7 @@ def _match_stamps(pattern, sources, all_instances, thinking,
 def find(pattern, role=None, since=None, around=2, max_hits=8, thinking=False, sources=None,
          include_agents=False, include_system=False, all_instances=False,
          order="recent"):
-    """기본은 authored-only: 기훈이 실제로 친 것과 Claude/Codex가 실제로 답한 것만.
+    """기본은 authored-only: 소유자가 실제로 친 것과 Claude/Codex가 실제로 답한 것만.
 
     include_agents=True면 서브에이전트 rollout도 검색하되 부모 복제본은 접어서 표시한다.
     include_system=True면 시스템 주입 레코드도 [주입] 태그와 함께 보여준다.
