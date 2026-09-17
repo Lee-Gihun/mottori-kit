@@ -725,22 +725,53 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
     # **ID와 문구를 가른 이유** (codex 라운드 4): 문구 전체를 ID로 쓰면 표시 문구만 고쳐도
     # 게이트가 "새 이슈"로 막았다. ID엔 상태를 식별하는 것만 넣고 날짜·줄번호·나이는 문구로 뺀다.
     warns = []
+    notices = []
     def W(gated, ident, text):
         warns.append((gated, ident, text))
+
+    def N(ident, text):
+        notices.append((ident, text))
 
     def finish():
         if issues:
             # 계약: `안정ID\t표시문구`, 시간 유발은 `~` 접두, 마지막 줄은 트레일러.
             gated = 0
+            for ident, text in notices:
+                print(f"~{ident}\t{text}")
             for gated_issue, ident, text in warns:
                 print(f"{ident if gated_issue else '~' + ident}\t{text}")
                 gated += 1 if gated_issue else 0
             print(f"#issues {gated}")
             return 0
+        for _ident, text in notices:
+            print("--", text)
         for _gated, _ident, text in warns:
             print("⚠", text)
         print(f"check: 경고 {len(warns)}건" if warns else "check: 깨끗함")
         return len(warns)
+
+    # 설치 전 개발 트리와 config만 사라진 반설치를 구분한다. root override는 아래의
+    # 검출기 단위 fixture가 쓰는 가상 경로라 런타임 설치 상태로 분류하지 않는다.
+    if os.path.realpath(root) == os.path.realpath(M.ROOT):
+        config_path = os.path.join(root, "system", "memory-config.json")
+        if not os.path.isfile(config_path):
+            state_dir = os.path.join(root, "state")
+            private_state_dir = os.path.join(root, "_private", "state")
+            state_dirs = (state_dir, private_state_dir)
+            has_now = any(os.path.isfile(os.path.join(path, "NOW.md"))
+                          for path in state_dirs)
+            has_journal = any(_glob.glob(os.path.join(path, "journal-*.md"))
+                              for path in state_dirs)
+            has_private_threads = os.path.isfile(
+                os.path.join(private_state_dir, "threads.json"))
+            if has_now or has_journal or has_private_threads:
+                W(True, "config-absent",
+                  "[NOW config 부재] state 입력은 있지만 "
+                  "system/memory-config.json이 없음")
+            else:
+                N("now-not-applicable",
+                  "[NOW 검사 해당없음] config와 state 입력이 없는 설치 전 개발 트리")
+            return finish()
 
     # 1) 트랙 정본 낙후: journal의 해당 트랙 최신 사건보다 정본 파일이 오래됨
     #    시간만 흘러서는 안 생긴다 (codex가 시계를 9/1로 고정해 확인). 편집 유발이라 gated.

@@ -156,7 +156,7 @@ def test_S2_G1_G2_force_add_and_work_tracked_changes_are_blocked() -> None:
 
 
 def test_tracked_public_state_is_not_forbidden() -> None:
-    """추적 중인 공개 state(원 인스턴스 규약)는 위반이 아니다. _private/는 force-add여도 항상 위반."""
+    """Tracked public state is allowed by the original instance contract; _private/ never is."""
     root = _repo("personal")
     try:
         (root / ".gitignore").write_text("/_private/\n", encoding="utf-8")
@@ -177,7 +177,7 @@ def test_tracked_public_state_is_not_forbidden() -> None:
 
 
 def test_tracked_markdown_symlink_in_head_is_not_reflagged() -> None:
-    """HEAD에 이미 커밋된 .md symlink는 이번 커밋의 위반이 아니다. 새로 올리는 symlink는 여전히 위반."""
+    """A .md symlink already in HEAD is not reflagged, but a newly staged symlink is."""
     root = _repo()
     try:
         made = subprocess.run(
@@ -200,7 +200,7 @@ def test_tracked_markdown_symlink_in_head_is_not_reflagged() -> None:
 
 
 def test_prepush_allows_presetup_kit_tree_and_blocks_unknown_context() -> None:
-    """config 없는 킷 트리(setup.sh+templates)는 push 허용을 명시 줄로 내고, 그 밖의 판정 불능은 차단."""
+    """Allow a pre-setup kit tree explicitly; block other cases that cannot be classified."""
     root = _repo("personal")
     try:
         (root / "system" / "memory-config.json").unlink()
@@ -309,7 +309,7 @@ def test_H03_H04_stop_hook_active_never_skips_a_pending_gate() -> None:
 
 def test_sync_inventory_is_single_source_and_partial_copy_rolls_back() -> None:
     if not (HERE / "sync_engine.sh").is_file():
-        # 킷→인스턴스 각인 복사 도구는 킷 쪽에만 있다 (인스턴스 kit_sync NOT_SYNCED).
+        # The stamped kit-to-instance copier exists only in the kit (instance kit_sync NOT_SYNCED).
         print("- sync inventory: not applicable here (no tools/sync_engine.sh: installed instance)")
         return
     instance = Path(tempfile.mkdtemp(prefix="sync-rollback-"))

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""setup.sh의 v1/v2/v3→v4 migration과 기존 v4 보존 privacy E2E.
+"""Privacy E2E for setup.sh v1/v2/v3 to v4 migration and existing-v4 preservation.
 
-배포 킷에만 setup.sh가 있으므로 이 suite도 킷 전용이다. 각 case는 임시 clone 모양에서 돌며
-실제 인스턴스 config/state에는 손대지 않는다.
+Only the distribution kit has setup.sh, so this suite is kit-only. Each case runs in a
+temporary clone-shaped tree and never touches real instance config or state.
 """
 import json
 import os
@@ -54,8 +54,8 @@ def fixture(old_cfg, rows):
             json.dump(old_cfg, f, ensure_ascii=False, indent=2)
     with open(os.path.join(root, "state", "journal-2026-01.md"), "w", encoding="utf-8") as f:
         f.write("# journal\n\n" + "".join(rows))
-    # 이 E2E의 관측 대상은 setup migration과 실제 now engine이다. 주변 doctor/gate는 별도
-    # suite가 소유하므로 임시 clone에서는 deterministic no-op으로 둔다.
+    # This E2E observes setup migration and the real now engine. Separate suites own the
+    # surrounding doctor and gate, so use deterministic no-ops in the temporary clone.
     for name in ("doctor.py", "gate.py"):
         with open(os.path.join(root, "tools", name), "w", encoding="utf-8") as f:
             f.write("#!/usr/bin/env python3\nraise SystemExit(0)\n")
@@ -63,11 +63,12 @@ def fixture(old_cfg, rows):
 
 
 def fixture_env(root, env=None):
-    """픽스처의 서브프로세스는 항상 자기 root를 인스턴스로 본다.
+    """Make every fixture subprocess treat its own root as the instance.
 
-    setup.sh는 `MOTTORI_INSTANCE`를 export하는데, setup 안에서 doctor가 이 테스트를 돌리면
-    그 값이 상속돼 now.py가 부모 인스턴스의 state를 읽었다 (2026-09-17 실측: 셸에서는 13/13,
-    setup 안에서는 11/13). 테스트가 호출자의 환경에 따라 결과가 달라지면 테스트가 아니다."""
+    setup.sh exports `MOTTORI_INSTANCE`. When doctor ran this test from setup, the inherited
+    value made now.py read the parent instance state (2026-09-17 measurement: 13/13 from a
+    shell, 11/13 from setup). A test whose result depends on the caller environment is not a test.
+    """
     merged = dict(os.environ if env is None else env)
     merged["MOTTORI_INSTANCE"] = root
     return merged
@@ -96,7 +97,7 @@ def text(root, rel):
 
 
 def file_snapshot(root):
-    """작은 fixture tree의 파일 bytes. hostile target 무변경 검증용."""
+    """File bytes from a small fixture tree, used to prove a hostile target is unchanged."""
     out = {}
     for base, dirs, files in os.walk(root):
         dirs.sort()
@@ -115,7 +116,8 @@ def assert_setup_aborts_without_config_overwrite(root):
     after = open(cfg_path, "rb").read()
     assert result.returncode != 0, result.stdout + result.stderr
     assert before == after
-    # preflight가 journal을 먼저 보므로 백업 전에 멈출 수 있다 (2026-09-17). 백업이 있다면 원본과 같다.
+    # Preflight checks the journal first, so it may stop before backup (2026-09-17).
+    # If a backup exists, it must match the original.
     assert (not os.path.exists(cfg_path + ".bak")) or open(cfg_path + ".bak", "rb").read() == before
 
 
@@ -320,8 +322,8 @@ def test_malformed_legacy_journal_aborts_without_overwriting_v2_config():
         after = open(os.path.join(root, "system", "memory-config.json"), "rb").read()
         assert result.returncode != 0
         assert before == after
-        # preflight가 journal을 먼저 검사하므로 백업을 만들기 전에 멈춘다 (2026-09-17). 백업이 있다면
-        # 원본과 같아야 하고, 없는 것이 정상이다.
+        # Preflight checks the journal first and stops before creating a backup (2026-09-17).
+        # If a backup exists it must match the original; no backup is the normal outcome.
         bak = os.path.join(root, "system", "memory-config.json.bak")
         assert (not os.path.exists(bak)) or open(bak, "rb").read() == before
     finally:

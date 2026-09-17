@@ -17,6 +17,47 @@ STRINGS = {
         "en": "codex CLI missing; ask_codex.sh unavailable. Check permissions/installation",
         "ko": "codex CLI 없음 — 티키타카(ask_codex.sh) 불가. 권한/설치 확인",
     },
+    "hookdiag.codex_missing": {"en": "codex CLI missing", "ko": "codex CLI 없음"},
+    "hookdiag.initialize_failed": {
+        "en": "codex initialize failed: {error}",
+        "ko": "codex initialize 실패: {error}",
+    },
+    "hookdiag.list_failed": {
+        "en": "hooks/list failed: {error}",
+        "ko": "hooks/list 실패: {error}",
+    },
+    "hookdiag.list_empty": {
+        "en": "hooks/list returned empty data",
+        "ko": "hooks/list가 빈 data를 반환",
+    },
+    "hook_canary.not_armed": {
+        "en": "canary stopped: SessionStart is not armed ({injector})",
+        "ko": "canary 중단: SessionStart armed가 아님 ({injector})",
+    },
+    "hook_canary.process_failed": {
+        "en": "{kind} process failed: {error}",
+        "ko": "{kind} process 실패: {error}",
+    },
+    "hook_canary.runtime_failed": {
+        "en": "{runtime} canary failed: {error_type}: {error}",
+        "ko": "{runtime} canary 실패: {error_type}: {error}",
+    },
+    "hook_canary.persist_failed": {
+        "en": "failed to save canary results: {error_type}: {error}",
+        "ko": "canary 결과 저장 실패: {error_type}: {error}",
+    },
+    "codex_root.dispatch_prefix": {
+        "en": "[Claude Code requested ",
+        "ko": "[Claude Code가 ",
+    },
+    "hook.sessionstart_failed": {
+        "en": "[kit] State injection failed (now.py is missing or errored). Run `python3 tools/doctor.py`; until fixed, read state/NOW.md together with _private/state/NOW.md when it exists. A missing local overlay means unavailable, not no state.",
+        "ko": "[kit] 상태 자동 주입이 실패했다 (now.py 없음 또는 오류). `python3 tools/doctor.py`로 진단하고, 그동안은 state/NOW.md와 존재할 때 _private/state/NOW.md를 함께 읽어라. local overlay 부재는 unavailable이지 상태 없음이 아니다.",
+    },
+    "hook.precompact_failed": {
+        "en": "precompact hook failed",
+        "ko": "precompact 훅 실패",
+    },
     "doctor.claude_missing": {
         "en": "claude CLI missing; headless verification (claude -p) unavailable",
         "ko": "claude CLI 없음 — 헤드리스 검증(claude -p) 불가",

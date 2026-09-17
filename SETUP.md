@@ -89,6 +89,13 @@ the instance name and `work` as the context, then prints that choice. On a perso
    `state/.gate-baseline.json`.
 5. One final run of `python3 tools/doctor.py`, with its result displayed.
 
+Before setup, a tree with neither config nor state input reports the NOW check as explicitly not applicable.
+If `state/NOW.md` or a journal remains while `system/memory-config.json` is absent, the tree is instead a partial
+installation and the gate fails closed with `config-absent`. In that state, `now.py render` freezes public
+publishing and leaves an old NOW file unchanged, including one without a `state-content-sha256` marker. Restore
+or create the config, then run `python3 tools/now.py render`; do not add a marker by hand. Evidence:
+`test:tools/test_devtree_gate.py::test_partial_install_without_config_fails_closed`.
+
 To upgrade an existing schema v1, v2, or v3 instance to v4, or to reapply setup while preserving a v4
 configuration, run `bash setup.sh --force`. The existing config values become the defaults for name and context.
 The context does not change to `work` when no tty is present. The existing config is saved as `.bak`. Tracks,

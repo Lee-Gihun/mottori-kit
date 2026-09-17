@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
-"""소유자의 Codex 루트 스레드 id를 찾아 출력한다.
+"""Find and print the owner's Codex root thread ID.
 
-판별 기준은 최신 수정 시각이 아니라 **소유자가 직접 친 발화의 수**다. mtime으로 고르면
-ask_codex.sh가 방금 만든 발주 세션이 잡힌다 (2026-08-22 실측). 제외 대상:
+Rank by the **number of owner-authored turns**, not the latest modification time. Ranking
+by mtime selects the dispatch session just created by ask_codex.sh (measured 2026-08-22).
+Exclude:
 
-- 서브에이전트 rollout: 첫 줄 session_meta의 thread_source == "subagent" 또는 source.subagent
-- 시스템 주입 레코드: role=user지만 태그로 시작하거나 AGENTS.md 전문, team-of-agents 프리앰블
-- ask_codex.sh 발주문: "[Claude Code가 " 로 시작하는 프롬프트
+- Subagent rollouts: first-line session_meta has thread_source == "subagent" or source.subagent.
+- System injection records: role=user but starting with a tag, the full AGENTS.md text, or the
+  team-of-agents preamble.
+- ask_codex.sh dispatch prompts: prompts beginning with the Korean dispatch prefix.
 """
 import glob
 import json
 import os
 import re
 
-DISPATCH = re.compile(r"^\[Claude Code가 ")
+import i18n
+
+DISPATCH = re.compile(r"^" + re.escape(i18n.STRINGS["codex_root.dispatch_prefix"]["ko"]))
 SYS = re.compile(r"^\s*<|^\s*#\s*AGENTS\.md instructions|^You are an agent in a team")
 
 
 def authored_turns(path):
-    """(소유자 발화 수, session_id) 또는 None (서브에이전트·판독 불가)."""
+    """Return (owner-authored turn count, session_id), or None for subagents/unreadable data."""
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
             meta = json.loads(f.readline())

@@ -22,7 +22,6 @@ ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "system" / "review-manifest.yaml"
 MANIFEST_REL = "system/review-manifest.yaml"
 DELIVERY_PATHS = {
-    "REPORT.md",
     "system/enforcement-matrix.yaml",
     "system/language-pending.txt",
     "system/reviews/content-audit.tsv",
@@ -33,6 +32,7 @@ DELIVERY_PATHS = {
     "tools/manifest_build.py",
     "tools/test_bypass_pins.py",
     "tools/test_context_budget.py",
+    "tools/test_devtree_gate.py",
     "tools/test_egress.py",
     "tools/test_enforce.py",
     "tools/test_language.py",
@@ -126,12 +126,10 @@ def build() -> dict:
             canonical = existing.get(path[:-len(".ko.md")] + ".md", {})
             default_kind = canonical.get("kind", "evidence")
             default_consumers = canonical.get("consumers", ["human"])
-        elif path == "tools/test_language.py":
+        elif path in ("tools/test_devtree_gate.py", "tools/test_language.py"):
             default_kind, default_consumers = "tool", ["tool"]
         elif path == "system/language-pending.txt":
             default_kind, default_consumers = "evidence", ["human", "tool"]
-        elif path == "REPORT.md":
-            default_kind, default_consumers = "evidence", ["human"]
         elif path.startswith(".github/workflows/") and path.endswith((".yml", ".yaml")):
             # remote gate definitions: run by CI, read by nobody else
             default_kind, default_consumers = "tool", ["tool"]

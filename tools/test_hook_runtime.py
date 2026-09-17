@@ -93,9 +93,11 @@ def _fixture_repo():
     return root
 
 
-def _installer(root, mode):
+def _installer(root, mode, env_extra=None):
+    env = dict(os.environ)
+    env.update(env_extra or {})
     return subprocess.run(["bash", "tools/install_hooks.sh", mode], cwd=root,
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, env=env)
 
 
 def _hook_path(root):
@@ -127,14 +129,16 @@ def test_installer_check_is_read_only_and_repair_is_exact():
                  os.stat(hook).st_mode, os.stat(hook).st_mtime_ns)
         assert r.returncode == 0 and before == after
 
-        # Sentinel 도입 직전 canonical은 명시된 legacy hash로만 owned migration 대상이다.
+        # The canonical hook from immediately before the sentinel was introduced is owned
+        # migration material only when it matches the explicit legacy hash.
         legacy = open(hook, encoding="utf-8").read().replace(
             "# MOTTORI_PRECOMMIT_HOOK_V1\n", "")
         with open(hook, "w", encoding="utf-8") as f:
             f.write(legacy)
-        r = _installer(root, "--check")
-        assert r.returncode != 0 and "owned-drift" in (r.stdout + r.stderr)
-        r = _installer(root, "--repair")
+        legacy_hash = hashlib.sha256(legacy.encode("utf-8")).hexdigest()
+        r = _installer(root, "--check", {"MOTTORI_LEGACY_HOOK_HASHES": legacy_hash})
+        assert r.returncode != 0 and "owned-drift" in (r.stdout + r.stderr), r.stdout + r.stderr
+        r = _installer(root, "--repair", {"MOTTORI_LEGACY_HOOK_HASHES": legacy_hash})
         assert r.returncode == 0 and open(hook, "rb").read() == template
         assert [x for x in os.listdir(os.path.dirname(hook)) if x.startswith("pre-commit.bak.")]
     finally:
@@ -245,7 +249,7 @@ def test_all_canary_persists_runtime_results_without_nonce():
 
 
 def test_precommit_now_check_reads_extracted_index_tree():
-    """live NOW가 깨끗해도 staged journal/NOW 불일치는 index 검사에서 잡혀야 한다."""
+    """The index check must catch staged journal/NOW drift even when live NOW is clean."""
     import gate
 
     root = tempfile.mkdtemp(prefix="staged-now-source-")
@@ -286,8 +290,8 @@ def test_precommit_now_check_reads_extracted_index_tree():
              "[system/state] INDEX-BASE"],
             cwd=root, env=env, capture_output=True, text=True)
         assert first.returncode == 0, first.stdout + first.stderr
-        # checkout-index는 Git에 없는 mtime을 보존하지 않는다. 동일 bytes를 새 mtime으로
-        # 꺼낸 clean tree가 false-stale이면 pre-commit은 항상 막히게 된다.
+        # checkout-index cannot preserve an mtime that Git does not store. If a clean tree
+        # extracted with identical bytes and a new mtime appears stale, every commit is blocked.
         shutil.copytree(root, extracted, copy_function=shutil.copy)
         local_state = os.path.join(extracted, "_private", "state")
         os.makedirs(local_state, exist_ok=True)
@@ -311,7 +315,7 @@ def test_precommit_now_check_reads_extracted_index_tree():
                        for issue in clean["now-check"]), clean["now-check"]
         assert "now-input-newer" not in clean["now-check"], clean["now-check"]
 
-        # Input bytes가 그대로라도 staged NOW 본문만 변조되면 marker가 불일치해야 한다.
+        # Even with unchanged input bytes, tampering only with staged NOW must mismatch the marker.
         now_path = os.path.join(extracted, "state", "NOW.md")
         clean_now = open(now_path, encoding="utf-8").read()
         with open(now_path, "w", encoding="utf-8") as f:

@@ -79,6 +79,13 @@ tty가 없으면(에이전트·CI·파이프) 묻지 않고 기본값(이름=디
 4. `python3 tools/linkcheck.py` 실행 기록(`state/.tool-runs.log`) + 게이트 기준선 `state/.gate-baseline.json`
 5. 마지막에 `python3 tools/doctor.py`를 한 번 돌려 결과를 보여준다
 
+setup 전에 config와 state 입력이 둘 다 없는 트리는 NOW 검사가 명시적 `해당없음`을 낸다.
+`system/memory-config.json`만 없고 `state/NOW.md` 또는 journal이 남아 있으면 반쪽 설치로 보고
+`config-absent`로 fail-close한다. 이 상태에서 `now.py render`는 public publish를 동결하고,
+`state-content-sha256` 표지가 없는 예전 NOW도 그대로 둔다. config를 복원하거나 만든 다음
+`python3 tools/now.py render`를 실행하고 표지를 손으로 넣지 마라. 근거:
+`test:tools/test_devtree_gate.py::test_partial_install_without_config_fails_closed`.
+
 기존 schema v1/v2/v3 인스턴스를 v4로 올리거나 v4 설정을 보존해 다시 적용할 때는
 `bash setup.sh --force`를 실행한다. 이름·context는 기존 config 값이 기본값이 된다 (tty가 없어도
 work로 바뀌지 않는다). 기존 config는 `.bak`으로 남고 트랙·검사·공개 목록은 보존된다.

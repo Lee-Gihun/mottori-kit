@@ -37,6 +37,7 @@ Codex 편집·interrupt는 못 본다. 그래서 후방선 둘이 있다.
     python3 tools/gate.py check     Stop 훅에서
     python3 tools/gate.py resume    UserPromptSubmit 훅에서
     python3 tools/gate.py precommit pre-commit 훅에서 (fail closed)
+    python3 tools/gate.py selfcheck direct/precommit gated ID 집합 비교
     python3 tools/gate.py baseline  현재 이슈 집합을 기준선으로 (사람만)
     python3 tools/gate.py status    지금 상태 보기
 """
@@ -543,12 +544,74 @@ def cmd_precommit():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _gated_issue_ids(measured):
+    """Checker-qualified gated IDs make cross-mode sets directly comparable."""
+    return sorted(
+        f"{checker}:{ident}"
+        for checker, issues in measured.items()
+        for ident in (issues or set())
+    )
+
+
+def cmd_selfcheck():
+    """Compare live direct measurement with the measurement used by precommit."""
+    if not _root_ok():
+        print(f"selfcheck: FAIL root mismatch ({M.ROOT} vs {SELF_ROOT})")
+        return 1
+    tmp = tempfile.mkdtemp(prefix="mottori-gate-selfcheck-")
+    try:
+        extracted = subprocess.run(
+            ["git", "-C", M.ROOT, "checkout-index", "-a", "--prefix", tmp + "/"],
+            capture_output=True, text=True,
+        )
+        if extracted.returncode != 0:
+            print("selfcheck: FAIL could not extract the index")
+            return 1
+        bad = _staged_tools_compile(tmp)
+        if bad:
+            print("selfcheck: FAIL staged Python is invalid: " + ", ".join(bad))
+            return 1
+        try:
+            paths = _staged_markdown_paths()
+        except ValueError as error:
+            print(f"selfcheck: FAIL {error}")
+            return 1
+        filelist = os.path.join(tmp, ".gate-filelist")
+        with open(filelist, "w", encoding="utf-8") as output:
+            output.write("".join(path + "\n" for path in paths))
+
+        direct = measure()
+        precommit = measure(tree=tmp, filelist=filelist)
+        dead_direct = sorted(name for name, value in direct.items() if value is None)
+        dead_precommit = sorted(name for name, value in precommit.items() if value is None)
+        if dead_direct or dead_precommit:
+            print("selfcheck: FAIL checker measurement unavailable")
+            print("  direct-dead=" + json.dumps(dead_direct, ensure_ascii=False))
+            print("  precommit-dead=" + json.dumps(dead_precommit, ensure_ascii=False))
+            return 1
+
+        direct_ids = _gated_issue_ids(direct)
+        precommit_ids = _gated_issue_ids(precommit)
+        if direct_ids != precommit_ids:
+            print("selfcheck: WARN direct/precommit gated issue ID sets differ")
+            print("  direct=" + json.dumps(direct_ids, ensure_ascii=False))
+            print("  precommit=" + json.dumps(precommit_ids, ensure_ascii=False))
+        else:
+            print(f"selfcheck: PASS gated issue ID sets match ({len(direct_ids)})")
+        return 0
+    except Exception as error:
+        print(f"selfcheck: FAIL {type(error).__name__}: {error}")
+        return 1
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
     return {"dirty": cmd_dirty, "check": cmd_check, "resume": cmd_resume,
             "precommit": cmd_precommit, "baseline": cmd_baseline,
             "seal-baseline": cmd_seal_baseline,
-            "status": cmd_status}.get(cmd, cmd_status)()
+            "status": cmd_status, "selfcheck": cmd_selfcheck}.get(cmd, cmd_status)()
 
 
 if __name__ == "__main__":

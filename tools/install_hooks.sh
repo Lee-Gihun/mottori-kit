@@ -59,11 +59,20 @@ PUSH_HOOK="$DIR/pre-push"
 # 2026-09-18 실측: v0.4~v0.6으로 배포된 precommit-hook.sh(동일 내용) 해시가 빠져 있어 실제 설치본 전부가
 # foreign으로 분류되고 CHANGELOG의 "[해야 함] install_hooks.sh --repair"를 수행할 수 없었다.
 LEGACY_HASHES="
+a90b84bf06dbc075c3c269b3e61c61ebdf25ea55f4fb8bd268f24fe1acc41c3e
 c078fa3e14b9a9152bad2ba4540efac5e3ca19e9d8b7467028e07f80dd022141
 28d6734242d51d3b6d63c4b31796864d659c320b85eb48fe803a5d7f807e12ee
 89fe10c571d56547e4235da07a777490f31e32fd2b6169d47bd49f5b4cda261e
 97c1f2144a63fbc3fb120cce56bd32a14b77948872183b73435a2e985fd951f9
+2749f33d184abd3c18069f206e9d3717acc4d56e9f1bee68dce6517298e4e7ee
 "
+# Tests and migrations may add hashes without editing this file; a hook marked owned only gets
+# replaced by our own template, so this cannot make the installer overwrite something with foreign code.
+if [[ -n "${MOTTORI_LEGACY_HOOK_HASHES:-}" ]]; then
+  LEGACY_HASHES="$LEGACY_HASHES
+${MOTTORI_LEGACY_HOOK_HASHES//,/
+}"
+fi
 
 sha256() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -75,13 +84,24 @@ sha256() {
   fi
 }
 
+# Ownership stamp: the installer records the sha256 of what it installed. A hook whose hash equals its
+# stamp is ours even after the template changed (2026-09-18 twice: a template edit orphaned every
+# installed hook as "foreign" and the hook self-check silently blocked all commits). Hand-maintained
+# LEGACY_HASHES stays only for installs made before the stamp existed.
+STAMP="$DIR/mottori-hooks.stamp"
+stamped_hash() {  # stamped_hash <hook-basename>
+  [[ -f "$STAMP" ]] && awk -v n="$1" '$1==n {print $2}' "$STAMP" || true
+}
 classify() {
   local target="$1"
+  local name; name="$(basename "$target")"
   if [[ ! -e "$target" ]]; then
     echo "missing"
   elif cmp -s "$TEMPLATE" "$target" && [[ -x "$target" ]]; then
     echo "current"
   elif cmp -s "$TEMPLATE" "$target"; then
+    echo "owned-drift"
+  elif [[ -n "$(stamped_hash "$name")" && "$(stamped_hash "$name")" == "$(sha256 "$target")" ]]; then
     echo "owned-drift"
   elif grep -Fxq "$(sha256 "$target")" <<< "$LEGACY_HASHES"; then
     echo "owned-drift"
@@ -191,6 +211,8 @@ if [[ "$GOT" != "$NONCE" ]]; then
   echo "git dispatcher probe 실패, 원상 복구: $HOOK" >&2
   exit 1
 fi
+
+printf 'pre-commit %s\npre-push %s\n' "$(sha256 "$HOOK")" "$(sha256 "$PUSH_HOOK")" > "$STAMP"
 
 if [[ "$LANG_CODE" == "en" ]]; then
   echo "current: $HOOK + $PUSH_HOOK (exact template + executable + direct hook probe + sealed baseline)"
