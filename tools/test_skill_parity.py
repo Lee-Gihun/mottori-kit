@@ -37,14 +37,14 @@ def test_canonical_contract_is_machine_visible():
     assert meta["side_effects"] == "proposals-only"
     assert meta["kit_writes"] == "0"
     assert meta["human_gate"] == "required"
-    assert "paper:<arXiv id 또는 DOI>" in source
+    assert "paper:<arXiv id or DOI>" in source
     assert "experiment:PTK-<8HEX>-E01" in source
 
 
 def test_paper_marker_contract_matches_evidence_schema():
     source = SOURCE.read_text(encoding="utf-8")
     schema = EVIDENCE_SCHEMA.read_text(encoding="utf-8")
-    canonical = "`paper:<arXiv id 또는 DOI>`"
+    canonical = "`paper:<arXiv id or DOI>`"
     assert canonical in source
     assert canonical in schema
     assert "paper: <stable-paper-id-or-url>" not in source

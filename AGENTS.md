@@ -1,68 +1,85 @@
-# 세션 지침
+Korean: `AGENTS.ko.md`
 
-이 워크스페이스는 코드베이스가 아니라 **작업 저장소**다. 여러 트랙을 한 자리에서 굴리고,
-세션은 무한히 이어지며, 컨텍스트는 주기적으로 압축된다. 아래 일곱 개는 그 조건에서
-실측으로 값을 증명한 규약이다.
+# Session instructions
 
-인스턴스 고유 규약(이 워크스페이스에서만 참인 것)은 `system/instance-rules.md`에 있다.
-없으면 아직 안 쓴 것이다 — `templates/instance-rules.md`를 복사해서 채워라.
+This workspace is not a codebase. It is a **work repository**. It runs multiple tracks in one place. Sessions
+continue indefinitely, and context is compacted periodically. The seven rules below have proved their value by
+measurement under those conditions.
 
-**엔진 파일과 인스턴스 파일은 쌍을 이룬다.** 왼쪽은 `git pull`이 덮으므로 고치지 않는다.
-오른쪽은 git 밖이라 안전하다. 왼쪽에 뭔가 쓰고 싶으면 오른쪽에 써라.
+Instance-specific rules, which are true only in this workspace, live in `system/instance-rules.md`. If that file
+does not exist, the rules have not been written yet. Copy `templates/instance-rules.md` and complete it.
 
-| 엔진 (업스트림 소유) | 인스턴스 (여기서 쓴다) |
+**Engine files and instance files come in pairs.** `git pull` can overwrite the engine file on the left, so do not
+edit it. The instance file on the right is outside Git and safe to edit. If you want to add something to the left,
+put it on the right instead.
+
+| Engine, owned upstream | Instance, written here |
 |---|---|
-| `AGENTS.md` 상시 코어 7 (`CLAUDE.md`가 import) | `system/instance-rules.md` |
+| `AGENTS.md`, the seven always-on core rules imported by `CLAUDE.md` | `system/instance-rules.md` |
 | `system/rituals.md` | `system/rituals.local.md` |
 | `system/kit-decisions.md` | `system/decisions.md` |
 
-## 상시 코어 (이 7개만 항상 유효 — 근거 없는 규칙은 두지 않는다)
+## Always-on core: Only these seven rules are always active
 
-1. **불가침.** 동결 구역은 재구성·삭제·추가 금지, 읽기만 한다. 외부 발송은 사람 손으로만.
-   이 인스턴스의 동결 구역 목록과 데이터 국경은 `system/instance-rules.md`.
-   *(Why: 증빙·원료·개인 영역은 복구 불가 — 한 번의 실수가 파산인 영역. 그리고 국경은
-   규율이 아니라 구조로 막는다 — `.gitignore`와 `tools/doctor.py`의 밸브 검사가 그 집행부다.)*
+Do not keep rules without evidence.
 
-2. **상태 정본 = public NOW + local overlay.** 세션 시작·재개·컴팩션 후 훅이 합친 view를
-   확인한다. 훅이 없으면 `state/NOW.md`와, 존재할 때 `_private/state/NOW.md`를 함께 읽는다.
-   public만 있으면 local 상태는 **unavailable**이지 "없음"이 아니다. 컴팩션 요약·기억과
-   충돌하면 이 view가 이긴다. 결정·국면·정정·교훈은 그 턴에 `python3 tools/now.py log
-   "[track/type] 한 줄"`; 개인·회사 유래 또는 불확실하면 `log --private`로 내린다. *(Why:
-   상태를 대화에 두면 압축이 삼키고, local 사건을 public NOW에 섞으면 Git이 국경을 우회한다.)*
+1. **Do not touch frozen areas.** Do not reorganize, delete from, or add to them. Read only. A person must perform
+   every external send. The frozen-area list and data boundaries for this instance are in
+   `system/instance-rules.md`.
+   *(Why: evidence, source material, and personal areas may be impossible to recover. One mistake can be
+   catastrophic. Boundaries are enforced by structure, not discipline. The valve checks in `.gitignore` and
+   `tools/doctor.py` provide that enforcement.)*
 
-3. **단언 전 조회, 모르면 모른다.** 개인 사실 = `python3 tools/rec.py find` + 핫셋 · 과거 발화
-   원문 = `python3 tools/recall.py find` · 처방 전엔 "이미 뭘 했는지"부터 묻는다. 소유자의
-   결정·선호·계획은 **그의 발화가 원점** — 요약·기억은 파생물이다. *(Why: 귀속 편향 4회 실측 —
-   추측이 정본을 오염시킨다.)*
+2. **The state source of truth is public NOW plus the local overlay.** After session start, resume, or compaction,
+   inspect the view merged by the hook. Without the hook, read `state/NOW.md` together with
+   `_private/state/NOW.md` when the latter exists. If only the public file is present, local state is
+   **unavailable**, not absent. This view wins over a conflicting compaction summary or memory. Log decisions,
+   phase changes, corrections, and lessons in the same turn with `python3 tools/now.py log "[track/type] one
+   line"`. Use `log --private` for events derived from personal or company material, or when their status is
+   uncertain.
+   *(Why: compaction swallows state kept in conversation. Mixing a local event into public NOW bypasses the Git
+   boundary.)*
 
-4. **깊은 스레드 복귀 = 서류철 먼저.** 등록된 스레드는 `python3 tools/now.py threads`.
-   깊은 세션을 떠날 땐 델타 5줄 append. *(Why: 컴팩션은 지금 태스크만 보존하고 다른 스레드의
-   깊이를 뭉갠다 — 복귀 피상성의 직접 차단선.)*
+3. **Look things up before making claims. Say when you do not know.** For personal facts, use
+   `python3 tools/rec.py find` plus the hotset. For original past statements, use
+   `python3 tools/recall.py find`. Before prescribing an action, ask what has already been tried. The owner's own
+   statement is the origin for the owner's decisions, preferences, and plans. Summaries and memories are
+   derivative.
+   *(Why: attribution bias was measured four times. Guessing contaminates the source of truth.)*
 
-5. **아웃바운드 금기.** 외부로 나가는 문안(메일·메시지·문서)에 em-dash 금지 · 발송·커밋·
-   푸시는 사람 손 (명시적으로 위임한 경우만 예외). *(Why: AI-작성 티 방지 + 비가역 행위는
-   소유자 집행 원칙.)*
-   발신 산출물을 쓰거나 의미를 바꿀 때는 멈추지 말고 `system/rituals.md`의 외부 문안 절을 따른다
-   (KIT-DR-008).
+4. **Before returning to a deep thread, read its dossier.** List registered threads with
+   `python3 tools/now.py threads`. Before leaving a deep session, append a five-line delta.
+   *(Why: compaction preserves the current task but flattens depth in other threads. This directly prevents a
+   shallow return.)*
 
-6. **큰 작업(전수 수집·대규모 병렬·장기 실행) 주문 = `system/WORKING-WITH-AI.md` 먼저.**
-   *(Why: 요약이 아니라 계측기 — 660편 실행으로 검증된 프레임.)*
+5. **Outbound restrictions.** Do not use em dashes in outbound email, messages, or documents. A person performs
+   sends, commits, and pushes unless they explicitly delegate the action.
+   *(Why: avoid the appearance of AI-written text, and let the owner execute irreversible actions.)*
+   When writing outbound material or changing its meaning, continue without pausing and follow the "Writing
+   outbound material" section of `system/rituals.md` (KIT-DR-008).
 
-7. **PRD·DR은 대화 중 슬쩍 바꾸지 않는다.** 정책 변경은 문서에서 고치고
-   `system/decisions.md`에 DR로 남긴다. *(Why: 기록 없는 결정이 드리프트와 재논의의 뿌리 —
-   이 규약 자체가 그 실측에서 나왔다.)*
+6. **Before a large task, read `system/WORKING-WITH-AI.md`.** Large tasks include exhaustive collection,
+   large-scale parallel work, and long-running work.
+   *(Why: it is an instrument, not a summary. The framework was verified in a run of 660 items.)*
 
-## 조건부 로드 (해당 상황에서만 읽는다)
+7. **Do not quietly change a PRD or decision record during conversation.** Change policy in the document and add
+   a decision record to `system/decisions.md`.
+   *(Why: unrecorded decisions cause drift and repeated discussion. This rule came from that measured failure.)*
 
-- 세션 의식·외부 문안·문서 규약 상세 → `system/rituals.md`
-- 사고렌즈 → `system/lenses/README.md` (막힌 문제·설계·결정·명시 요청 시만)
-- 총동원 딥패스 → `system/deep-pass.md` (깊이를 주문할 때)
-- 런타임 간 토론 → `system/debate/README.md` (Claude·Codex 비동기 논쟁판)
-- 기억 시스템 spec → `system/PRD-session-memory.md` · 정보 아키텍처 → `system/PRD-info-architecture.md`
-- 설치·이식 → `SETUP.md` · 검증 → `python3 tools/doctor.py`
+## Conditional loading
 
-## 왜 상시 규칙이 일곱 개인가
+Read these only when the stated situation applies.
 
-동시에 지켜지는 지시의 수는 k=5~6에서 막힌다 (`2608.12426`). 규칙을 더 넣으면 각각이
-덜 지켜진다. 그래서 새 규칙을 추가하고 싶을 때의 기본 동작은 **조건부 로드 문서로 보내는 것**이고,
-상시 코어에 올리려면 기존 하나를 내려야 한다.
+- Session rituals, outbound material, and detailed document conventions: `system/rituals.md`
+- Thinking lenses: `system/lenses/README.md`, only for a blocked problem, design, decision, or explicit request
+- Full deep pass: `system/deep-pass.md`, when depth is explicitly requested
+- Cross-runtime debate: `system/debate/README.md`, the asynchronous board for Claude and Codex
+- Memory system specification: `system/PRD-session-memory.md`; information architecture:
+  `system/PRD-info-architecture.md`
+- Installation and migration: `SETUP.md`; verification: `python3 tools/doctor.py`
+
+## Why there are seven always-on rules
+
+The number of instructions followed at once reaches a limit around k=5 to 6 (`2608.12426`). Adding more makes
+each rule less reliable. The default destination for a new rule is therefore a conditionally loaded document. To
+promote a rule into the always-on core, demote an existing one.

@@ -1,11 +1,11 @@
-# 이 인스턴스만의 의식
+# Rituals specific to this instance
 
-*`system/rituals.md`(업스트림 소유)의 확장점이다. 이 파일은 git 밖이라 `git pull`이 안 덮는다.*
-*데이터 국경 선언은 `system/instance-rules.md`가 따로 맡는다 — 여기는 작업 방식만.*
+*This extends the upstream-owned `system/rituals.md`. It lives outside Git, so `git pull` does not overwrite it.*
+*`system/instance-rules.md` owns the data-boundary declaration. This file contains working methods only.*
 
-아직 비어 있다. 이 워크스페이스에서만 참인 절차가 생기면 여기 쌓는다.
-규칙마다 **왜 그런지 한 줄**을 붙인다. 근거를 못 쓰는 규칙은 삭제 후보다.
+It is empty for now. Add procedures that are true only in this workspace. Give every rule **one line explaining
+why**. A rule with no evidence is a deletion candidate.
 
-## 예시 (지우고 쓰면 된다)
+## Example (delete and replace)
 
-- (예) 스탠드업 전에 어제 journal 훑기. *(Why: 어제 결정을 오늘 다시 논의하는 일이 반복돼서.)*
+- Review yesterday's journal before stand-up. *(Why: yesterday's decisions were repeatedly discussed again.)*

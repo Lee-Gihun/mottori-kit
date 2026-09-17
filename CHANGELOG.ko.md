@@ -1,42 +1,42 @@
 # CHANGELOG
 
-**This file records what an existing instance must do, not merely what was added.**
+**이 파일의 형식은 "무엇이 추가됐다"가 아니라 "기존 인스턴스가 무엇을 해야 하는가"다.**
 
-The engine arrives through `git pull`, but **instance-owned files do not**: `system/memory-config.json`,
-`system/instance-rules.md`, `system/decisions.md`, `system/rituals.local.md`, `state/`, and `_private/`. When a new
-engine expects a new field or section in those files, a person must add it. This file records those manual steps.
+엔진은 `git pull`로 온다. 그러나 **인스턴스 소유 파일은 안 온다** — system/memory-config.json,
+system/instance-rules.md, system/decisions.md, system/rituals.local.md, `state/`, `_private/`.
+새 엔진이 그 파일들에 새 필드나 새 절을 기대하면 사람이 직접 넣어야 한다.
+그 "직접 넣어야 하는 것"이 여기 적힌다.
 
-Every item is marked `[Action required]`, `[Note]`, or `[Automatic]`. If any `[Action required]` item is
-outstanding, `python3 tools/doctor.py` fails after the pull.
+각 항목은 `[해야 함]`, `[알아둘 것]`, `[자동]` 중 하나를 단다.
+`[해야 함]`이 하나라도 있으면 pull 뒤에 `python3 tools/doctor.py`가 FAIL을 낸다.
 
 ---
 
-## v0.8 · 2026-09-18 (English canonical migration)
+## v0.8 · 2026-09-18 (영어 정본화)
 
-### `[Automatic]` The first canonical kit surfaces move to English with Korean locale files
+### `[자동]` 첫 킷 표면의 영어 정본과 한국어 로케일 파일
 
-The four root operational documents and AGENTS, three instance templates, five slash commands, the paper-to-kit
-workflow, and the evidence schema and matrix move to English. Korean reader surfaces use the matching `.ko.md`
-file or the `ko` column in `tools/i18n.py`. `tools/test_language.py` rejects Hangul on the migrated surfaces and
-checks the heading shape and relative links of every delivered `.md` and `.ko.md` pair. Other canonical files
-remain migration work.
+루트 운영 문서 넷과 AGENTS, 인스턴스 템플릿 셋, 슬래시 명령 다섯, paper-to-kit
+워크플로, evidence schema와 matrix를 영어로 옮겼다. 한국어 독자 표면은 대응하는
+`.ko.md` 파일 또는 `tools/i18n.py`의 `ko` 열을 쓴다. `tools/test_language.py`는 이행한
+표면의 한글과 배포한 `.md`/`.ko.md` 쌍의 제목 구조·상대 링크 불일치를 거부한다.
+그 밖의 정본 파일은 아직 이행 대상이다.
 
-Evidence: `test:tools/test_language.py::test_pair_fixture`.
+근거: `test:tools/test_language.py::test_pair_fixture`.
 
-Existing instances do not rename their local files. Instance-owned rules remain at
-`system/instance-rules.md`, `system/decisions.md`, and `system/rituals.local.md`; the locale split applies to kit
-files only.
+기존 인스턴스의 local 파일명은 바꾸지 않는다. 인스턴스 소유 규약은 기존처럼
+`system/instance-rules.md`, `system/decisions.md`, `system/rituals.local.md`에 남고 locale 분리는
+킷 파일에만 적용된다.
 
-### `[Automatic]` The language gate fails closed around an explicit migration backlog
+### `[자동]` 언어 게이트가 명시적인 이식 대기 목록을 fail-close로 검사한다
 
-`tools/test_language.py` scans every engine text file. Hangul is allowed only in the `ko` column of the i18n
-table, `.ko.md` locale files, marked evidence quotations with an ASCII English rendering, test-fixture strings,
-and historical CHANGELOG sections. Canonical files that have not migrated yet must be listed one per line in
-`system/language-pending.txt`; an unlisted file with Hangul and a listed file with no Hangul both fail the gate.
-The command summary reports the pending-file count. Required locale pairs are enumerated and checked in both
-directions.
+`tools/test_language.py`는 엔진의 모든 텍스트 파일을 검사한다. 한글은 i18n 표의 `ko` 열, `.ko.md` locale
+파일, ASCII 영어 번역을 괄호 안에 둔 근거 인용, 테스트 fixture 문자열, CHANGELOG 과거 절에서만 허용된다.
+아직 이식하지 않은 정본 파일은 `system/language-pending.txt`에 한 줄에 하나씩 적는다. 한글이 있는데 목록에
+없는 파일과, 목록에 있지만 한글이 없는 낡은 항목은 모두 실패한다. 실행 요약은 pending 파일 수를 표시한다.
+필수 locale 쌍은 코드에 열거하며 양방향 존재를 검사한다.
 
-Evidence: `test:tools/test_language.py::test_pending_contract_fixture`.
+근거 표지: `test:tools/test_language.py::test_pending_contract_fixture`.
 
 ## v0.7 · 2026-09-18 (스웜 파도 2 B그룹 통합)
 

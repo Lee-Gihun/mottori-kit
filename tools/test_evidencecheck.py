@@ -202,6 +202,7 @@ def test_gate_consumes_evidencecheck_issues_end_to_end():
             "tools/test_egress.py",
             "tools/test_enforce.py",
             "tools/test_evidencecheck.py",
+            "tools/test_language.py",
             "tools/test_matrix_check.py",
         }
         for rel in sorted(set(path for path in listed if path) | new_engine_files):
