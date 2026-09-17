@@ -30,14 +30,15 @@ def test_capability_roles_do_not_collapse():
 
 
 def test_gate_unit_rejects_current_only_checker_key():
+    """이름은 유지(근거 표지 호환), 계약은 2026-09-18에 바뀌었다: 검사기 추가는 빈 기준선(이슈 0이면 통과·기록),
+    검사기 제거는 차단. 옛 계약(추가도 차단)은 검사기 추가 커밋을 교착시켰다."""
     import gate
-    reason, shrink = gate._verdict(
-        {"linkcheck": set(), "new-checker": set()},
-        {"linkcheck": set()},
-        "ok",
-    )
-    assert reason is not None and "new-checker" in reason
-    assert shrink is False
+    reason, pull = gate._verdict({"linkcheck": set(), "new-checker": set()}, {"linkcheck": set()}, "ok")
+    assert reason is None and pull is True, (reason, pull)
+    reason, pull = gate._verdict({"linkcheck": set(), "new-checker": {"n|1"}}, {"linkcheck": set()}, "ok")
+    assert reason is not None and "n|1" in reason and pull is False, (reason, pull)
+    reason, pull = gate._verdict({"linkcheck": set()}, {"linkcheck": set(), "gone": set()}, "ok")
+    assert reason is not None and "gone" in reason and pull is False, (reason, pull)
 
 
 def test_doctor_rejects_declared_hook_with_invalid_command():
