@@ -83,8 +83,8 @@ def digest(path):
     return hashlib.sha256(open(path, "rb").read()).hexdigest()
 
 
-# now.py는 현재 시각으로 저널 파일명을 정한다. 하드코딩하면 매달 1일에 깨진다.
-# (2026-09-01 실측: 월 롤오버로 13건 동시 실패)
+# now.py derives the journal filename from the current time. Hard-coding it breaks on the
+# first day of each month (2026-09-01 measurement: 13 simultaneous month-rollover failures).
 JOURNAL_NOW = "journal-%s.md" % datetime.datetime.now().strftime("%Y-%m")
 
 

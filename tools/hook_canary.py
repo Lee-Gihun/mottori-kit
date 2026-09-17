@@ -19,6 +19,7 @@ ROOT = os.path.dirname(HERE)
 RESULT_PATH = os.path.join(ROOT, "state", "hook-canary.json")
 sys.path.insert(0, HERE)
 import hookdiag  # noqa: E402
+import i18n  # noqa: E402
 
 PROMPT = ("Do not use tools. If startup context contains a line beginning HOOK_CANARY:, "
           "respond with only the value after that prefix. Otherwise respond only ABSENT.")
@@ -46,7 +47,7 @@ def agent_messages(stream):
 def _run(token, hooks_enabled):
     codex = shutil.which("codex")
     if not codex:
-        raise FileNotFoundError("codex CLI 없음")
+        raise FileNotFoundError(i18n.t("hookdiag.codex_missing"))
     cmd = [codex, "exec", "--ephemeral", "--json", "-C", ROOT, "-s", "read-only"]
     if not hooks_enabled:
         cmd += ["--disable", "hooks"]
@@ -60,18 +61,20 @@ def _codex_canary(token):
     report = hookdiag.codex_runtime_report(live.get("hooks", []))
     injector = report["injector"]
     if not injector["declared"] or not injector["armed"]:
-        print(f"canary 중단: SessionStart armed가 아님 ({injector})", file=sys.stderr)
+        print(i18n.t("hook_canary.not_armed", injector=injector), file=sys.stderr)
         return False
 
     positive = _run(token, True)
     if positive.returncode:
-        print(f"positive process 실패: {positive.stderr[-1000:]}", file=sys.stderr)
+        print(i18n.t("hook_canary.process_failed", kind="positive",
+                     error=positive.stderr[-1000:]), file=sys.stderr)
         return False
     pos_messages, pos_tools = agent_messages(positive.stdout)
 
     negative = _run(token, False)
     if negative.returncode:
-        print(f"negative process 실패: {negative.stderr[-1000:]}", file=sys.stderr)
+        print(i18n.t("hook_canary.process_failed", kind="negative",
+                     error=negative.stderr[-1000:]), file=sys.stderr)
         return False
     neg_messages, neg_tools = agent_messages(negative.stdout)
 
@@ -89,7 +92,7 @@ def _codex_canary(token):
 def _run_claude(token, hooks_enabled):
     claude = shutil.which("claude")
     if not claude:
-        raise FileNotFoundError("claude CLI 없음")
+        raise FileNotFoundError(i18n.t("doctor.claude_missing"))
     cmd = [claude, "-p", "--no-session-persistence", "--tools", "", "--model", "fable",
            "--effort", "high"]
     if not hooks_enabled:
@@ -166,11 +169,13 @@ def main():
             results[name] = bool(function(token))
         except Exception as e:
             results[name] = False
-            print(f"{name} canary 실패: {type(e).__name__}: {e}", file=sys.stderr)
+            print(i18n.t("hook_canary.runtime_failed", runtime=name,
+                         error_type=type(e).__name__, error=e), file=sys.stderr)
     try:
         _persist_results(results)
     except Exception as e:
-        print(f"canary 결과 저장 실패: {type(e).__name__}: {e}", file=sys.stderr)
+        print(i18n.t("hook_canary.persist_failed", error_type=type(e).__name__, error=e),
+              file=sys.stderr)
         return 1
     return 0 if results and all(results.values()) else 1
 

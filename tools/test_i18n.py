@@ -38,8 +38,9 @@ def run(*args, cwd=ROOT, lang="en"):
 
 
 def test_english_surfaces():
-    # 설치된 인스턴스(setup.sh 없음)는 journal·track 이름 등 사용자 데이터가 그 언어라 "EN 출력에 한글 0"을
-    # 잴 수 없고 setup fixture도 만들 수 없다. 건너뛴 사실은 요약 줄에 남긴다 (KIT-DR-012: 판정은 영수증으로만).
+    # In an installed instance (without setup.sh), user data such as journal and track names may
+    # use that language, so "zero Hangul in EN output" cannot be measured and no setup fixture can
+    # be built. Record the skip in the summary line (KIT-DR-012: judge only from receipts).
     if not os.path.isfile(os.path.join(ROOT, "setup.sh")):
         SKIPPED.append("EN surfaces (installed instance without setup.sh: user data may be Korean; "
                        "covered by tools/test_fresh_install.sh with MOTTORI_LANG=en in the kit)")
@@ -109,6 +110,7 @@ def test_korean_compatibility():
             "linkcheck.pending_count": " · pending(setup 전): 3",
             "gate.baseline_absent": "게이트 기준선이 없다. 지운 것과 처음 설치한 것을 기계가 구분할 수 없어서 자동으로 채택하지 않는다. `python3 tools/gate.py baseline`을 직접 돌려라.",
             "setup.already": "이미 세팅돼 있다: system/memory-config.json",
+            "codex_root.dispatch_prefix": "[Claude Code가 ",
         }
         actual = {
             "doctor.node_missing": i18n.t("doctor.node_missing"),
@@ -116,6 +118,7 @@ def test_korean_compatibility():
             "linkcheck.pending_count": i18n.t("linkcheck.pending_count", count=3),
             "gate.baseline_absent": i18n.t("gate.baseline_absent"),
             "setup.already": i18n.t("setup.already", path="system/memory-config.json"),
+            "codex_root.dispatch_prefix": i18n.t("codex_root.dispatch_prefix"),
         }
         for key in expected:
             check("KO compatibility: " + key, actual[key] == expected[key], repr(actual[key]))

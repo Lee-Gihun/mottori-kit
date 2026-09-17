@@ -619,7 +619,8 @@ def c_regression():
         # 배포 킷 전용 suite: setup.sh·review manifest·skill 문서처럼 킷 트리에만 대상이 있다
         # (인스턴스엔 kit_sync NOT_SYNCED로 남는다). 하나라도 지우면 fail-close.
         kit_suites = ("test_setup_migration.py", "test_portability.py", "test_manifests.py",
-                      "test_skill_parity.py", "test_matrix_check.py", "test_language.py")
+                      "test_skill_parity.py", "test_matrix_check.py", "test_language.py",
+                      "test_devtree_gate.py")
         required = ("setup.sh",) + tuple(os.path.join("tools", s) for s in kit_suites)
         missing = [path for path in required if not os.path.isfile(os.path.join(ROOT, path))]
         if missing:

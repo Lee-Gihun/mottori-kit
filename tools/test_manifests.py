@@ -13,7 +13,6 @@ ROOT = Path(__file__).resolve().parent.parent
 REVIEW = ROOT / "system" / "review-manifest.yaml"
 MATRIX = ROOT / "system" / "enforcement-matrix.yaml"
 DELIVERY_PATHS = {
-    "REPORT.md",
     "system/enforcement-matrix.yaml",
     "system/language-pending.txt",
     "system/reviews/content-audit.tsv",
@@ -24,6 +23,7 @@ DELIVERY_PATHS = {
     "tools/manifest_build.py",
     "tools/test_bypass_pins.py",
     "tools/test_context_budget.py",
+    "tools/test_devtree_gate.py",
     "tools/test_egress.py",
     "tools/test_enforce.py",
     "tools/test_language.py",

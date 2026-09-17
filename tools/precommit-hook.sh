@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # MOTTORI_PRECOMMIT_HOOK_V1
-# mottori gate — 커밋될 index를 검사한다. tools/install_hooks.sh가 설치했다.
+# The mottori gate checks the index to be committed. Installed by tools/install_hooks.sh.
 set -euo pipefail
 
-# git hook run 전용 dispatch probe. 일반 git commit은 pre-commit에 인자를 전달하지 않는다.
+# Dispatch probe used only by `git hook run`; an ordinary commit passes no arguments to pre-commit.
 if [[ "${1:-}" == "--mottori-probe" ]]; then
   [[ "${2:-}" == probe-* ]] || { echo "invalid mottori probe" >&2; exit 2; }
   printf '%s\n' "$2"
   exit 0
 fi
 
-# 이 변수가 깨끗한 다른 clone을 가리키면 깨진 index가 통과할 수 있다. gate.py도 root가
-# 자기 위치와 다르면 fail-close한다.
+# If this variable points to another clean clone, a broken index could pass. gate.py also
+# fails closed when the root differs from its own location.
 unset MOTTORI_INSTANCE
 ROOT="$(git rev-parse --show-toplevel)"
 
@@ -23,7 +23,12 @@ case "$(basename "$0")" in
     # A running owned hook verifies the complete installed pair before trusting the gate. This
     # catches drift in the companion pre-push hook and template. Replacing this file itself remains
     # outside a repo-local hook's authority and is reported as REVIEW in the enforcement matrix.
-    bash "$ROOT/tools/install_hooks.sh" --check >/dev/null
+    if ! bash "$ROOT/tools/install_hooks.sh" --check >/dev/null 2>&1; then
+      echo "mottori hook self-check failed (installed hooks differ from tools/precommit-hook.sh):" >&2
+      bash "$ROOT/tools/install_hooks.sh" --check >&2 || true
+      echo "fix: bash tools/install_hooks.sh --repair" >&2
+      exit 1
+    fi
     exec python3 "$ROOT/tools/gate.py" precommit
     ;;
   *)

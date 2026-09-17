@@ -152,6 +152,16 @@ receipt 하나를 만든다. 기존 인스턴스가 손으로 바꿀 파일은 �
 
 ## v0.6 · 2026-09-17 (스웜 파도 1+2A 통합)
 
+### `[알아둘 것]` 설치 전 개발 트리의 NOW 게이트가 반쪽 설치를 구분한다
+
+근거 표지: `test:tools/test_devtree_gate.py::test_unconfigured_devtree_precommit_is_not_applicable`,
+`test:tools/test_devtree_gate.py::test_partial_install_without_config_fails_closed`.
+
+config와 state 입력이 둘 다 없는 상류 개발 트리에서 direct·portable NOW 검사는 명시적 `해당없음`과
+gated 0을 낸다. NOW 또는 journal은 있지만 config만 없는 반쪽 설치는 `config-absent`로 fail-close한다.
+`gate.py selfcheck`는 direct와 precommit의 checker-qualified gated ID 집합을 비교하고 다르면 WARN에 두
+집합을 모두 보여준다. 기존 인스턴스가 손으로 바꿀 파일은 없다.
+
 ### `[알아둘 것]` 공용 엔진 회귀는 설치된 인스턴스에서도 돈다
 
 근거 표지: `test:tools/test_evidencecheck.py::test_tree_without_any_target_is_not_applicable`.
