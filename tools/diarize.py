@@ -14,10 +14,18 @@
   python3 tools/diarize.py <audio> --segments <json|srt> [--out out.spk.txt] [--k N]
 """
 import argparse, json, os, re, subprocess, sys
-import numpy as np
-from scipy.fftpack import dct
-from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
+
+# The audio stack is only needed to run the pipeline. `--help`, argument errors and the entrypoint
+# regression must work without it (2026-09-18: CI has no numpy and the module-level import broke --help).
+try:
+    import numpy as np
+    from scipy.fftpack import dct
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score
+    _DEPS_ERROR = None
+except ImportError as exc:  # noqa: BLE001
+    np = dct = KMeans = silhouette_score = None
+    _DEPS_ERROR = exc
 
 SR = 16000
 NMEL, NCEP = 40, 20
@@ -53,8 +61,19 @@ def mel_filterbank():
     return fb
 
 
-FB = mel_filterbank()
-WIN = np.hamming(FRAME).astype(np.float32)
+FB = None
+WIN = None
+
+
+def _init_dsp():
+    """Build the filterbank and window once the audio stack is known to be present."""
+    global FB, WIN
+    if _DEPS_ERROR is not None:
+        sys.exit(f"diarize: numpy, scipy and scikit-learn are required to run the pipeline "
+                 f"(pip install numpy scipy scikit-learn): {_DEPS_ERROR}")
+    if FB is None:
+        FB = mel_filterbank()
+        WIN = np.hamming(FRAME).astype(np.float32)
 
 
 def mfcc(x):
@@ -110,6 +129,7 @@ def main():
     ap.add_argument("--out", default=None)
     ap.add_argument("--k", type=int, default=0, help="화자 수를 안다면 고정 (0=자동)")
     a = ap.parse_args()
+    _init_dsp()
 
     segs = read_segments(a.segments)
     if not segs:
