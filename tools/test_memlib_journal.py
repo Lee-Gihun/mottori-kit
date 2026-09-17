@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Matrix coverage: tools/memlib.py
 """Generated boundary tests for journal parsing and config validation."""
 import copy
 import dataclasses
@@ -240,6 +241,14 @@ def _run_journal_case(case):
              M.LEGACY_PUBLIC_TRACKS, M.LEGACY_CUTOFF) = old
 
 
+def test_journal_body_exact_boundary():
+    """The documented limit is inclusive at 300 and rejects the first byte past it."""
+    prefix = "- 2026-01-15T08:31:22+09:00 [system/state] "
+    assert M.validate_line(prefix + ("x" * 300)) is None
+    error = M.validate_line(prefix + ("x" * 301))
+    assert error is not None and "300" in error
+
+
 def valid_config():
     return {
         "schema_version": 4,
@@ -352,6 +361,7 @@ def main():
         _run_journal_case(case)
     for case in configs:
         _run_config_case(case)
+    test_journal_body_exact_boundary()
     _visibility_contract_on_fixture()
     print(f"PASS: journal {len(journals)} generated cases, config {len(configs)} cases, seed={SEED}")
 

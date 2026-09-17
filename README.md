@@ -3,17 +3,21 @@
 무한 세션에서 상태와 깊이를 잃지 않기 위한 **에이전트 워크스페이스 엔진**.
 Claude Code와 Codex가 같은 규약 위에서 돌고, 컴팩션을 넘어 작업이 이어진다.
 
-`git clone` → `bash setup.sh` → `bash tools/install_hooks.sh --repair` → `python3 tools/doctor.py`.
-명령 넷은 1분 안에 끝난다 (`tools/test_fresh_install.sh`가 임시 클론에서 이 순서를 그대로 재고,
+`git clone` → `bash setup.sh` → `bash tools/install_hooks.sh --repair` → `bash tools/install_hooks.sh --check` → `python3 tools/doctor.py`.
+명령 다섯은 1분 안에 끝난다 (`tools/test_fresh_install.sh`가 임시 클론에서 이 순서를 그대로 재고,
 2026-09-17 기준 통과한다). 그 뒤 국경 선언(`system/instance-rules.md`)과 CHECKLIST의 사람 확인
 항목은 네가 쓰는 시간이다.
 
 **English quickstart.** Requires Python 3.8+, git 2.5+, Bash 3.2+, macOS or Linux; `claude`, `codex` and `node` are
-optional. Run `bash setup.sh --name <name> --context personal|work` (`work` makes `doctor` reject pushes to
-remotes outside the allowlist), then `bash tools/install_hooks.sh --repair`, then `python3 tools/doctor.py`:
+optional. If the shell came from another mottori workspace, first run `unset MOTTORI_INSTANCE` or set it to
+the new clone's absolute path. Run `bash setup.sh --name <name> --context personal|work` (`work` makes `doctor`
+reject pushes to remotes outside the allowlist), then `bash tools/install_hooks.sh --repair`,
+`bash tools/install_hooks.sh --check`, and `python3 tools/doctor.py`:
 `FAIL` must be zero, `warn` is acceptable, `--` means not applicable. Replace every `CHANGEME` in
 `system/instance-rules.md`. Nothing under `state/` or `_private/` is ever committed, so back those up yourself;
 to update, `git pull`, re-run the hook check, refresh the gate baseline, and run `doctor` again (SETUP.md §5a).
+English output currently covers setup, doctor, and linkcheck; `now.py` and generated NOW documents remain in
+Korean. Before the first Claude or Codex session, `python3 tools/recall.py sessions` succeeds with no output.
 The rest of the documentation is in Korean.
 
 ---
@@ -108,7 +112,15 @@ git clone <이 리포> ~/work
 cd ~/work
 bash setup.sh --name work --context work     # 인자 없이 돌리면 묻는다. tty 없으면 기본값
 bash tools/install_hooks.sh --repair         # pre-commit 후방선 (.git/hooks는 clone에 안 온다)
+bash tools/install_hooks.sh --check          # 두 hook이 현재 템플릿과 같은지 확인
 python3 tools/doctor.py                      # FAIL 0이면 완료. warn은 상황별 정상, --는 해당 없음
 ```
 
 자세한 절차는 `SETUP.md`. 설치 후 사람이 확인할 것은 `CHECKLIST.md`. 업데이트는 `SETUP.md` §5a.
+
+## 규범 근거 연결
+
+이 문서의 설치 명령과 백업 경고는 각각 `tools/test_fresh_install.sh`의 낯선 클론 재현,
+`.gitignore`의 기본 거부 목록, KIT-DR-002·011에 근거한다. 명령은 재현된 설치 순서를 보존하고,
+백업 경고는 추적 차단이 백업 차단도 된다는 같은 구조의 반대면을 드러내기 위함이다.
+고정 개수와 시간 수치는 해당 테스트나 코드 목록을 세는 시점값이며 영구 성능 보장이 아니다.

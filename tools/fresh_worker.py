@@ -15,21 +15,26 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import memlib as M
+import worker_batch as B
 
 
 ROOT = M.ROOT
 RUN_ROOT = os.path.join(ROOT, "_private", "work", "runs")
 RECEIPT_MAX_BYTES = 4096
 WRAPPER_RESULT_MISSING = 3
+RESULT_CONTRACT_PREFIX = "RESULT_JSON: "
+RESULT_VERDICTS = {"PASS", "FAIL", "INCONCLUSIVE"}
 ENGINE_DIR = os.path.dirname(os.path.abspath(__file__))
 META_SCHEMA_VERSION = 2  # v2 (2026-09-16): kit_rev · kit_dirty · harness_sha256 · usage · read_scope · scope
 # The kit revision this copy was synced from. The kit repo itself leaves it None (git HEAD is used);
@@ -41,8 +46,9 @@ KIT_REV_EMBEDDED = None
 KIT_SYNC_DIRTY = None
 KIT_SYNC_ENGINE_SHA256 = None   # destination baseline: normalized engine sha of the copy right after sync
 KIT_SYNC_SOURCE_SHA256 = None   # source manifest: sha over the kit files that were copied (review R5, 3rd pass)
-ENGINE_FILES = ("fresh_worker.py", "memlib.py")
-SYNC_FILES = ("fresh_worker.py", "test_fresh_worker.py", "ask_codex.sh")
+ENGINE_FILES = ("fresh_worker.py", "memlib.py", "worker_batch.py")
+SYNC_FILES = ("fresh_worker.py", "test_fresh_worker.py", "worker_batch.py",
+              "test_worker_batch.py", "ask_codex.sh")
 STAMP_PREFIXES = ("KIT_REV_EMBEDDED =", "KIT_SYNC_DIRTY =", "KIT_SYNC_ENGINE_SHA256 =", "KIT_SYNC_SOURCE_SHA256 =")
 WORKTREE_INSTANCE_FILES = (
     "system/memory-config.json",
@@ -174,6 +180,131 @@ def read_prompt(path):
     return source, text
 
 
+def _under_policy_prefix(path, prefix):
+    return path == prefix.rstrip("/") or path.startswith(prefix)
+
+
+def _private_refs(source, body):
+    """Return unique denied workspace paths named by the prompt or used as its source."""
+    policy = M.EGRESS_MODEL_SEND
+    deny = policy["deny_prefixes"]
+    allow = policy["allow_prefixes"]
+    found = []
+
+    def add(path):
+        path = path.replace(os.sep, "/")
+        if path.startswith("./"):
+            path = path[2:]
+        if (any(_under_policy_prefix(path, prefix) for prefix in deny)
+                and not any(_under_policy_prefix(path, prefix) for prefix in allow)
+                and path not in found):
+            found.append(path)
+
+    source_rel = os.path.relpath(source, ROOT).replace(os.sep, "/")
+    add(source_rel)
+    root_prefix = ROOT.rstrip(os.sep).replace(os.sep, "/") + "/"
+    for prefix in deny:
+        spellings = (prefix, root_prefix + prefix)
+        for spelling in spellings:
+            pattern = (r"(?<![A-Za-z0-9_.-])(" + re.escape(spelling)
+                       + r"[^\s`'\"<>\[\](){};,]*)")
+            for match in re.finditer(pattern, body):
+                raw = match.group(1).rstrip(".!?:")
+                add(raw[len(root_prefix):] if raw.startswith(root_prefix) else raw)
+    return found
+
+
+def _private_source_texts(refs):
+    """Snapshot named private text before a writable worker can alter it."""
+    sources = {}
+    for ref in refs:
+        path = os.path.join(ROOT, *ref.split("/"))
+        try:
+            if not os.path.isfile(path) or not _inside_root(path):
+                continue
+            with open(path, encoding="utf-8") as source_file:
+                text = source_file.read()
+        except (OSError, UnicodeError):
+            continue
+        if text:
+            sources[ref] = text
+    return sources
+
+
+def _egress_events(runtime, refs, source_texts, effective, result, rel_run):
+    """Describe private references sent to the model and verified run-record copies."""
+    events = [
+        {"kind": "model_send_reference", "source": ref, "destination": f"model:{runtime}"}
+        for ref in refs
+    ]
+    destinations = ((f"{rel_run}/prompt.md", effective),
+                    (f"{rel_run}/result.txt", result or ""))
+    for ref in refs:
+        for destination, content in destinations:
+            if ref in content:
+                events.append({
+                    "kind": "private_reference_copy",
+                    "source": ref,
+                    "destination": destination,
+                })
+    for ref, source_text in source_texts.items():
+        for destination, content in destinations:
+            if source_text in content:
+                events.append({
+                    "kind": "private_content_copy",
+                    "source": ref,
+                    "destination": destination,
+                })
+    return events
+
+
+def _result_contract(result):
+    """Validate the machine-readable final-result line without inferring from prose."""
+    def invalid(error):
+        return {
+            "schema_version": 1,
+            "valid": False,
+            "verdict": "INCONCLUSIVE",
+            "summary": "structured result unavailable",
+            "evidence": [],
+            "unknowns": [error],
+            "error": error,
+        }
+
+    if not isinstance(result, str) or not result.strip():
+        return invalid("result is missing")
+    lines = result.splitlines()
+    candidates = [line for line in lines if line.startswith(RESULT_CONTRACT_PREFIX)]
+    if len(candidates) != 1:
+        return invalid("exactly one RESULT_JSON line is required")
+    if candidates[0] != next(line for line in reversed(lines) if line.strip()):
+        return invalid("RESULT_JSON must be the final non-empty line")
+    try:
+        payload = json.loads(candidates[0][len(RESULT_CONTRACT_PREFIX):])
+    except json.JSONDecodeError:
+        return invalid("RESULT_JSON is not valid JSON")
+    required = {"verdict", "summary", "evidence", "unknowns"}
+    if not isinstance(payload, dict) or set(payload) != required:
+        return invalid("RESULT_JSON fields must be verdict, summary, evidence, unknowns")
+    if payload.get("verdict") not in RESULT_VERDICTS:
+        return invalid("RESULT_JSON verdict is not PASS, FAIL, or INCONCLUSIVE")
+    if not isinstance(payload.get("summary"), str) or not payload["summary"].strip():
+        return invalid("RESULT_JSON summary must be a non-empty string")
+    for field in ("evidence", "unknowns"):
+        values = payload.get(field)
+        if not isinstance(values, list) or not all(isinstance(value, str) and value.strip()
+                                                   for value in values):
+            return invalid(f"RESULT_JSON {field} must be a list of non-empty strings")
+    if not payload["evidence"]:
+        return invalid("RESULT_JSON evidence must contain at least one path or section")
+    return {
+        "schema_version": 1,
+        "valid": True,
+        **payload,
+        "error": None,
+    }
+
+
 def _effective_prompt(runtime, body):
     capability = CAPABILITIES[runtime]
     common = (
@@ -184,7 +315,10 @@ def _effective_prompt(runtime, body):
         "- Put durable work in the exact artifact paths authorized by the request.\n"
         "- End with a concise result that lists evidence, changed artifact paths, tests, and remaining unknowns.\n"
         "- Every factual claim in the result names the file path (and line or section) it came from; "
-        "a claim without a source goes under remaining unknowns.\n\n"
+        "a claim without a source goes under remaining unknowns.\n"
+        "- End with exactly one machine-readable final line: RESULT_JSON: "
+        '{"verdict":"PASS|FAIL|INCONCLUSIVE","summary":"...","evidence":["path:line"],'
+        '"unknowns":["..."]}. Use an empty unknowns list when nothing remains.\n\n'
     )
     if runtime == "claude":
         common += (
@@ -489,9 +623,13 @@ def _normalize_prefix(prefix, root=None):
     return "/".join(canonical)
 
 
-def _workspace_snapshot(exclude_rel, root=None):
-    """path -> (kind, size, mtime_ns, ctime_ns, mode) for every entry under ROOT except .git and
-    the run-record tree. Directories are entries too (kind 'dir').
+def _workspace_snapshot(exclude_rel, root=None, include_git=False, include_parent=False):
+    """Return metadata fingerprints for the worker's observable write boundary.
+
+    Normal report-only runs omit .git and the parent. Strict runs include .git and the immediate
+    parent entries so writes to the two control surfaces cannot disappear from the write-set. The
+    parent scan is deliberately one level: recursive observation would cross into unrelated
+    workspaces and still would not be confinement. The runtime sandbox remains the outer boundary.
 
     Only lstat is used (no hashing), so a snapshot of a large tree costs well under a second.
     ctime_ns is included because a writer can restore mtime with utime but cannot restore ctime,
@@ -514,9 +652,10 @@ def _workspace_snapshot(exclude_rel, root=None):
         keep = []
         for d in dirnames:
             rel = f"{rel_dir}/{d}" if rel_dir else d
-            # .git and the whole run-record tree belong to the wrapper, not to the worker's write-set.
-            # (Concurrent runs would otherwise see each other's records as changes.)
-            if d == ".git" or rel == exclude_rel or (runs_rel is not None and rel == runs_rel):
+            # The run-record tree belongs to the wrapper, not the worker. Strict runs do include
+            # .git because refs, config, index, and hooks are enforcement control surfaces.
+            if (d == ".git" and not include_git) or rel == exclude_rel \
+                    or (runs_rel is not None and rel == runs_rel):
                 continue
             full = os.path.join(dirpath, d)
             try:
@@ -531,7 +670,7 @@ def _workspace_snapshot(exclude_rel, root=None):
         dirnames[:] = keep
         for name in filenames:
             rel = f"{rel_dir}/{name}" if rel_dir else name
-            if rel == ".git":
+            if rel == ".git" and not include_git:
                 continue
             try:
                 st = os.lstat(os.path.join(dirpath, name))
@@ -539,6 +678,28 @@ def _workspace_snapshot(exclude_rel, root=None):
                 continue
             kind = "link" if stat.S_ISLNK(st.st_mode) else "file"
             snap[rel] = fingerprint(st, kind)
+    if include_parent:
+        parent = os.path.dirname(root)
+        # The OS temp root is a shared high-churn namespace. Treating every unrelated mktemp as a
+        # worker write makes strict mode unusable and still proves no confinement. Real workspaces
+        # and nested attack fixtures have a dedicated immediate parent and are measured below.
+        if os.path.realpath(parent) == os.path.realpath(tempfile.gettempdir()):
+            return snap
+        try:
+            names = os.listdir(parent)
+        except OSError as error:
+            raise InputError(f"workspace parent를 측정할 수 없다: {type(error).__name__}")
+        own_name = os.path.basename(root)
+        for name in names:
+            if name == own_name:
+                continue
+            path = os.path.join(parent, name)
+            try:
+                st = os.lstat(path)
+            except OSError:
+                continue
+            kind = "link" if stat.S_ISLNK(st.st_mode) else ("dir" if stat.S_ISDIR(st.st_mode) else "file")
+            snap["../" + name] = fingerprint(st, kind)
     return snap
 
 
@@ -716,6 +877,7 @@ def _receipt(meta, result):
             f"patch: {len(worktree['files'])} files "
             f"(+{worktree['added']}/-{worktree['deleted']})\n"
         )
+    egress_count = (meta.get("egress") or {}).get("private_ref_count", 0)
     fixed = (
         "FRESH_WORKER v1\n"
         f"run: {meta['run']}\n"
@@ -728,6 +890,7 @@ def _receipt(meta, result):
         f"stream_sha256: {meta['stream_sha256']}\n"
         f"result_sha256: {meta['result_sha256']}\n"
         f"result_bytes: {meta['result_bytes']}\n"
+        f"egress: {egress_count} private refs\n"
         f"scope: {meta['scope']['status']} (changed {meta['scope']['changed_count']}, "
         f"violations {meta['scope']['violation_count']})\n"
         f"{patch_line}"
@@ -744,7 +907,8 @@ def _receipt(meta, result):
 
 
 def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
-                   worktree_meta, copied, write_prefixes=(), strict_scope=False):
+                   worktree_meta, copied, egress_refs, egress_source_texts,
+                   write_prefixes=(), strict_scope=False, strict_egress=False, batch=None):
     prefixes = [_normalize_prefix(p, root=workspace) for p in write_prefixes]
     rel_run = os.path.relpath(run_dir, ROOT).replace(os.sep, "/")
     for prefix in prefixes:
@@ -753,15 +917,21 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
         os.makedirs(os.path.join(workspace, prefix), exist_ok=True)
     t_scope = time.monotonic()
     exclude_rel = rel_run if os.path.realpath(workspace) == os.path.realpath(ROOT) else "__outside__"
-    before = _workspace_snapshot(exclude_rel, root=workspace)
+    strict_root = os.path.realpath(workspace) == os.path.realpath(ROOT)
+    before = _workspace_snapshot(
+        exclude_rel, root=workspace, include_git=strict_scope,
+        include_parent=(strict_scope and strict_root),
+    )
     scope_seconds = time.monotonic() - t_scope
     prompt_path = os.path.join(run_dir, "prompt.md")
     stream_path = os.path.join(run_dir, "stream.jsonl")
     stderr_path = os.path.join(run_dir, "stderr.log")
     result_path = os.path.join(run_dir, "result.txt")
+    result_contract_path = os.path.join(run_dir, "result-contract.json")
     runtime_result_path = (os.path.join(workspace, f".mottori-worker-result-{run_id}")
                            if worktree_meta["mode"] is not None else result_path)
     meta_path = os.path.join(run_dir, "meta.json")
+    egress_path = os.path.join(run_dir, "egress.log")
     effective = _effective_prompt(runtime, body)
     _private_write(prompt_path, effective)
 
@@ -778,6 +948,13 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
         "harness_sha256": _harness_sha256(runtime, command, run_specific=(runtime_result_path,)),
         "usage": {"raw": None, "input": None, "output": None, "total": None},
         "read_scope": None,
+        "egress": {
+            "private_ref_count": len(egress_refs),
+            "private_refs": egress_refs,
+            "strict": strict_egress,
+            "log": f"{rel_run}/egress.log" if egress_refs else None,
+            "event_count": 0,
+        },
         "worktree": worktree_meta,
         "scope": {"prefixes": prefixes, "status": "running", "changed_count": 0, "changed": [],
                   "violation_count": 0, "violations": [], "files_scanned": len(before),
@@ -796,6 +973,8 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
         "result_sha256": None,
         "result_bytes": 0,
     }
+    if batch is not None:
+        meta["batch"] = batch
     _write_meta(meta_path, meta)
 
     t0 = time.monotonic()
@@ -842,8 +1021,25 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
         else:
             os.chmod(result_path, 0o600)
 
+    _private_write(
+        result_contract_path,
+        json.dumps(_result_contract(result), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+    )
+
+    egress_events = _egress_events(
+        runtime, egress_refs, egress_source_texts, effective, result, rel_run)
+    if egress_events:
+        _private_write(
+            egress_path,
+            "".join(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
+                    for event in egress_events),
+        )
+
     t_scope = time.monotonic()
-    after = _workspace_snapshot(exclude_rel, root=workspace)
+    after = _workspace_snapshot(
+        exclude_rel, root=workspace, include_git=strict_scope,
+        include_parent=(strict_scope and strict_root),
+    )
     scope = _scope_report(prefixes, before, after, scope_seconds + (time.monotonic() - t_scope),
                           root=workspace)
     if worktree_meta["mode"] is not None:
@@ -852,8 +1048,8 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
     if strict_scope and scope["status"] == "scope_violation":
         # Post-run detection only: nothing is deleted or rolled back; the paths are on record.
         # A violation outranks the runtime's own exit code (review R3): process_exit stays in meta.
-        # Without --strict-scope the violations stay in meta/receipt but do not fail the run. In
-        # worktree mode they can only come from the worker; legacy mode can include concurrent writers.
+        # Strict mode makes the declared write-prefix an enforcement boundary. Without it the same
+        # scope report remains observable but does not replace the runtime result (PRD §10.5).
         wrapper_exit = WRAPPER_SCOPE_VIOLATION
         status_name = "scope_violation"
         if process_exit == 0 and (result is None or not result.strip()):
@@ -880,14 +1076,52 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
         "result_bytes": os.path.getsize(result_path) if os.path.isfile(result_path) else 0,
         "usage": _usage(runtime, stream_path),
         "read_scope": _read_scope(result),
+        "egress": {
+            **meta["egress"],
+            "event_count": len(egress_events),
+        },
         "scope": scope,
     })
     _write_meta(meta_path, meta)
     return _receipt(meta, result), wrapper_exit
 
 
-def run(runtime, prompt_file, write_prefixes=(), strict_scope=False, worktree_mode=None):
+def _batch_identity(batch_manifest, slot, source, body):
+    if batch_manifest is None and slot is None:
+        return None
+    if batch_manifest is None or slot is None:
+        raise InputError("--batch-manifest and --slot must be used together")
+    try:
+        manifest, manifest_sha = B.load_manifest(batch_manifest)
+    except B.BatchError as e:
+        raise InputError(f"batch manifest rejected: {e}")
+    row = next((item for item in manifest["slots"] if item["name"] == slot), None)
+    if row is None:
+        raise InputError("slot is not present in the batch manifest")
+    source_rel = os.path.relpath(source, ROOT).replace(os.sep, "/")
+    if source_rel != row["prompt"]:
+        raise InputError("prompt path does not match the batch slot")
+    prompt_sha = hashlib.sha256(body.encode("utf-8")).hexdigest()
+    if prompt_sha != row["prompt_sha256"]:
+        raise InputError("prompt SHA does not match the batch slot")
+    return {
+        "manifest_sha256": manifest_sha,
+        "slot": slot,
+        "prompt_sha256": prompt_sha,
+    }
+
+
+def run(runtime, prompt_file, write_prefixes=(), strict_scope=False, strict_egress=False,
+        worktree_mode=None, batch_manifest=None, slot=None):
+    if strict_scope and not write_prefixes:
+        raise InputError("--strict-scope에는 하나 이상의 --write-prefix가 필요하다")
     source, body = read_prompt(prompt_file)
+    egress_refs = _private_refs(source, body)
+    if egress_refs:
+        raise InputError(
+            "model-send deny ref를 기본 경로에서 거부했다: " + ", ".join(egress_refs))
+    egress_source_texts = _private_source_texts(egress_refs)
+    batch = _batch_identity(batch_manifest, slot, source, body)
     run_id, run_dir, started = _new_run(runtime)
     workspace = ROOT
     copied = []
@@ -904,7 +1138,8 @@ def run(runtime, prompt_file, write_prefixes=(), strict_scope=False, worktree_mo
     try:
         receipt, wrapper_exit = _run_workspace(
             runtime, source, body, run_id, run_dir, started, workspace, worktree_meta, copied,
-            write_prefixes=write_prefixes, strict_scope=strict_scope,
+            egress_refs, egress_source_texts, write_prefixes=write_prefixes,
+            strict_scope=strict_scope, strict_egress=strict_egress, batch=batch,
         )
     finally:
         if worktree_mode is not None:
@@ -918,22 +1153,31 @@ def main(argv=None):
     ap.add_argument("--runtime", required=True, choices=sorted(CAPABILITIES))
     ap.add_argument("--write-prefix", action="append", default=[], metavar="DIR",
                     help="ROOT-relative directory the worker may write under (repeatable). Changes "
-                         "outside every prefix are recorded as scope violations (post-run "
-                         "detection, no rollback); see --strict-scope. Without it the write-set "
-                         "is still recorded with scope status 'unchecked'.")
+                         "outside every prefix are reported after the run. With --strict-scope they "
+                         "fail with wrapper exit 4; without a prefix the write-set is unchecked.")
     ap.add_argument("--strict-scope", action="store_true",
-                    help="With --write-prefix: a violation makes the run status scope_violation "
-                         "(wrapper_exit 4). Default is report-only. In worktree mode scope is measured "
-                         "inside the isolate and the original tree is not writable by the worker.")
+                    help="Require at least one --write-prefix and fail on prefix violations. In "
+                         "worktree mode scope is measured inside the isolate and the original tree "
+                         "is not writable by the worker.")
+    ap.add_argument("--strict-egress", action="store_true",
+                    help="Compatibility flag. Denied model-send references are always rejected "
+                         "before a run is created or a runtime is started.")
     ap.add_argument("--worktree", nargs="?", const="dirty", choices=("head", "dirty"),
                     help="Run in <run>/wt and extract patch.diff plus untracked.txt. 'head' starts "
                          "from HEAD; 'dirty' first applies the original tree's tracked git diff. "
                          "A bare --worktree means dirty.")
+    ap.add_argument("--batch-manifest",
+                    help="Manifest created by worker_batch.py. Must be paired with --slot; the "
+                         "manifest and source prompt hashes are recorded in meta.json v2.")
+    ap.add_argument("--slot",
+                    help="Expected slot name in --batch-manifest. Does not launch or schedule peers.")
     ap.add_argument("prompt_file")
     args = ap.parse_args(argv)
     try:
         return run(args.runtime, args.prompt_file, write_prefixes=args.write_prefix,
-                   strict_scope=args.strict_scope, worktree_mode=args.worktree)
+                   strict_scope=args.strict_scope, strict_egress=args.strict_egress,
+                   worktree_mode=args.worktree,
+                   batch_manifest=args.batch_manifest, slot=args.slot)
     except InputError as e:
         print(f"fresh-worker input rejected: {e}", file=sys.stderr)
         return 2

@@ -63,6 +63,15 @@ def _fixture(root, run_id, runtime, status, usage, prompt, days_ago, changed=0,
         contract += "- read-only reviewer\n- report only\n\n"
     (run / "prompt.md").write_text(contract + prompt + "\nsecond line\n", encoding="utf-8")
     (run / "result.txt").write_text("ok\n", encoding="utf-8")
+    (run / "result-contract.json").write_text(json.dumps({
+        "schema_version": 1,
+        "valid": True,
+        "verdict": "PASS",
+        "summary": "ok",
+        "evidence": ["tools/fixture.py:1"],
+        "unknowns": [],
+        "error": None,
+    }), encoding="utf-8")
 
 
 def _root():
@@ -175,6 +184,80 @@ def test_cost_runtime_totals_and_daily_histogram():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_aggregate_eight_runs_into_one_bounded_wave_receipt():
+    root = Path(tempfile.mkdtemp(prefix="receipts-wave-fixture-"))
+    try:
+        run_ids = []
+        for index in range(8):
+            run_id = f"wave-{index + 1}"
+            run_ids.append(run_id)
+            _fixture(
+                root, run_id, "codex", "success",
+                {"input": 100, "output": 20, "total": 120},
+                f"wave prompt {index + 1}", 0,
+            )
+            result_path = root / "_private" / "work" / "runs" / run_id / "result.txt"
+            worker_result = (
+                f"판정: PASS run {index + 1} " + "긴판정" * 80 + "\n"
+                f"증거: tools/evidence_{index + 1}.py:{10 + index} " + "경로설명" * 80 + "\n"
+                f"미지: unknown-{index + 1} " + "미확인" * 80 + "\n"
+            )
+            result_path.write_text(worker_result, encoding="utf-8")
+            contract_path = result_path.with_name("result-contract.json")
+            if index == 7:
+                # Convincing free prose cannot become a verdict when the schema artifact is absent.
+                contract_path.unlink()
+            else:
+                contract_path.write_text(json.dumps({
+                    "schema_version": 1,
+                    "valid": True,
+                    "verdict": "PASS",
+                    "summary": f"PASS run {index + 1} " + "긴판정" * 80,
+                    "evidence": [f"tools/evidence_{index + 1}.py:{10 + index} " + "경로설명" * 80],
+                    "unknowns": [f"unknown-{index + 1} " + "미확인" * 80],
+                    "error": None,
+                }), encoding="utf-8")
+
+        result = _run(root, "aggregate", *run_ids)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert len(result.stdout.encode("utf-8")) <= 4096
+        assert result.stdout.startswith("WAVE_RECEIPT v1\nruns: 8\n")
+        assert "run | verdict | evidence | unknown" in result.stdout
+        rows = [line for line in result.stdout.splitlines() if line.startswith("wave-")]
+        assert len(rows) == 8
+        for index, row in enumerate(rows[:7], 1):
+            assert row.startswith(f"wave-{index} | success · PASS · PASS run {index}")
+            assert f"tools/evidence_{index}.py:{9 + index}" in row
+            assert f"unknown-{index}" in row
+        assert rows[7].startswith(
+            "wave-8 | success · INCONCLUSIVE · structured result unavailable"
+        )
+        assert "PASS run 8" not in rows[7]
+        assert "result-contract.json" in rows[7]
+
+        missing = _run(root, "aggregate", "wave-1", "missing")
+        assert missing.returncode == 1
+        assert "run을 찾을 수 없다: missing" in missing.stderr
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_ledger_and_worker_receipt_limits_share_the_exact_boundary():
+    root = _root()
+    try:
+        sys.path.insert(0, str(HERE))
+        import fresh_worker
+        import receipts
+        assert receipts.RECEIPT_MAX_BYTES == fresh_worker.RECEIPT_MAX_BYTES == 4096
+        run = root / "_private" / "work" / "runs" / "success-codex"
+        meta = json.loads((run / "meta.json").read_text(encoding="utf-8"))
+        body = "x" * 20000
+        assert len(receipts._receipt(meta, body).encode("utf-8")) <= 4096
+        assert len(fresh_worker._receipt(meta, body).encode("utf-8")) <= 4096
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_doctor_recent_runs_threshold():
     root = _root()
     sys.path.insert(0, str(HERE))
@@ -200,6 +283,8 @@ def test_doctor_recent_runs_threshold():
 
 TESTS = [test_list_table_and_totals, test_list_json_since_and_runtime_filters,
          test_show_meta_summary_and_receipt, test_cost_runtime_totals_and_daily_histogram,
+         test_aggregate_eight_runs_into_one_bounded_wave_receipt,
+         test_ledger_and_worker_receipt_limits_share_the_exact_boundary,
          test_doctor_recent_runs_threshold]
 
 

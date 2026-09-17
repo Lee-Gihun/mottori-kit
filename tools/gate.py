@@ -42,8 +42,11 @@ Codex 편집·interrupt는 못 본다. 그래서 후방선 둘이 있다.
 """
 import contextlib
 import fcntl
+import hashlib
+import hmac
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -89,6 +92,7 @@ def _ephem(name):
 DIRTY = lambda: _ephem("mottori-gate-dirty")
 PENDING = lambda: _ephem("mottori-gate-pending")     # 막힌 뒤 아직 재검증 안 된 상태
 LOCK = lambda: _ephem("mottori-gate-lock")
+SIGNING_KEY = lambda: _ephem("mottori-gate-key")
 
 
 @contextlib.contextmanager
@@ -179,16 +183,56 @@ def _load_baseline():
         raw = json.load(open(BASELINE, encoding="utf-8"))
         if not isinstance(raw, dict) or not raw:
             return {}, "corrupt"
+        if raw.get("schema_version") == 2:
+            issues = raw.get("issues")
+            payload_hash = raw.get("payload_sha256")
+            signature = raw.get("signature")
+            if not isinstance(issues, dict) or not isinstance(payload_hash, str) \
+                    or not isinstance(signature, str):
+                return {}, "corrupt"
+            payload = _baseline_payload(issues)
+            if not hmac.compare_digest(hashlib.sha256(payload).hexdigest(), payload_hash):
+                return {}, "corrupt"
+            try:
+                key = open(SIGNING_KEY(), "rb").read()
+            except OSError:
+                return {}, "corrupt"
+            expected = hmac.new(key, payload, hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(expected, signature):
+                return {}, "corrupt"
+            return {k: set(v) for k, v in issues.items()}, "ok"
+        # Upgrade bridge: an old unsigned baseline is accepted only until install_hooks --repair
+        # creates the repository-local key and seals it. Once a key exists, unsigned means tampered.
+        if os.path.exists(SIGNING_KEY()):
+            return {}, "corrupt"
         return {k: set(v) for k, v in raw.items()}, "ok"
     except Exception:
         return {}, "corrupt"
 
 
+def _baseline_payload(issues):
+    canonical = {k: sorted(v) for k, v in issues.items()}
+    return json.dumps(canonical, ensure_ascii=False, sort_keys=True,
+                      separators=(",", ":")).encode("utf-8")
+
+
 def _save_baseline(cur):
     os.makedirs(M.STATE, exist_ok=True)
     tmp = BASELINE + ".tmp"
-    json.dump({k: sorted(v) for k, v in cur.items()},
-              open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=0)
+    issues = {k: sorted(v) for k, v in cur.items()}
+    if os.path.exists(SIGNING_KEY()):
+        key = open(SIGNING_KEY(), "rb").read()
+        payload = _baseline_payload(issues)
+        document = {
+            "schema_version": 2,
+            "issues": issues,
+            "payload_sha256": hashlib.sha256(payload).hexdigest(),
+            "signature": hmac.new(key, payload, hashlib.sha256).hexdigest(),
+        }
+    else:
+        document = issues
+    with open(tmp, "w", encoding="utf-8") as output:
+        json.dump(document, output, ensure_ascii=False, indent=0)
     os.replace(tmp, BASELINE)
 
 
@@ -240,6 +284,15 @@ def cmd_baseline():
     if not _root_ok():
         print(f"실행 root 불일치: M.ROOT={M.ROOT} vs 도구 위치={SELF_ROOT}", file=sys.stderr)
         return 1
+    # A sealed installation may not silently replace its baseline while an index change is staged.
+    # This is the setup --force bypass: a failed setup used to adopt the broken staged tree first.
+    staged = subprocess.run(["git", "-C", M.ROOT, "diff", "--cached", "--quiet", "--"],
+                            capture_output=True)
+    unstaged = subprocess.run(["git", "-C", M.ROOT, "diff", "--quiet", "--"],
+                              capture_output=True)
+    if os.path.exists(SIGNING_KEY()) and (staged.returncode != 0 or unstaged.returncode != 0):
+        print("기준선을 못 세운다 — sealed 설치의 tracked tree가 clean하지 않다")
+        return 1
     cur = measure()
     dead = [k for k, v in cur.items() if v is None]
     if dead:
@@ -251,6 +304,31 @@ def cmd_baseline():
         with contextlib.suppress(OSError):
             os.remove(p)
     print("기준선 저장: " + " · ".join(f"{k} {len(v)}건" for k, v in cur.items()))
+    return 0
+
+
+def cmd_seal_baseline():
+    """Upgrade a measured legacy baseline to an HMAC-sealed document during hook repair."""
+    if not _root_ok():
+        print("baseline seal root 불일치", file=sys.stderr)
+        return 1
+    base, state = _load_baseline()
+    if state != "ok":
+        print(f"baseline seal 거부: baseline {state}", file=sys.stderr)
+        return 1
+    cur = measure()
+    reason, _advance = _verdict(cur, base, state)
+    if reason:
+        print(f"baseline seal 거부: {reason}", file=sys.stderr)
+        return 1
+    key_path = SIGNING_KEY()
+    if not os.path.exists(key_path):
+        os.makedirs(os.path.dirname(key_path), exist_ok=True)
+        fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as key_file:
+            key_file.write(secrets.token_bytes(32))
+    _save_baseline(cur)
+    print("baseline sealed: sha256+hmac")
     return 0
 
 
@@ -276,8 +354,6 @@ def cmd_check():
             payload = json.loads(sys.stdin.read() or "{}")
         except Exception:
             payload = {}
-        if payload.get("stop_hook_active"):
-            return 0
         if not _root_ok():
             return _block(t("gate.root_block", root=M.ROOT, tool=SELF_ROOT))
         if not (os.path.exists(DIRTY()) or os.path.exists(PENDING())):
@@ -392,6 +468,23 @@ def _staged_tools_compile(tmp):
     return bad
 
 
+def _staged_markdown_paths():
+    """Read staged Markdown paths without Git's quotePath transformation."""
+    listed = subprocess.run(
+        ["git", "-c", "core.quotePath=false", "-C", M.ROOT,
+         "ls-files", "-z", "--cached", "*.md"], capture_output=True,
+    )
+    if listed.returncode != 0 or (listed.stdout and not listed.stdout.endswith(b"\0")):
+        raise ValueError("staged Markdown file list measurement failed")
+    try:
+        paths = [p.decode("utf-8") for p in listed.stdout.split(b"\0") if p]
+    except UnicodeDecodeError as error:
+        raise ValueError("staged Markdown path is not UTF-8") from error
+    if any("\n" in path or "\r" in path for path in paths):
+        raise ValueError("newline in staged Markdown path")
+    return paths
+
+
 def cmd_precommit():
     """pre-commit 훅. 커밋되는 index를 검사하고, 조금이라도 못 미더우면 막는다 (fail closed)."""
     if not _root_ok():
@@ -409,10 +502,24 @@ def cmd_precommit():
             print("[gate] index의 파이썬 도구가 깨져 있다: " + ", ".join(bad), file=sys.stderr)
             print("  검사기가 깨진 채 커밋되면 이 게이트 자체가 무력해진다.", file=sys.stderr)
             return 1
+        enforce_cmd = [sys.executable, os.path.join(HERE, "enforce.py"),
+                       "--issues", "--index", "--root", M.ROOT]
+        absolute_issues = _issues(enforce_cmd, cwd=M.ROOT)
+        if absolute_issues is None:
+            print("[gate] staged privacy enforcement를 측정하지 못했다", file=sys.stderr)
+            return 1
+        if absolute_issues:
+            print("[gate] absolute staged violation: "
+                  + "; ".join(sorted(absolute_issues)[:8]), file=sys.stderr)
+            return 1
         fl = os.path.join(tmp, ".gate-filelist")
-        ls = subprocess.run(["git", "-C", M.ROOT, "ls-files", "--cached", "*.md"],
-                            capture_output=True, text=True).stdout
-        open(fl, "w", encoding="utf-8").write(ls)
+        try:
+            paths = _staged_markdown_paths()
+        except ValueError as error:
+            print(f"[gate] {error}", file=sys.stderr)
+            return 1
+        with open(fl, "w", encoding="utf-8") as filelist:
+            filelist.write("".join(path + "\n" for path in paths))
 
         base, state = _load_baseline()
         cur = measure(tree=tmp, filelist=fl)
@@ -433,6 +540,7 @@ def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
     return {"dirty": cmd_dirty, "check": cmd_check, "resume": cmd_resume,
             "precommit": cmd_precommit, "baseline": cmd_baseline,
+            "seal-baseline": cmd_seal_baseline,
             "status": cmd_status}.get(cmd, cmd_status)()
 
 

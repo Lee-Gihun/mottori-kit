@@ -171,24 +171,36 @@
         "system/enforcement-matrix.yaml",
         "system/kit-decisions.md",
         "system/review-manifest.yaml",
+        "system/reviews/content-audit.tsv",
         "system/rituals.md",
         "system/skills/paper-to-kit.md",
+        "system/test-matrix.yaml",
+        "tools/context_budget.py",
         "tools/doctor.py",
+        "tools/enforce.py",
         "tools/evidencecheck.py",
         "tools/gate.py",
+        "tools/install_hooks.sh",
         "tools/receipts.py",
         "tools/skill_adapters.py",
         "tools/sync_engine.sh",
+        "tools/test_bypass_pins.py",
+        "tools/test_egress.py",
+        "tools/test_enforce.py",
         "tools/test_evidencecheck.py",
         "tools/test_fresh_install.sh",
         "tools/test_fresh_worker.py",
         "tools/test_i18n.py",
         "tools/test_install_checks.py",
         "tools/test_manifests.py",
+        "tools/test_matrix_check.py",
         "tools/test_memlib_journal.py",
+        "tools/test_mutation.py",
         "tools/test_portability.py",
+        "tools/test_receipts.py",
         "tools/test_skill_parity.py",
-        "tools/test_state_runtime.py"
+        "tools/test_state_runtime.py",
+        "tools/worker_batch.py"
       ],
       "reviewed_at": null
     },
@@ -257,6 +269,7 @@
         "setup.sh",
         "tools/doctor.py",
         "tools/install_hooks.sh",
+        "tools/recall.py",
         "tools/skill_adapters.py",
         "tools/test_fresh_install.sh"
       ],
@@ -338,7 +351,18 @@
         "claude",
         "codex"
       ],
-      "depends_on": [],
+      "depends_on": [
+        ".claude/settings.json",
+        ".gitignore",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "tools/coherence.py",
+        "tools/fresh_worker.py",
+        "tools/gate.py",
+        "tools/hook_canary.py",
+        "tools/now.py",
+        "tools/rec.py"
+      ],
       "reviewed_at": null
     },
     {
@@ -351,12 +375,17 @@
         "codex"
       ],
       "depends_on": [
+        ".claude/commands/dossier.md",
         ".claude/settings.json",
+        ".codex/hooks.json",
         "AGENTS.md",
         "CLAUDE.md",
         "tools/fresh_worker.py",
         "tools/memlib.py",
+        "tools/now.py",
+        "tools/rec.py",
         "tools/recall.py",
+        "tools/receipts.py",
         "tools/wf_gardener.js"
       ],
       "reviewed_at": null
@@ -446,10 +475,15 @@
         "system/kit-decisions.md",
         "system/rituals.md",
         "tools/doctor.py",
+        "tools/enforce.py",
+        "tools/fresh_worker.py",
         "tools/gate.py",
         "tools/install_hooks.sh",
         "tools/precommit-hook.sh",
+        "tools/sync_engine.sh",
         "tools/test_doctor_json.py",
+        "tools/test_egress.py",
+        "tools/test_enforce.py",
         "tools/test_fresh_install.sh",
         "tools/test_fresh_worker.py",
         "tools/test_hook_runtime.py",
@@ -513,7 +547,10 @@
         "claude",
         "codex"
       ],
-      "depends_on": [],
+      "depends_on": [
+        "AGENTS.md",
+        "system/rituals.md"
+      ],
       "reviewed_at": null
     },
     {
@@ -737,8 +774,10 @@
         "system/lenses/silence.md",
         "system/person-ledger.md",
         "system/reviews/architecture.md",
+        "system/reviews/content-audit.tsv",
         "system/rituals.md",
         "system/skills/paper-to-kit.md",
+        "system/test-matrix.yaml",
         "templates/decisions.md",
         "templates/instance-rules.md",
         "templates/memory-config.json",
@@ -747,8 +786,10 @@
         "tools/build_memory_map.py",
         "tools/codex_root_thread.py",
         "tools/coherence.py",
+        "tools/context_budget.py",
         "tools/diarize.py",
         "tools/doctor.py",
+        "tools/enforce.py",
         "tools/eval_recall.py",
         "tools/evidencecheck.py",
         "tools/fresh_worker.py",
@@ -768,8 +809,12 @@
         "tools/receipts.py",
         "tools/skill_adapters.py",
         "tools/sync_engine.sh",
+        "tools/test_bypass_pins.py",
         "tools/test_coherence.py",
+        "tools/test_context_budget.py",
         "tools/test_doctor_json.py",
+        "tools/test_egress.py",
+        "tools/test_enforce.py",
         "tools/test_evidencecheck.py",
         "tools/test_fresh_install.sh",
         "tools/test_fresh_worker.py",
@@ -779,8 +824,10 @@
         "tools/test_install_checks.py",
         "tools/test_install_hooks.py",
         "tools/test_manifests.py",
+        "tools/test_matrix_check.py",
         "tools/test_memcheck.py",
         "tools/test_memlib_journal.py",
+        "tools/test_mutation.py",
         "tools/test_portability.py",
         "tools/test_rec.py",
         "tools/test_recall.py",
@@ -788,8 +835,11 @@
         "tools/test_setup_migration.py",
         "tools/test_skill_parity.py",
         "tools/test_state_runtime.py",
+        "tools/test_tool_entrypoints.py",
+        "tools/test_worker_batch.py",
         "tools/transcribe.py",
-        "tools/wf_gardener.js"
+        "tools/wf_gardener.js",
+        "tools/worker_batch.py"
       ],
       "reviewed_at": null
     },
@@ -902,6 +952,115 @@
       "reviewed_at": null
     },
     {
+      "path": "system/reviews/content-audit.tsv",
+      "kind": "evidence",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".claude/commands/dossier.md",
+        ".claude/commands/garden.md",
+        ".claude/commands/now.md",
+        ".claude/commands/paper-to-kit.md",
+        ".claude/commands/recall.md",
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        ".gitignore",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CHECKLIST.md",
+        "CLAUDE.md",
+        "LICENSE",
+        "README.md",
+        "SETUP.md",
+        "setup.sh",
+        "state/.gitkeep",
+        "system/PRD-info-architecture.md",
+        "system/PRD-session-memory.md",
+        "system/WORKING-WITH-AI.md",
+        "system/debate/README.md",
+        "system/deep-pass.md",
+        "system/enforcement-matrix.md",
+        "system/enforcement-matrix.yaml",
+        "system/evidence-schema.md",
+        "system/kit-decisions.md",
+        "system/lenses/README.md",
+        "system/lenses/ergodic.md",
+        "system/lenses/feedback-loop.md",
+        "system/lenses/fence.md",
+        "system/lenses/feynman.md",
+        "system/lenses/incentive.md",
+        "system/lenses/inversion.md",
+        "system/lenses/isomorphism.md",
+        "system/lenses/jensen.md",
+        "system/lenses/ledger.md",
+        "system/lenses/limits.md",
+        "system/lenses/marginal.md",
+        "system/lenses/mirror.md",
+        "system/lenses/silence.md",
+        "system/person-ledger.md",
+        "system/review-manifest.yaml",
+        "system/reviews/architecture.md",
+        "system/rituals.md",
+        "system/skills/paper-to-kit.md",
+        "templates/decisions.md",
+        "templates/instance-rules.md",
+        "templates/memory-config.json",
+        "templates/rituals.local.md",
+        "tools/ask_codex.sh",
+        "tools/build_memory_map.py",
+        "tools/codex_root_thread.py",
+        "tools/coherence.py",
+        "tools/diarize.py",
+        "tools/doctor.py",
+        "tools/eval_recall.py",
+        "tools/evidencecheck.py",
+        "tools/fresh_worker.py",
+        "tools/gate.py",
+        "tools/hook_canary.py",
+        "tools/hookdiag.py",
+        "tools/i18n.py",
+        "tools/install_hooks.sh",
+        "tools/linkcheck.py",
+        "tools/manifest_build.py",
+        "tools/memlib.py",
+        "tools/now.py",
+        "tools/portrait.py",
+        "tools/precommit-hook.sh",
+        "tools/rec.py",
+        "tools/recall.py",
+        "tools/receipts.py",
+        "tools/skill_adapters.py",
+        "tools/sync_engine.sh",
+        "tools/test_coherence.py",
+        "tools/test_doctor_json.py",
+        "tools/test_evidencecheck.py",
+        "tools/test_fresh_install.sh",
+        "tools/test_fresh_worker.py",
+        "tools/test_hook_runtime.py",
+        "tools/test_hookdiag.py",
+        "tools/test_i18n.py",
+        "tools/test_install_checks.py",
+        "tools/test_install_hooks.py",
+        "tools/test_manifests.py",
+        "tools/test_memcheck.py",
+        "tools/test_memlib_journal.py",
+        "tools/test_portability.py",
+        "tools/test_rec.py",
+        "tools/test_recall.py",
+        "tools/test_receipts.py",
+        "tools/test_setup_migration.py",
+        "tools/test_skill_parity.py",
+        "tools/test_state_runtime.py",
+        "tools/transcribe.py",
+        "tools/wf_gardener.js"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": "system/rituals.md",
       "kind": "rule",
       "owner": "kit",
@@ -936,6 +1095,72 @@
       ],
       "depends_on": [
         "system/evidence-schema.md"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/test-matrix.yaml",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "setup.sh",
+        "tools/ask_codex.sh",
+        "tools/build_memory_map.py",
+        "tools/codex_root_thread.py",
+        "tools/coherence.py",
+        "tools/context_budget.py",
+        "tools/diarize.py",
+        "tools/doctor.py",
+        "tools/enforce.py",
+        "tools/eval_recall.py",
+        "tools/evidencecheck.py",
+        "tools/fresh_worker.py",
+        "tools/gate.py",
+        "tools/hook_canary.py",
+        "tools/hookdiag.py",
+        "tools/i18n.py",
+        "tools/install_hooks.sh",
+        "tools/linkcheck.py",
+        "tools/manifest_build.py",
+        "tools/memlib.py",
+        "tools/now.py",
+        "tools/portrait.py",
+        "tools/precommit-hook.sh",
+        "tools/rec.py",
+        "tools/recall.py",
+        "tools/receipts.py",
+        "tools/skill_adapters.py",
+        "tools/sync_engine.sh",
+        "tools/test_coherence.py",
+        "tools/test_context_budget.py",
+        "tools/test_doctor_json.py",
+        "tools/test_enforce.py",
+        "tools/test_evidencecheck.py",
+        "tools/test_fresh_install.sh",
+        "tools/test_fresh_worker.py",
+        "tools/test_hook_runtime.py",
+        "tools/test_hookdiag.py",
+        "tools/test_i18n.py",
+        "tools/test_install_checks.py",
+        "tools/test_install_hooks.py",
+        "tools/test_manifests.py",
+        "tools/test_memlib_journal.py",
+        "tools/test_mutation.py",
+        "tools/test_rec.py",
+        "tools/test_recall.py",
+        "tools/test_receipts.py",
+        "tools/test_setup_migration.py",
+        "tools/test_skill_parity.py",
+        "tools/test_state_runtime.py",
+        "tools/test_tool_entrypoints.py",
+        "tools/test_worker_batch.py",
+        "tools/transcribe.py",
+        "tools/wf_gardener.js",
+        "tools/worker_batch.py"
       ],
       "reviewed_at": null
     },
@@ -1064,6 +1289,17 @@
       "reviewed_at": null
     },
     {
+      "path": "tools/context_budget.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
       "path": "tools/diarize.py",
       "kind": "tool",
       "owner": "kit",
@@ -1095,6 +1331,20 @@
         "tools/portrait.py",
         "tools/rec.py",
         "tools/recall.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/enforce.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "setup.sh",
+        "state/.gitkeep"
       ],
       "reviewed_at": null
     },
@@ -1207,6 +1457,7 @@
         "tool"
       ],
       "depends_on": [
+        "tools/gate.py",
         "tools/precommit-hook.sh"
       ],
       "reviewed_at": null
@@ -1236,7 +1487,20 @@
       "depends_on": [
         "system/enforcement-matrix.yaml",
         "system/review-manifest.yaml",
-        "tools/test_manifests.py"
+        "system/reviews/content-audit.tsv",
+        "system/test-matrix.yaml",
+        "tools/context_budget.py",
+        "tools/enforce.py",
+        "tools/test_bypass_pins.py",
+        "tools/test_context_budget.py",
+        "tools/test_egress.py",
+        "tools/test_enforce.py",
+        "tools/test_manifests.py",
+        "tools/test_matrix_check.py",
+        "tools/test_mutation.py",
+        "tools/test_tool_entrypoints.py",
+        "tools/test_worker_batch.py",
+        "tools/worker_batch.py"
       ],
       "reviewed_at": null
     },
@@ -1292,6 +1556,7 @@
         "tool"
       ],
       "depends_on": [
+        "tools/enforce.py",
         "tools/gate.py",
         "tools/install_hooks.sh"
       ],
@@ -1363,6 +1628,22 @@
       "reviewed_at": null
     },
     {
+      "path": "tools/test_bypass_pins.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "README.md",
+        "tools/gate.py",
+        "tools/linkcheck.py"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": "tools/test_coherence.py",
       "kind": "tool",
       "owner": "kit",
@@ -1377,6 +1658,17 @@
       "reviewed_at": null
     },
     {
+      "path": "tools/test_context_budget.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
       "path": "tools/test_doctor_json.py",
       "kind": "tool",
       "owner": "kit",
@@ -1385,6 +1677,33 @@
         "tool"
       ],
       "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_egress.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_enforce.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "README.md",
+        "setup.sh",
+        "tools/sync_engine.sh"
+      ],
       "reviewed_at": null
     },
     {
@@ -1400,9 +1719,15 @@
         "system/enforcement-matrix.md",
         "system/evidence-schema.md",
         "system/kit-decisions.md",
+        "system/test-matrix.yaml",
+        "tools/enforce.py",
         "tools/evidencecheck.py",
         "tools/gate.py",
-        "tools/precommit-hook.sh"
+        "tools/i18n.py",
+        "tools/install_hooks.sh",
+        "tools/test_egress.py",
+        "tools/test_enforce.py",
+        "tools/test_matrix_check.py"
       ],
       "reviewed_at": null
     },
@@ -1418,8 +1743,12 @@
         "SETUP.md",
         "setup.sh",
         "tools/doctor.py",
+        "tools/fresh_worker.py",
+        "tools/gate.py",
         "tools/install_hooks.sh",
-        "tools/linkcheck.py"
+        "tools/linkcheck.py",
+        "tools/memlib.py",
+        "tools/now.py"
       ],
       "reviewed_at": null
     },
@@ -1476,7 +1805,9 @@
         "setup.sh",
         "tools/doctor.py",
         "tools/gate.py",
-        "tools/linkcheck.py"
+        "tools/i18n.py",
+        "tools/linkcheck.py",
+        "tools/test_fresh_install.sh"
       ],
       "reviewed_at": null
     },
@@ -1493,7 +1824,8 @@
         "README.md",
         "SETUP.md",
         "tools/linkcheck.py",
-        "tools/now.py"
+        "tools/now.py",
+        "tools/test_fresh_install.sh"
       ],
       "reviewed_at": null
     },
@@ -1523,7 +1855,51 @@
         ".codex/hooks.json",
         "system/enforcement-matrix.yaml",
         "system/review-manifest.yaml",
-        "tools/manifest_build.py"
+        "system/reviews/content-audit.tsv",
+        "system/test-matrix.yaml",
+        "tools/context_budget.py",
+        "tools/enforce.py",
+        "tools/manifest_build.py",
+        "tools/test_bypass_pins.py",
+        "tools/test_context_budget.py",
+        "tools/test_egress.py",
+        "tools/test_enforce.py",
+        "tools/test_matrix_check.py",
+        "tools/test_mutation.py",
+        "tools/test_tool_entrypoints.py",
+        "tools/test_worker_batch.py",
+        "tools/worker_batch.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_matrix_check.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "setup.sh",
+        "tools/doctor.py",
+        "tools/fresh_worker.py",
+        "tools/gate.py",
+        "tools/install_hooks.sh",
+        "tools/linkcheck.py",
+        "tools/memlib.py",
+        "tools/now.py",
+        "tools/test_doctor_json.py",
+        "tools/test_fresh_install.sh",
+        "tools/test_fresh_worker.py",
+        "tools/test_hook_runtime.py",
+        "tools/test_install_checks.py",
+        "tools/test_install_hooks.py",
+        "tools/test_memlib_journal.py",
+        "tools/test_mutation.py",
+        "tools/test_rec.py",
+        "tools/test_setup_migration.py",
+        "tools/test_state_runtime.py"
       ],
       "reviewed_at": null
     },
@@ -1546,7 +1922,36 @@
         "human",
         "tool"
       ],
-      "depends_on": [],
+      "depends_on": [
+        "tools/memlib.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_mutation.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "setup.sh",
+        "tools/doctor.py",
+        "tools/fresh_worker.py",
+        "tools/gate.py",
+        "tools/install_hooks.sh",
+        "tools/linkcheck.py",
+        "tools/memlib.py",
+        "tools/now.py",
+        "tools/test_fresh_worker.py",
+        "tools/test_hook_runtime.py",
+        "tools/test_install_checks.py",
+        "tools/test_install_hooks.py",
+        "tools/test_memlib_journal.py",
+        "tools/test_setup_migration.py",
+        "tools/test_state_runtime.py"
+      ],
       "reviewed_at": null
     },
     {
@@ -1643,6 +2048,39 @@
       "reviewed_at": null
     },
     {
+      "path": "tools/test_tool_entrypoints.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/ask_codex.sh",
+        "tools/codex_root_thread.py",
+        "tools/diarize.py",
+        "tools/eval_recall.py",
+        "tools/portrait.py",
+        "tools/sync_engine.sh",
+        "tools/transcribe.py",
+        "tools/wf_gardener.js"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_worker_batch.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "AGENTS.md"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": "tools/transcribe.py",
       "kind": "tool",
       "owner": "kit",
@@ -1667,6 +2105,17 @@
         "tools/now.py",
         "tools/recall.py"
       ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/worker_batch.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
       "reviewed_at": null
     }
   ]

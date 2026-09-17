@@ -106,6 +106,7 @@ def _validate_config_shape(data):
 
     containers = {
         "instance": dict,
+        "egress": dict,
         "episodic_sources": list,
         "tracks": list,
         "journal_visibility": dict,
@@ -127,6 +128,17 @@ def _validate_config_shape(data):
     if "remote_allowlist" in instance and not all(
             _valid_remote_allowlist_entry(x) for x in instance["remote_allowlist"]):
         raise ValueError("config.instance.remote_allowlist에 유효하지 않은 host/remote가 있음")
+
+    egress = data.get("egress", {})
+    if "model_send" in egress and not isinstance(egress["model_send"], dict):
+        raise ValueError("config.egress.model_send가 object가 아님")
+    model_send = egress.get("model_send", {})
+    for key in ("deny_prefixes", "allow_prefixes"):
+        if key in model_send and not (
+                isinstance(model_send[key], list)
+                and all(_valid_egress_prefix(x) for x in model_send[key])):
+            raise ValueError(
+                f"config.egress.model_send.{key}가 안전한 상대경로 prefix list가 아님")
 
     for i, row in enumerate(data.get("episodic_sources", [])):
         if not isinstance(row, dict):
@@ -225,6 +237,17 @@ def _valid_remote_host(host):
             return False
     label = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
     return bool(host) and all(label.match(part) for part in host.split("."))
+
+
+def _valid_egress_prefix(value):
+    """Model-send policy prefixes are canonical workspace-relative directories."""
+    if not isinstance(value, str) or not value or value != value.strip():
+        return False
+    if (not value.endswith("/") or "\\" in value or value.startswith(("/", "./"))
+            or re.match(r"^[A-Za-z]:", value)
+            or ".." in value.split("/")):
+        return False
+    return all(part not in ("", ".", "..") for part in value[:-1].split("/"))
 
 
 def _valid_remote_allowlist_entry(value):
@@ -339,6 +362,17 @@ INSTANCE_NAME = _INST.get("name", os.path.basename(ROOT))
 INSTANCE_CONTEXT = _INST.get("context", "personal")   # personal | work
 REMOTE_ALLOWLIST = _INST.get("remote_allowlist", [])
 CONFIG_SCHEMA = _CFG.get("schema_version", 1)   # 없으면 1 (instance 블록 이전)
+
+# 모델 전송 등급은 Git visibility와 별개다. 옛 config에도 안전한 기본값을 적용하므로 optional
+# 필드 추가를 위해 schema_version을 올리지 않는다.
+_DEFAULT_EGRESS_MODEL_SEND = {"deny_prefixes": ["_private/"], "allow_prefixes": []}
+_MODEL_SEND = _CFG.get("egress", {}).get("model_send", {})
+EGRESS_MODEL_SEND = {
+    "deny_prefixes": list(_MODEL_SEND.get(
+        "deny_prefixes", _DEFAULT_EGRESS_MODEL_SEND["deny_prefixes"])),
+    "allow_prefixes": list(_MODEL_SEND.get(
+        "allow_prefixes", _DEFAULT_EGRESS_MODEL_SEND["allow_prefixes"])),
+}
 
 
 def schema_gap():
