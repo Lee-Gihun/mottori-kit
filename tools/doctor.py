@@ -69,14 +69,25 @@ def c_git():
     r = sh("git", "rev-parse", "--show-toplevel")
     if r.returncode:
         return WARN, "git 저장소가 아니다 — linkcheck가 추적 파일을 못 센다"
-    return PASS, r.stdout.strip()
+    # install_hooks.sh는 `git hook run`(2.36+)과 `rev-parse --path-format`(2.31+)을 쓴다. 옛 git에서는
+    # 후방선 설치가 롤백되고 exit 1 한다 (2026-09-17 문서 감사). 어디서 막히는지 여기서 먼저 말한다.
+    v = sh("git", "--version").stdout.strip()
+    m = re.search(r"(\d+)\.(\d+)", v)
+    if not m:
+        return WARN, f"{r.stdout.strip()} · git 버전을 못 읽음 ({v!r}) — 2.36 이상인지 직접 확인"
+    if (int(m.group(1)), int(m.group(2))) < (2, 36):
+        # 고칠 수 있는 결함이다(git 업그레이드). warn으로 두면 후방선 없이 FAIL 0이 가능하다 (독립 리뷰 3).
+        return FAIL, f"{r.stdout.strip()} · {v} — 2.36 미만: `install_hooks.sh --repair`(pre-commit 후방선)가 안 된다. git을 올려라"
+    return PASS, r.stdout.strip() + f" · {v}"
 
 
 # ------------------------------------------------------------------ 배선
 
 def c_memlib():
     import memlib as M
-    if M.ROOT != ROOT:
+    # 같은 디렉토리의 두 표기(심볼릭 링크 경유 vs 물리 경로)는 불일치가 아니다 (2026-09-17 실측: macOS
+    # /var → /private/var 아래 임시 클론에서 setup이 export한 논리 경로와 도구의 realpath가 달랐다).
+    if os.path.realpath(M.ROOT) != os.path.realpath(ROOT):
         return FAIL, f"ROOT 불일치: memlib={M.ROOT} vs 실제={ROOT}"
     return PASS, f"ROOT={M.ROOT}"
 
@@ -220,7 +231,12 @@ def c_hook_codex_armed():
     if entry.get("errors"):
         return FAIL, detail + f" · loader errors={entry['errors']}"
     if required:
-        return FAIL, detail + " · unarmed: " + ", ".join(required)
+        # 선언·명령은 유효한데 Codex가 아직 신뢰를 안 준 상태다. 신뢰 승인은 사람이 이 디렉토리에서
+        # codex를 한 번 띄워야만 생기므로(CHECKLIST C) 기계가 못 고치는 FAIL이 된다. 안 고쳐지는
+        # FAIL은 사람이 FAIL 자체를 무시하게 만든다 (2026-08-24 교훈). 그래서 warn + 할 일.
+        return WARN, (detail + " · unarmed: " + ", ".join(required)
+                      + "\n      이 디렉토리에서 `codex`를 한 번 띄워 훅 신뢰를 승인해라 (CHECKLIST C). "
+                        "승인 전엔 Codex 세션에 상태가 주입되지 않는다")
     if report["guard"]["declared"] and not report["guard"]["matcher_reachable"]:
         return WARN, detail + " · guard armed지만 matcher-unreachable"
     return PASS, detail
@@ -267,7 +283,13 @@ def c_hook_success():
     except Exception as e:
         return FAIL, f"유효 JSON이 아니다: {e} · stdout[:120]={r.stdout[:120]!r}"
     if ctx.startswith("[kit]"):
-        return FAIL, "실패 분기로 떨어졌다 — now.py가 안 돈다"
+        import memlib as M
+        if not os.path.exists(M.CONFIG_PATH):
+            # setup 전엔 config·NOW가 없어 fallback이 뜨는 것이 정상이다. 고장과 미초기화를 가른다
+            # (2026-09-17 독립 감사 H).
+            return WARN, "실패 분기 확인만 완료 — setup 전(config 없음). `bash setup.sh` 뒤 다시 본다"
+        tail = (r.stderr.strip().splitlines() or [""])[-1][:160]
+        return FAIL, "실패 분기로 떨어졌다 — now.py가 안 돈다" + (f" · stderr: {tail}" if tail else "")
     return PASS, f"command-valid only · {len(ctx.encode('utf-8'))} UTF-8 bytes · fired/effect=unknown"
 
 
@@ -398,7 +420,7 @@ def c_regression():
     계측기가 자기 옆의 계측기를 안 보고 있었던 셈이다.
     """
     scripts = ["test_memcheck.py", "test_state_runtime.py", "test_hook_runtime.py",
-               "test_fresh_worker.py"]
+               "test_fresh_worker.py", "test_install_checks.py"]
     kit_sync = os.path.join(ROOT, "tools", "kit_sync.py")
     # kit_sync.py는 상류에만 있는 표지다. 배포 킷에서는 installer와 그 fixture가 둘 다
     # distribution contract이므로 한쪽을 지워 4-suite green으로 축소하는 경로를 막는다.
@@ -583,7 +605,9 @@ def _linkcheck_scope():
     import hashlib
     r = sh("git", "ls-files", "--cached", "--others", "--exclude-standard", "*.md")
     d = hashlib.sha1()
-    for f in sorted(x for x in r.stdout.split() if x.strip()):
+    # 줄 단위다. split()으로 나누면 공백 든 파일명이 두 조각이 나 linkcheck의 인증서와 다른 해시가
+    # 되고, 그 파일이 있는 한 "검사 기록 없음"이 영원히 뜬다 (2026-09-17 독립 감사 L).
+    for f in sorted(x for x in r.stdout.splitlines() if x.strip()):
         d.update(f.encode())
         try:
             d.update(open(os.path.join(ROOT, f), "rb").read())
@@ -620,7 +644,8 @@ def c_missed_gate():
     if M.ran_at_head("linkcheck", cur_scope, require_ok=True):
         return PASS, "지금 파일 상태에서 linkcheck 통과 기록 있음"
     # 미검증 상태다. 새 파일이 끼어 있을 때만 문제로 본다 — 단순 수정마다 울면 꺼진다.
-    added = sh("git", "show", "--diff-filter=A", "--name-only", "--format=", "HEAD").stdout.split()
+    added = [x for x in sh("git", "show", "--diff-filter=A", "--name-only", "--format=",
+                           "HEAD").stdout.splitlines() if x.strip()]
     untracked_new = [l[3:] for l in sh("git", "status", "--porcelain").stdout.splitlines()
                      if l.startswith(("A ", "??"))]
     new_files = added + untracked_new
@@ -722,7 +747,12 @@ def c_engine_drift():
             continue
         try:
             want = kit_sync.depersonalize(open(a, encoding="utf-8").read())
-            if want != open(b, encoding="utf-8").read():
+            have = open(b, encoding="utf-8").read()
+            # fresh_worker.py의 동기화 각인(KIT-DR-010)은 의도된 차이다. kit_sync와 같은 정규화를
+            # 거쳐야 이 검사가 상시 warn이 되지 않는다 (2026-09-17 실측).
+            if f == "fresh_worker.py" and hasattr(kit_sync, "unstamp"):
+                want, have = kit_sync.unstamp(want), kit_sync.unstamp(have)
+            if want != have:
                 diff.append(f)
         except UnicodeDecodeError:
             pass

@@ -27,10 +27,12 @@
 
 ```bash
 python3 --version     # 3.8 이상
-git --version
-which claude codex    # 둘 중 하나만 있어도 시작은 된다
+git --version         # 2.36 이상 (pre-commit 후방선 설치가 `git hook run`을 쓴다)
+which claude codex    # 없어도 설치는 된다. 둘 다 없으면 fresh worker와 훅 주입만 못 쓴다
 node --version        # 정원사(/garden)용. 없어도 나머지는 다 돈다
 ```
+
+macOS·Linux 전용이다 (게이트가 `fcntl` 잠금, 훅 설치가 `shasum`을 쓴다). Windows는 WSL에서.
 
 ## 2. 인스턴스 설정 만들기
 
@@ -45,22 +47,28 @@ bash setup.sh
 bash setup.sh --name team-work --context work
 ```
 
-`setup.sh`가 하는 일은 넷뿐이다.
-1. `templates/memory-config.json` → `system/memory-config.json` 복사 후 이름·context 치환
-2. `templates/instance-rules.md` → `system/instance-rules.md` 복사
-3. `state/` 준비 + 첫 journal 엔트리 기록
-4. `python3 tools/now.py render`로 첫 NOW 생성
+tty가 없으면(에이전트·CI·파이프) 묻지 않고 기본값(이름=디렉토리명, context=work)을 쓰고 그 사실을
+인쇄한다. 개인 머신이면 `--context personal`을 명시해라.
 
-기존 schema v1/v2/v3 인스턴스를 v4로 올리거나 v4 설정을 보존해 다시 적용할 때는 같은 이름·context로
-`bash setup.sh --force`를 실행한다. 기존 config는 `.bak`으로 남고 트랙·검사·공개 목록은 보존된다.
+`setup.sh`가 만드는 것은 아래 전부다 (되돌리려면 이 목록을 지운다).
+1. `system/memory-config.json` (templates에서 복사, 이름·context 치환, 클론 origin을 allowlist에 등록)
+2. `system/instance-rules.md` · `system/decisions.md` · `system/rituals.local.md` (없는 것만 templates에서)
+3. `state/journal-<월>.md` 첫 사건 + `state/NOW.md` · `_private/state/journal-<월>.md` 첫 local 사건 + `_private/state/NOW.md`
+4. `python3 tools/linkcheck.py` 실행 기록(`state/.tool-runs.log`) + 게이트 기준선 `state/.gate-baseline.json`
+5. 마지막에 `python3 tools/doctor.py`를 한 번 돌려 결과를 보여준다
+
+기존 schema v1/v2/v3 인스턴스를 v4로 올리거나 v4 설정을 보존해 다시 적용할 때는
+`bash setup.sh --force`를 실행한다. 이름·context는 기존 config 값이 기본값이 된다 (tty가 없어도
+work로 바뀌지 않는다). 기존 config는 `.bak`으로 남고 트랙·검사·공개 목록은 보존된다.
 단, v1~v3의 nonempty `threads[]`에는 public 판정 provenance가 없으므로 자동 승격하지 않고 중단한다.
 확인된 public 항목과 local 항목을 사람이 먼저 분리한 뒤 재실행한다. 검증된 v4 `threads[]`만 그대로
 보존한다. v3는 기존 공개 목록을 과거 journal 행의 provenance로 고정하고, v1/v2에는 그 판정이
 없으므로 기존 journal 전부를 fail-closed legacy-private로 둔다. 경계는 migration 전 마지막 journal
 timestamp다. malformed journal·config는 추측해 덮지 않는다. 끝나면 `python3 tools/doctor.py`를 다시 돌린다.
 
-새 설치를 되돌리려면 만들어진 세 파일을 지우면 된다. migration을 되돌릴 때는 내용을 확인한
-뒤 `system/memory-config.json.bak`을 복원한다. 되돌릴 수 없는 일은 하지 않는다.
+새 설치를 되돌리려면 위 목록의 파일(`system/` 넷, `state/`, `_private/state/`)과 `.git/hooks/pre-commit`
+(2b에서 설치)을 지우면 된다. migration을 되돌릴 때는 내용을 확인한 뒤 `system/memory-config.json.bak`을
+복원한다. 되돌릴 수 없는 일은 하지 않는다.
 
 ## 2b. 검증 후방선 설치
 
@@ -81,13 +89,26 @@ Codex 편집, 사용자 interrupt는 못 본다. pre-commit은 실제로 커밋�
 
 ```bash
 python3 tools/doctor.py
-python3 tools/gate.py baseline    # 이 리포의 현재 이슈를 기준선으로
 ```
 
-기준선을 안 세우면 게이트는 삭제와 첫 설치를 구분할 수 없어 fail-closed로 막는다.
-`setup.sh`는 첫 초기화에서 baseline을 만들지만, 수동 설치·복구 때는 위 명령을 직접 실행한다.
+`setup.sh`가 첫 초기화에서 linkcheck 기록과 게이트 기준선을 만든다. 수동 설치·복구 때만
+`python3 tools/linkcheck.py && python3 tools/gate.py baseline`을 직접 실행한다. 기준선이 없으면
+게이트는 삭제와 첫 설치를 구분할 수 없어 fail-closed로 막는다.
 
-**FAIL이 0이어야 세팅 완료다.** warn은 상황에 따라 정상이다 (예: codex CLI 미설치).
+**FAIL이 0이어야 세팅 완료다.** 표시 셋의 뜻:
+- `FAIL` 기계가 고칠 수 있거나 고쳐야 하는 것. 종료코드 1. 하나라도 있으면 상태 자동화를 믿지 마라
+- `warn` 상황에 따라 정상인 것 (codex·claude 미설치, 아직 세션을 안 돌려 전사 디렉토리 없음, tracks 미등록,
+  Codex가 아직 이 디렉토리의 훅을 신뢰하지 않음). 종료코드에 안 들어간다
+- `--` 이 인스턴스에 해당 없음 (예: personal이면 원격 검사 안 함)
+
+같은 발견이 work 인스턴스에서는 FAIL, personal에서는 warn인 것이 있다 (`_private`을 가리키는 추적
+심볼릭 링크). 회사 구조가 원격에 나가느냐의 차이다.
+
+Codex를 쓰면 이 디렉토리에서 `codex`를 한 번 띄워 훅 신뢰를 승인해야 Codex 세션에 상태가 주입된다.
+승인 전엔 doctor가 `훅 · codex armed`를 warn으로 알려준다 (CHECKLIST C).
+
+낯선 머신에서 이 절차 전체가 실제로 통과하는지는 `bash tools/test_fresh_install.sh`가 임시 클론에서
+비대화형으로 재현한다 (setup → 훅 → linkcheck → doctor → 회귀 → 재실행). 엔진을 고친 뒤 이걸 돌린다.
 
 doctor가 마지막에 인쇄하는 **"자동 검사 불가"** 네 개는 기계가 확인할 수 없는 것들이다.
 그 목록을 사람에게 그대로 전달해라. 확인했다고 대신 말하지 마라.
@@ -109,7 +130,20 @@ doctor가 마지막에 인쇄하는 **"자동 검사 불가"** 네 개는 기계
 { "key": "onboarding", "name": "온보딩", "canonical": "onboarding/tracker.md" }
 ```
 
-등록하면 `state/NOW.md`의 온도판에 그 트랙의 신선도가 자동으로 뜬다.
+등록한 뒤 `python3 tools/now.py render`를 한 번 돌리면 `state/NOW.md`의 온도판에 그 트랙의 신선도가
+뜬다 (config를 손으로 고치면 NOW가 낡은 상태가 되고, `now.py check`가 그걸 이슈로 잡는다).
+
+## 5a. 엔진을 업데이트할 때 (`git pull` 뒤)
+
+```bash
+git pull
+bash tools/install_hooks.sh --check      # 훅 템플릿이 바뀌었으면 --repair
+python3 tools/linkcheck.py && python3 tools/gate.py baseline   # 검사기가 바뀌었으면 기준선 갱신
+python3 tools/doctor.py                  # CHANGELOG의 [해야 함] 항목이 있으면 여기서 FAIL로 뜬다
+```
+
+`CHANGELOG.md`가 "기존 인스턴스가 무엇을 해야 하는가"의 정본이다. 새 설치는 최신 템플릿이므로
+옛 버전의 `[해야 함]` 항목을 다시 할 필요가 없다.
 
 ## 5b. 자기 점검 — 문서가 자기 안에서 닫히는가
 

@@ -62,15 +62,26 @@ def fixture(old_cfg, rows):
     return parent, root
 
 
+def fixture_env(root, env=None):
+    """픽스처의 서브프로세스는 항상 자기 root를 인스턴스로 본다.
+
+    setup.sh는 `MOTTORI_INSTANCE`를 export하는데, setup 안에서 doctor가 이 테스트를 돌리면
+    그 값이 상속돼 now.py가 부모 인스턴스의 state를 읽었다 (2026-09-17 실측: 셸에서는 13/13,
+    setup 안에서는 11/13). 테스트가 호출자의 환경에 따라 결과가 달라지면 테스트가 아니다."""
+    merged = dict(os.environ if env is None else env)
+    merged["MOTTORI_INSTANCE"] = root
+    return merged
+
+
 def run_setup(root, env=None):
     return subprocess.run(
         ["bash", "setup.sh", "--force", "--name", "fixture", "--context", "personal"],
-        cwd=root, capture_output=True, text=True, env=env)
+        cwd=root, capture_output=True, text=True, env=fixture_env(root, env))
 
 
 def run_now(root, *args):
     return subprocess.run([sys.executable, "tools/now.py", *args], cwd=root,
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, env=fixture_env(root))
 
 
 def text(root, rel):
@@ -96,9 +107,10 @@ def assert_setup_aborts_without_config_overwrite(root):
     before = open(cfg_path, "rb").read()
     result = run_setup(root)
     after = open(cfg_path, "rb").read()
-    backup = open(cfg_path + ".bak", "rb").read()
     assert result.returncode != 0, result.stdout + result.stderr
-    assert before == after == backup
+    assert before == after
+    # preflight가 journal을 먼저 보므로 백업 전에 멈출 수 있다 (2026-09-17). 백업이 있다면 원본과 같다.
+    assert (not os.path.exists(cfg_path + ".bak")) or open(cfg_path + ".bak", "rb").read() == before
 
 
 def test_fresh_setup_creates_v4_config_and_now():
@@ -289,9 +301,12 @@ def test_malformed_legacy_journal_aborts_without_overwriting_v2_config():
         before = open(os.path.join(root, "system", "memory-config.json"), "rb").read()
         result = run_setup(root)
         after = open(os.path.join(root, "system", "memory-config.json"), "rb").read()
-        backup = open(os.path.join(root, "system", "memory-config.json.bak"), "rb").read()
         assert result.returncode != 0
-        assert before == after == backup
+        assert before == after
+        # preflight가 journal을 먼저 검사하므로 백업을 만들기 전에 멈춘다 (2026-09-17). 백업이 있다면
+        # 원본과 같아야 하고, 없는 것이 정상이다.
+        bak = os.path.join(root, "system", "memory-config.json.bak")
+        assert (not os.path.exists(bak)) or open(bak, "rb").read() == before
     finally:
         shutil.rmtree(parent, ignore_errors=True)
 

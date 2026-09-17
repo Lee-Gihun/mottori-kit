@@ -19,6 +19,7 @@
 # --- 엔진만 되살린다 ---
 !/.gitignore
 !/README.md
+!/LICENSE
 !/SETUP.md
 !/CHECKLIST.md
 !/CHANGELOG.md

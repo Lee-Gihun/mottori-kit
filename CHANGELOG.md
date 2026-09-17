@@ -12,6 +12,56 @@ system/instance-rules.md, system/decisions.md, system/rituals.local.md, `state/`
 
 ---
 
+## v0.5 · 2026-09-17
+
+### `[알아둘 것]` 낯선 첫 설치가 실제로 통과한다 (`tools/test_fresh_install.sh`)
+
+v0.4를 임시 디렉토리에 클론해 README대로 돌리자 `bash setup.sh`가 tty 없이 **아무 출력 없이 exit 1** 했고
+(`read`가 EOF를 만나 set -e), 인자를 줘도 첫 doctor가 FAIL 4(codex 미신뢰·깨진 참조 2·회귀 12/13·검사 기록 없는
+새 파일)였다. 이번 판은 그 경로를 검사기로 만들었다: `bash tools/test_fresh_install.sh`가 공백 든 임시 경로에
+클론하고 작업트리 변경을 덮은 뒤 setup(비대화형·인자 없음) → 훅 설치 → linkcheck → doctor → 회귀 5종 → setup
+재실행 순으로 재서 PASS/FAIL을 낸다. 엔진을 고친 뒤 이걸 돌린다. 고친 것: setup.sh가 tty 없으면 기본값으로
+진행하고 인쇄한다 · `--force` 재실행은 기존 config의 이름·context를 기본값으로 쓴다(이전엔 비대화형이면 personal
+인스턴스가 work로 뒤집혔다) · 첫 local 사건을 기록해 `_private/state/NOW.md`를 첫날부터 만든다 · 순서는 기준선 →
+linkcheck → doctor(linkcheck 통과 기록이 doctor의 인증서다) · 쓰기 전에 public·private journal을 strict로 preflight
+한다(마지막 줄 개행 포함; 실패하면 아무것도 안 바꾼다) · `pwd -P`로 물리 경로를 export한다(macOS `/var` 링크 아래에서
+doctor의 ROOT 불일치) · `test_setup_migration.py` 픽스처가 부모의 `MOTTORI_INSTANCE`를 상속하지 않는다.
+
+### `[알아둘 것]` 실패가 조용히 성공으로 읽히던 경로 넷을 닫았다 (독립 결함 감사 17건 반영)
+
+`setup.sh`는 doctor·기준선이 실패하면 안내문을 끝까지 인쇄한 뒤 exit 1 한다(이전엔 FAIL을 보여주고도 0).
+`linkcheck.py` normal mode는 broken이 있으면 exit 1이다(`--issues`는 그대로 0). Stop 게이트는 검사기 자신이
+예외를 내면 무출력 0이 아니라 차단 JSON을 내고 pending을 남기며, UserPromptSubmit 회수 경로는 경고 JSON을
+낸다(후방선 fail-closed). doctor의 linkcheck 인증서 해시가 공백 든 md 파일명에서 linkcheck와 갈라지던 것을
+줄 단위로 고쳤다. 그 밖에: setup 전 doctor의 `훅 · claude 명령 유효성`은 고장이 아니라 "setup 전"으로 warn ·
+`c_git`은 2.36 미만을 FAIL(업그레이드로 고칠 수 있는 결함) · 새 인스턴스 NOW의 개인 정본이 `None`으로 찍히던 것
+정정 · CHECKLIST의 게이트 시험은 일회용 클론에서 하도록 바꿈(원본에서 게이트가 뚫리면 실제 커밋이 남았다).
+회귀 `tools/test_install_checks.py`가 이 계약을 고정한다(doctor의 회귀 목록에 포함). 독립 검토 2회(Codex)의
+FIX 판정을 반영했고, 남긴 것은 실제 Git 2.35 바이너리·Python 3.8 실기·shasum 없는 Linux·Claude/Codex 훅의
+실제 발화(fired/effect)로, 전부 이 머신에서 재현할 수 없는 것들이다.
+
+### `[알아둘 것]` doctor·linkcheck·now.py check의 늑대소년 3건 제거
+
+`훅 · codex armed`의 "미신뢰"는 사람이 codex를 한 번 띄워야만 풀리므로 FAIL이 아니라 warn+할 일이다. 상류 사본
+(setup 전)의 linkcheck는 setup이 만드는 7개 경로(config·인스턴스 문서 셋·두 NOW·게이트 기준선)를 BROKEN이 아니라
+`PENDING`으로 따로 센다 (`broken: 0 · pending(setup 전): N`); setup 뒤에는 같은 참조가 없으면 BROKEN이다.
+`now.py check`의 드라이브 인박스 검사는 개인 장비 어댑터(`drive_inbox.py`)가 없으면 경고 없이 건너뛴다(이전엔 킷
+클론마다 "인박스 검사 실패" 경고). `c_git`은 2.36 미만을 FAIL로 낸다(`install_hooks.sh`가 `git hook run`을 쓴다;
+업그레이드로 고칠 수 있는 결함이라 FAIL이다). 킷 드리프트 검사는 `fresh_worker.py` 각인 줄을 정규화해 비교한다.
+
+### `[알아둘 것]` 철학 한 줄과 LICENSE(MIT)
+
+README 첫 절에 소유자가 정한 철학이 들어갔다: 사람의 주의가 가장 비싼 자원, 토큰이 가장 싼 자원, 사람은 무한
+스레드 하나만 상대한다. 그 아래 규칙 둘(판정은 영수증으로만 · 통과와 원인은 따로 검증한다)은 KIT-DR-012.
+LICENSE는 MIT다. 독립 문서 감사가 "라이선스 검사하는 조직에서는 사용 자체가 막힌다"고 지적했다.
+
+### `[알아둘 것]` 문서가 코드와 맞는다 (독립 문서 감사 39건 반영)
+
+SETUP: setup이 만드는 파일 전체 목록과 되돌리기 목록, git 2.36·macOS/Linux 전제, FAIL·warn·`--`의 뜻, Codex 훅
+신뢰 승인 단계, `git pull` 뒤 재실행 순서(§5a), 트랙 등록 뒤 `render` 필요. README: 명령 넷 + 영어 quickstart 한 문단,
+훅·검사 개수 정정. CHECKLIST: 훅은 프로젝트 수준, work 인스턴스의 origin은 allowlist에 등록됨, 변경 관측 matcher
+위치. 소유자 이름은 킷 전체에서 역할어(소유자)로 치환됐다(`kit_sync`가 조사까지 변환하고 SCAN이 이름 단독을 잡는다).
+
 ## v0.4 · 2026-09-16
 
 ### `[자동]` fresh worker meta v2: kit_rev·kit_dirty·harness_sha256·usage·read_scope·scope
@@ -40,7 +90,7 @@ common 계약에 한 줄이 늘었다: 출처 없는 주장은 remaining unknown
 많으면 workspace 밖에 별명이 있는 hardlink라 위반이다(R8). 없는 prefix는 baseline 전에 디스패처가 만들어 그 생성이 위반으로
 잡히지 않게 한다(R9). prefix의 대소문자 보정은 파일시스템이 실제로 그 표기를 같은 항목으로 푸는 경우에만 한다(R10). **기본은 기록만**(run status 불변). `--strict-scope`를 함께 주면 위반 시 status
 `scope_violation`(wrapper_exit 4, 런타임 자체 exit보다 우선하며 `process_exit`는 meta에 남는다, R3). 사후 탐지만이고 rollback·삭제는 없다.
-호출자: `garden_cycle.sh` 검토 워커는 `--write-prefix "$DIR"`를 넘기고, `ask_codex.sh`는 `MOTTORI_WRITE_PREFIX` 환경변수를 통과시킨다(R4). prefix를 안 주면 write-set만 기록하고
+호출자: 배포본의 `ask_codex.sh`는 `MOTTORI_WRITE_PREFIX` 환경변수를 통과시킨다(R4). 원본 인스턴스의 확장인 정원 주기 스크립트(킷에 안 실림)는 검토 워커에 `--write-prefix "$DIR"`를 넘긴다. prefix를 안 주면 write-set만 기록하고
 status는 `unchecked`다. 이유: 2026-09-16 실 카나리에서 위반 2건이 전부 동시 쓰기(디스패처의 문서 편집,
 인스턴스의 `state/.tool-runs.log`)였다. 동시 writer와 워커를 가르려면 worktree 격리가 필요하다(다음 버전 후보).
 DR-049 closeout의 "allowlist·denylist 검사기" 구체화 (2609.04170 §2.2·§3.6).
