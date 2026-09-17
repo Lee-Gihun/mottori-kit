@@ -167,9 +167,11 @@
     },
     {
       "path": ".github/workflows/gates.yml",
-      "kind": null,
+      "kind": "tool",
       "owner": "kit",
-      "consumers": [],
+      "consumers": [
+        "tool"
+      ],
       "depends_on": [
         "tools/evidencecheck.py",
         "tools/linkcheck.py",
@@ -354,6 +356,7 @@
         "tools/gate.py",
         "tools/i18n.py",
         "tools/install_hooks.sh",
+        "tools/manifest_build.py",
         "tools/receipts.py",
         "tools/skill_adapters.py",
         "tools/sync_engine.sh",
@@ -2387,6 +2390,7 @@
         "system/test-matrix.yaml",
         "tools/context_budget.py",
         "tools/enforce.py",
+        "tools/gate.py",
         "tools/test_bypass_pins.py",
         "tools/test_context_budget.py",
         "tools/test_egress.py",
