@@ -417,7 +417,7 @@ if __name__ == "__main__":
                test_doctor_precommit_accepts_localized_status_tokens,
                test_doctor_work_context_rejects_tracked_private_symlink,
                test_gate_check_blocks_when_measure_raises,
-               test_gate_verdict_rejects_current_only_checker_key,
+               test_gate_verdict_checker_key_growth_and_shrink,
                test_now_renders_unspecified_personal_pointer):
         try:
             fn()
