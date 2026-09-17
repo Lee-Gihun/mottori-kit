@@ -55,7 +55,7 @@ doctor는 SessionStart 명령 출력과 PreCompact 명령의 journal 효과를 �
 - `[ ]` **PreCompact 실제 발화 확인.** 명령 효과는 doctor가 검증했다. 다음 실제 컴팩션이 일어난 뒤:
   ```bash
   tail -3 state/journal-$(date +%Y-%m).md   # "컴팩션 발생" 줄이 있어야 한다
-  cat state/.hook-errors.log 2>/dev/null    # 있으면 훅이 실패한 기록이다
+  test ! -e state/.hook-errors.log && echo "훅 오류 로그 없음" || cat state/.hook-errors.log
   ```
 - `[ ]` **Codex 훅 신뢰 승인.** Codex는 훅을 처음 볼 때 신뢰를 물어본다.
   승인하지 않으면 조용히 안 돈다. `codex` 한 번 띄워서 프롬프트가 뜨는지 확인
@@ -73,6 +73,8 @@ doctor는 SessionStart 명령 출력과 PreCompact 명령의 journal 효과를 �
   ```bash
   python3 tools/recall.py sessions
   ```
+  첫 Claude 또는 Codex 세션 전에는 출력 없이 종료코드 0이어도 정상이다. 세션을 한 번
+  연 뒤에는 현재 인스턴스 경로만 나오는지 확인해라.
 - `[기계]` Codex 발주 왕복 (codex CLI가 있을 때)
   ```bash
   printf '%s\n' "한 줄로 답해라: 지금 이 리포의 상시 코어는 몇 개인가." \
@@ -147,3 +149,10 @@ doctor는 SessionStart 명령 출력과 PreCompact 명령의 journal 효과를 �
 - `[ ]` 일반 버그면: 증상만 적어 두고 개인 머신에서 재현해서 고친다
 - `[ ]` 그래도 올려야 하면: 사람이 diff를 눈으로 읽고 회사 식별자·수치·코드네임이 없는지
   확인한 뒤 별도 쓰기 권한으로 올린다
+
+## 항목 근거 연결
+
+이 체크리스트는 자동 검사가 관찰할 수 없는 사람 권한, 회사 정책, 복구 가능성만 남긴다.
+각 항목의 Why는 `tools/doctor.py`가 자동 판정하지 못하는 경계와 `system/instance-rules.md`의
+인스턴스 선언을 서로 대조하려는 것이다. 훅과 명령 개수는 현재 배선을 확인하는 점검값이며,
+그 숫자 자체가 정책은 아니다.

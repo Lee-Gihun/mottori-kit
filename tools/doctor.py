@@ -14,6 +14,7 @@ doctor는 그 침묵을 깨는 쪽 계기다.
 """
 import json
 import os
+from pathlib import Path
 import re
 import shutil
 import subprocess
@@ -26,6 +27,7 @@ from i18n import language, t
 ROOT = os.path.dirname(HERE)
 VERBOSE = "--verbose" in sys.argv
 JSON_OUTPUT = "--json" in sys.argv
+READY_MODE = "--ready" in sys.argv
 
 PASS, FAIL, WARN, SKIP = "PASS", "FAIL", "WARN", "SKIP"
 results = []
@@ -150,6 +152,11 @@ def c_config():
     raw = open(M.CONFIG_PATH, encoding="utf-8").read()
     if "CHANGEME" in raw:
         return FAIL, t("doctor.config_changeme")
+    if READY_MODE:
+        import enforce
+        problems = enforce.ready_problems(Path(ROOT))
+        if problems:
+            return FAIL, " · ".join(problems)
     if M.CONFIG_WARNINGS:
         return WARN, " · ".join(_config_warning(w) for w in M.CONFIG_WARNINGS)
     return PASS, t("doctor.config_counts", tracks=len(M.TRACKS), threads=len(M.THREADS),
@@ -504,9 +511,9 @@ def c_precommit_install():
     r = sh("bash", script, "--check")
     detail = (r.stdout + r.stderr).strip().splitlines()
     first = detail[0] if detail else f"exit={r.returncode}"
-    if r.returncode == 0 and first.startswith("current:"):
+    if r.returncode == 0 and first.startswith(("current:", "현재(current):")):
         return PASS, first
-    if first.startswith("missing:"):
+    if first.startswith(("missing:", "없음(missing):")):
         return WARN, t("doctor.repair_needed", detail=first)
     return FAIL, first
 
@@ -589,10 +596,11 @@ def c_regression():
     # 공용 엔진 suite: 킷과 인스턴스 양쪽에 대상이 있다. test_i18n·test_doctor_json은 doctor 자신을
     # 돌리므로 여기 넣으면 재귀한다 (전수 실행은 test_fresh_install.sh와 스웜 계약이 맡는다).
     scripts = ["test_memcheck.py", "test_memlib_journal.py", "test_state_runtime.py",
-               "test_hook_runtime.py", "test_fresh_worker.py", "test_install_checks.py",
+               "test_hook_runtime.py", "test_fresh_worker.py", "test_worker_batch.py",
+               "test_install_checks.py",
                "test_recall.py", "test_rec.py",
                "test_hookdiag.py", "test_install_hooks.py", "test_coherence.py",
-               "test_evidencecheck.py"]
+               "test_evidencecheck.py", "test_egress.py"]
     kit_sync = os.path.join(ROOT, "tools", "kit_sync.py")
     # kit_sync.py는 상류에만 있는 표지다. 배포 킷에서는 installer와 그 fixture가 둘 다
     # distribution contract이므로 한쪽을 지워 4-suite green으로 축소하는 경로를 막는다.
@@ -611,7 +619,7 @@ def c_regression():
         # 배포 킷 전용 suite: setup.sh·review manifest·skill 문서처럼 킷 트리에만 대상이 있다
         # (인스턴스엔 kit_sync NOT_SYNCED로 남는다). 하나라도 지우면 fail-close.
         kit_suites = ("test_setup_migration.py", "test_portability.py", "test_manifests.py",
-                      "test_skill_parity.py")
+                      "test_skill_parity.py", "test_matrix_check.py")
         required = ("setup.sh",) + tuple(os.path.join("tools", s) for s in kit_suites)
         missing = [path for path in required if not os.path.isfile(os.path.join(ROOT, path))]
         if missing:
@@ -661,8 +669,13 @@ def c_ledger():
         return SKIP, t("doctor.ledger_missing")
     n = len([f for f in os.listdir(d) if f.endswith(".md")])
     r = sh(sys.executable, "tools/rec.py", "check")
+    if r.returncode != 0 or "Traceback" in r.stderr:
+        detail = (r.stderr.strip().splitlines() or [f"exit {r.returncode}"])[-1]
+        return FAIL, f"rec.py check 실패: {detail[:120]}"
     m = re.search(r"문제: (\d+)건", r.stdout)
-    bad = int(m.group(1)) if m else 0
+    if not m:
+        return FAIL, "rec.py check 결과에 `문제: N건` trailer가 없다"
+    bad = int(m.group(1))
     return (PASS if not bad else WARN), t("doctor.ledger_counts", facts=n, issues=bad)
 
 
@@ -687,6 +700,15 @@ def c_portrait():
 
 
 # --------------------------------------------------------- 단방향 밸브 (DR-026)
+
+def c_egress():
+    """모델 전송 정책이 최소 한 개의 deny prefix로 닫혀 있는가."""
+    import memlib as M
+    deny = M.EGRESS_MODEL_SEND.get("deny_prefixes", [])
+    allow = M.EGRESS_MODEL_SEND.get("allow_prefixes", [])
+    if not deny:
+        return FAIL, t("doctor.egress_empty")
+    return PASS, t("doctor.egress_ok", deny=len(deny), allow=len(allow))
 
 def _remote_host(url):
     """원격 URL에서 host를 뽑는다. scp 문법(git@host:path)과 로컬 경로도 처리."""
@@ -767,6 +789,16 @@ def c_symlinks():
              if rec.startswith("120000") and "\t" in rec]
     if not links:
         return PASS, t("doctor.symlinks_zero")
+    if M.INSTANCE_CONTEXT == "work":
+        shown = []
+        for link in links[:3]:
+            blob = subprocess.run(["git", "show", f":{link}"], cwd=ROOT,
+                                  capture_output=True, text=True)
+            target = blob.stdout.strip() if blob.returncode == 0 else "<index target unreadable>"
+            shown.append(f"{link[-52:]}  ->  {target[-52:]}")
+        more = t("doctor.more", count=len(links) - len(shown)) if len(links) > len(shown) else ""
+        return FAIL, (f"work index의 추적 symlink {len(links)}개\n      "
+                      + "\n      ".join(shown) + more)
     priv = os.path.realpath(os.path.join(ROOT, "_private"))
     into_private = []
     for l in links:
@@ -970,6 +1002,15 @@ def c_ignored():
             if len(exposed) < 20 else (WARN, t("doctor.untracked_exposure", count=len(exposed)))
 
     msgs = []
+    try:
+        import enforce
+        absolute = [row for row in enforce.index_issues(Path(ROOT))
+                    if not row[0].startswith("work-local-change:")]
+    except Exception as error:
+        msgs.append(f"index privacy 측정 실패: {type(error).__name__}")
+    else:
+        if absolute:
+            msgs.append("index privacy 위반: " + ", ".join(issue for issue, _ in absolute[:6]))
     still = [x for x in not_ignored if x not in tracked]
     if still:
         msgs.append(t("doctor.ignore_misses", items=", ".join(still)))
@@ -1013,6 +1054,7 @@ CHECKS = [
     (t("doctor.check.tools_recall"),          c_recall),
     (t("doctor.check.tools_ledger"),          c_ledger),
     (t("doctor.check.tools_portrait"),        c_portrait),
+    (t("doctor.check.valve_egress"),          c_egress),
     (t("doctor.check.valve_remote"),          c_valve),
     (t("doctor.check.valve_ignored"),         c_ignored),
     (t("doctor.check.valve_symlinks"),        c_symlinks),

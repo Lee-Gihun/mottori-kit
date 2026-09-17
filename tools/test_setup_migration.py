@@ -79,6 +79,12 @@ def run_setup(root, env=None):
         cwd=root, capture_output=True, text=True, env=fixture_env(root, env))
 
 
+def run_setup_defaults(root, env=None):
+    return subprocess.run(
+        ["bash", "setup.sh", "--force"], stdin=subprocess.DEVNULL,
+        cwd=root, capture_output=True, text=True, env=fixture_env(root, env))
+
+
 def run_now(root, *args):
     return subprocess.run([sys.executable, "tools/now.py", *args], cwd=root,
                           capture_output=True, text=True, env=fixture_env(root))
@@ -126,6 +132,17 @@ def test_fresh_setup_creates_v4_config_and_now():
         assert vis["legacy_public_tracks"] == []
         assert os.path.isfile(os.path.join(root, "state", "NOW.md"))
         assert "인스턴스 세팅" in text(root, "state/NOW.md")
+    finally:
+        shutil.rmtree(parent, ignore_errors=True)
+
+
+def test_noninteractive_fresh_setup_defaults_to_work_context():
+    parent, root = fixture(None, [])
+    try:
+        result = run_setup_defaults(root)
+        assert result.returncode == 0, result.stdout + result.stderr
+        cfg = json.load(open(os.path.join(root, "system", "memory-config.json"), encoding="utf-8"))
+        assert cfg["instance"]["context"] == "work"
     finally:
         shutil.rmtree(parent, ignore_errors=True)
 
@@ -374,6 +391,7 @@ def test_v3_nonempty_threads_abort_even_with_ad_hoc_visibility_field():
 
 TESTS = [
     test_fresh_setup_creates_v4_config_and_now,
+    test_noninteractive_fresh_setup_defaults_to_work_context,
     test_setup_binds_instance_to_its_own_root,
     test_setup_backup_is_gitignored,
     test_v1_empty_config_with_history_is_fail_closed,

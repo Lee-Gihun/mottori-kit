@@ -169,24 +169,27 @@ def test_doctor_reads_last_canary_result():
         shutil.rmtree(root, ignore_errors=True)
 
 
-TESTS = [
-    test_json_schema_and_exit_status,
+FAST_TESTS = [
     test_precompact_simulation_passes_for_both_runtimes,
     test_precompact_simulation_fails_without_journal_effect,
     test_doctor_reads_last_canary_result,
 ]
 
+FULL_TESTS = [test_json_schema_and_exit_status, *FAST_TESTS]
+
 
 def run():
+    tests = FULL_TESTS if "--full" in sys.argv else FAST_TESTS
     failed = []
-    for test in TESTS:
+    for test in tests:
         try:
             test()
             print(f"✓ {test.__name__}")
         except Exception as error:  # noqa: BLE001
             failed.append(test.__name__)
             print(f"✗ {test.__name__}: {type(error).__name__}: {error}")
-    print(f"doctor json: {len(TESTS) - len(failed)}/{len(TESTS)} passed")
+    mode = "full" if tests is FULL_TESTS else "fast"
+    print(f"doctor json ({mode}): {len(tests) - len(failed)}/{len(tests)} passed")
     return 1 if failed else 0
 
 

@@ -23,9 +23,22 @@ MANIFEST = ROOT / "system" / "review-manifest.yaml"
 MANIFEST_REL = "system/review-manifest.yaml"
 DELIVERY_PATHS = {
     "system/enforcement-matrix.yaml",
+    "system/reviews/content-audit.tsv",
     "system/review-manifest.yaml",
+    "system/test-matrix.yaml",
+    "tools/context_budget.py",
+    "tools/enforce.py",
     "tools/manifest_build.py",
+    "tools/test_bypass_pins.py",
+    "tools/test_context_budget.py",
+    "tools/test_egress.py",
+    "tools/test_enforce.py",
     "tools/test_manifests.py",
+    "tools/test_matrix_check.py",
+    "tools/test_mutation.py",
+    "tools/test_tool_entrypoints.py",
+    "tools/test_worker_batch.py",
+    "tools/worker_batch.py",
 }
 
 

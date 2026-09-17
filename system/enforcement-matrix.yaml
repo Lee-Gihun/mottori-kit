@@ -3626,6 +3626,24 @@
       "status": "DETECTED"
     },
     {
+      "id": "doctor-26-egress",
+      "origin": "doctor",
+      "source_key": "밸브 · 모델 전송",
+      "sources": [
+        "tools/doctor.py CHECKS \"밸브 · 모델 전송\""
+      ],
+      "invariant": "모델 전송 정책의 deny_prefixes는 비어 있지 않아야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": "tools/test_egress.py",
+        "negative": "tools/test_egress.py"
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 뒤 config를 바꾸거나 fresh_worker 밖에서 모델을 호출하는 경로는 막지 않는다.",
+      "status": "DETECTED"
+    },
+    {
       "id": "doctor-27",
       "origin": "doctor",
       "source_key": "밸브 · 원격 검사",
@@ -3948,6 +3966,162 @@
       "bypass_log": false,
       "residual": "doctor를 실행하지 않으면 탐지되지 않는다.",
       "status": "DETECTED"
+    },
+    {
+      "id": "w2-7-index-shapes",
+      "origin": "W2-7",
+      "source_key": "H1-G02-G04",
+      "sources": ["tools/gate.py cmd_precommit", "tools/enforce.py --issues --index"],
+      "invariant": "Unicode Markdown 경로는 원문으로 검사하고 Markdown symlink와 submodule gitlink는 commit 전에 거부한다.",
+      "boundary": "precommit",
+      "fail_close": "경로 측정 실패 또는 금지 mode가 있으면 gate precommit이 exit 1이다.",
+      "fixtures": {"positive": "tools/test_enforce.py", "negative": "tools/test_enforce.py"},
+      "bypass_log": true,
+      "residual": "개행 파일명은 검사 불가로 차단하며 submodule 사용 정책은 전면 금지다.",
+      "status": "ENFORCED"
+    },
+    {
+      "id": "w2-7-baseline-seal",
+      "origin": "W2-7",
+      "source_key": "H1-G10-G12",
+      "sources": ["tools/gate.py baseline schema v2", "tools/install_hooks.sh --repair"],
+      "invariant": "설치 후 baseline은 payload hash와 repository-local HMAC으로 봉인되고 staged index에서는 재생성되지 않는다.",
+      "boundary": "gate",
+      "fail_close": "hash 또는 HMAC 불일치와 sealed staged 재생성은 gate 실패다.",
+      "fixtures": {"positive": "tools/test_enforce.py", "negative": "tools/test_enforce.py"},
+      "bypass_log": true,
+      "residual": "같은 OS 사용자가 .git key까지 바꾸는 공격은 repo-local 신뢰 경계 밖이다.",
+      "status": "ENFORCED"
+    },
+    {
+      "id": "w2-7-stop-active",
+      "origin": "W2-7",
+      "source_key": "H1-H03-H04",
+      "sources": ["tools/gate.py cmd_check"],
+      "invariant": "stop_hook_active payload는 dirty 또는 pending gate 검사를 생략하지 않는다.",
+      "boundary": "hook",
+      "fail_close": "dirty 또는 pending 위반은 payload 값과 무관하게 block JSON을 낸다.",
+      "fixtures": {"positive": "tools/test_enforce.py", "negative": "tools/test_enforce.py"},
+      "bypass_log": true,
+      "residual": "dispatcher가 Stop hook 자체를 호출하지 않는 경우는 canary 검토 영역이다.",
+      "status": "ENFORCED"
+    },
+    {
+      "id": "w2-7-worker-control-surfaces",
+      "origin": "W2-7",
+      "source_key": "H1-W05-W06-W09",
+      "sources": ["tools/fresh_worker.py strict scope"],
+      "invariant": "선언한 write-prefix 위반은 항상 실패하고 strict scope는 prefix를 필수로 하며 .git과 전용 immediate parent의 직접 변경을 관측한다.",
+      "boundary": "test",
+      "fail_close": "관측된 control-surface 변경은 scope_violation과 wrapper exit 4가 된다.",
+      "fixtures": {"positive": "tools/test_fresh_worker.py", "negative": "tools/test_fresh_worker.py"},
+      "bypass_log": true,
+      "residual": "공유 OS temp root와 parent 하위의 기존 파일 변경은 관측하지 않으며 실제 confinement는 runtime sandbox 책임이다.",
+      "status": "ENFORCED"
+    },
+    {
+      "id": "w2-7-work-index-egress",
+      "origin": "W2-7",
+      "source_key": "S2-G1-G3-G5",
+      "sources": ["tools/enforce.py index_issues", "tools/doctor.py c_ignored"],
+      "invariant": "work index의 force-add, 금지 경로, symlink, submodule, 모든 local tracked 변경은 차단되고 doctor가 같은 index를 검사한다.",
+      "boundary": "precommit",
+      "fail_close": "precommit은 절대 위반에서 exit 1이고 doctor는 같은 위반에서 FAIL이다.",
+      "fixtures": {"positive": "tools/test_enforce.py", "negative": "tools/test_enforce.py"},
+      "bypass_log": true,
+      "residual": "파일 내용의 회사 의미 판정은 기계화하지 않으며 work에서는 local commit 전체 금지로 닫는다.",
+      "status": "ENFORCED"
+    },
+    {
+      "id": "w2-7-work-prepush",
+      "origin": "W2-7",
+      "source_key": "S2-G4",
+      "sources": ["tools/precommit-hook.sh pre-push", "tools/enforce.py prepush"],
+      "invariant": "work instance의 push는 설치된 pre-push 경계에서 항상 거부된다.",
+      "boundary": "precommit",
+      "fail_close": "context 미판정 또는 work이면 pre-push가 nonzero다.",
+      "fixtures": {"positive": "tools/test_enforce.py", "negative": "tools/test_enforce.py"},
+      "bypass_log": true,
+      "residual": "--no-verify와 hook 교체는 서버 read-only 자격증명 또는 required check가 추가로 필요하다.",
+      "status": "ENFORCED"
+    },
+    {
+      "id": "w2-7-operational-ready",
+      "origin": "W2-7",
+      "source_key": "E1-2.1",
+      "sources": ["tools/enforce.py ready", "tools/doctor.py --ready"],
+      "invariant": "운영 준비 검사는 context 누락과 instance-rules CHANGEME를 실패로 판정한다.",
+      "boundary": "doctor",
+      "fail_close": "enforce ready와 doctor --ready가 미작성 규약에서 nonzero다.",
+      "fixtures": {"positive": "tools/test_enforce.py", "negative": "tools/test_enforce.py"},
+      "bypass_log": true,
+      "residual": "기본 doctor는 기계 설치 게이트 호환을 위해 --ready를 명시해야 운영 준비를 강제한다.",
+      "status": "ENFORCED"
+    },
+    {
+      "id": "w2-7-ledger-fail-close",
+      "origin": "W2-7",
+      "source_key": "E1-2.2",
+      "sources": ["tools/doctor.py c_ledger"],
+      "invariant": "rec.py check의 nonzero, traceback, 결과 trailer 부재는 문제 0건이 아니라 doctor FAIL이다.",
+      "boundary": "doctor",
+      "fail_close": "원장 검사 결과를 완전히 판독하지 못하면 doctor가 FAIL이다.",
+      "fixtures": {"positive": "tools/test_enforce.py", "negative": "tools/test_enforce.py"},
+      "bypass_log": true,
+      "residual": "원장 디렉토리가 전혀 없으면 기존 계약대로 SKIP이다.",
+      "status": "ENFORCED"
+    },
+    {
+      "id": "w2-7-sync-transaction",
+      "origin": "W2-7",
+      "source_key": "W2-2-3.5-6",
+      "sources": ["tools/fresh_worker.py SYNC_FILES", "tools/sync_engine.sh"],
+      "invariant": "sync 복사 목록은 SYNC_FILES 하나에서 나오고 중간 실패는 기존 destination 파일로 rollback한다.",
+      "boundary": "test",
+      "fail_close": "source, stamp, import, manifest 검증 실패 시 nonzero와 rollback이다.",
+      "fixtures": {"positive": "tools/test_enforce.py", "negative": "tools/test_enforce.py"},
+      "bypass_log": true,
+      "residual": "프로세스 kill -9 또는 전원 손실은 shell EXIT trap을 실행하지 않는다.",
+      "status": "ENFORCED"
+    },
+    {
+      "id": "w2-7-hook-self-integrity",
+      "origin": "W2-7",
+      "source_key": "H1-G08",
+      "sources": ["tools/install_hooks.sh --check", "tools/precommit-hook.sh"],
+      "invariant": "설치 hook 교체를 commit 시점에 신뢰 경계 밖에서 차단한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {"positive": null, "negative": null},
+      "bypass_log": null,
+      "residual": "repo-local hook 자체를 같은 사용자가 교체하면 실행될 코드가 없어 source-only로 차단할 수 없다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "w2-7-hook-root-provenance",
+      "origin": "W2-7",
+      "source_key": "H1-S01-S02",
+      "sources": [".claude/settings.json", ".codex/hooks.json"],
+      "invariant": "SessionStart context의 project root는 runtime이 인증한 root에 결박된다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {"positive": null, "negative": null},
+      "bypass_log": null,
+      "residual": "dispatcher가 별도 인증 root를 제공하지 않으면 다른 repo의 동일 이름 도구와 구분할 수 없다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "w2-7-hook-failure-canary",
+      "origin": "W2-7",
+      "source_key": "H1-H01-S03",
+      "sources": [".claude/settings.json", "tools/enforce.py hook"],
+      "invariant": "gate 실행 전 실패는 명시 출력되고 free-form canary는 context에 들어가지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {"positive": null, "negative": null},
+      "bypass_log": null,
+      "residual": "이 worker의 .claude와 .codex mount가 read-only라 실제 hook command를 wrapper로 전환하지 못했다.",
+      "status": "REVIEW"
     }
   ]
 }

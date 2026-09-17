@@ -262,6 +262,7 @@ print(json.dumps({"type":"result","result":"읽음: A, B\\n본문\\nUNREAD: 없�
         assert len(r.stdout.encode("utf-8")) <= 4096
         meta = json.loads((_run_dir(root, r.stdout) / "meta.json").read_text(encoding="utf-8"))
         assert meta["schema_version"] == 2
+        assert "batch" not in meta, "legacy single-run meta must not gain batch bytes"
         assert isinstance(meta["harness_sha256"], str) and len(meta["harness_sha256"]) == 64
         assert meta["kit_rev"] is None or len(meta["kit_rev"]) == 40
         assert meta["kit_dirty"] in (True, False, None)
@@ -406,6 +407,54 @@ def test_common_contract_has_source_line():
         prefix = fw._effective_prompt(runtime, "")
         assert "names the file path" in prefix
         assert "remaining unknowns" in prefix
+        assert "RESULT_JSON:" in prefix
+
+
+def test_result_contract_is_structured_and_free_prose_is_inconclusive():
+    fw = _fw()
+    valid = fw._result_contract(
+        'done\nRESULT_JSON: {"verdict":"PASS","summary":"ok","evidence":["x.py:1"],'
+        '"unknowns":[]}\n'
+    )
+    assert valid == {
+        "schema_version": 1,
+        "valid": True,
+        "verdict": "PASS",
+        "summary": "ok",
+        "evidence": ["x.py:1"],
+        "unknowns": [],
+        "error": None,
+    }
+    for malformed in (
+        "판정: PASS\n증거: x.py:1\n",
+        'RESULT_JSON: {"verdict":"MAYBE","summary":"ok","evidence":["x.py:1"],'
+        '"unknowns":[]}\n',
+        'RESULT_JSON: {"verdict":"PASS","summary":"ok","evidence":[],"unknowns":[]}\n',
+        'RESULT_JSON: {"verdict":"PASS","summary":"ok","evidence":["x.py:1"],'
+        '"unknowns":[]}\ntrailing prose\n',
+    ):
+        contract = fw._result_contract(malformed)
+        assert contract["valid"] is False and contract["verdict"] == "INCONCLUSIVE"
+
+
+def test_fresh_worker_receipt_limit_matches_contract_boundary():
+    fw = _fw()
+    assert fw.RECEIPT_MAX_BYTES == 4096
+    meta = {
+        "run": "_private/work/runs/fixture",
+        "runtime": "codex",
+        "capability": "workspace-write",
+        "status": "success",
+        "process_exit": 0,
+        "wrapper_exit": 0,
+        "prompt_sha256": "a" * 64,
+        "stream_sha256": "b" * 64,
+        "result_sha256": "c" * 64,
+        "result_bytes": 20000,
+        "egress": {"private_ref_count": 0},
+        "scope": {"status": "ok", "changed_count": 0, "violation_count": 0},
+    }
+    assert len(fw._receipt(meta, "x" * 20000).encode("utf-8")) <= 4096
 
 
 def _run_prefixed(root, runtime, prompt, binary, prefixes, strict=False):
@@ -643,6 +692,34 @@ def test_scope_violation_is_report_only_without_strict():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_strict_scope_detects_git_and_immediate_parent_writes():
+    container = Path(tempfile.mkdtemp(prefix="fresh-worker-protected-"))
+    root = container / "workspace"
+    root.mkdir()
+    parent_name = f"worker-parent-{os.getpid()}.txt"
+    parent_path = root.parent / parent_name
+    try:
+        _git_ok(root, "init", "-q")
+        (root / "allowed").mkdir()
+        prompt = root / "p.md"
+        prompt.write_text("write\n", encoding="utf-8")
+        fake = root / "fake codex"
+        _script(fake, _CODEX_WRITER)
+        os.environ["FAKE_WRITES"] = f"w=.git/worker-attack;w=../{parent_name}"
+        try:
+            result = _run_prefixed(root, "codex", prompt, fake, ["allowed"], strict=True)
+        finally:
+            os.environ.pop("FAKE_WRITES", None)
+        assert result.returncode == 4, (result.stdout, result.stderr)
+        meta = json.loads((_run_dir(root, result.stdout) / "meta.json").read_text(encoding="utf-8"))
+        violations = {row["path"] for row in meta["scope"]["violations"]}
+        assert ".git/worker-attack" in violations
+        assert f"../{parent_name}" in violations
+    finally:
+        parent_path.unlink(missing_ok=True)
+        shutil.rmtree(container, ignore_errors=True)
+
+
 def test_read_scope_accepts_declaration_variants():
     fw = _fw()
     assert fw._read_scope("읽기 범위 선언: 읽음=A; 안 읽음=B\n본문\n")["declared"] == "읽기 범위 선언: 읽음=A; 안 읽음=B"
@@ -838,10 +915,12 @@ def test_scope_violation_outranks_runtime_failure():  # review R3
         assert "status: scope_violation" in r.stdout and "process_exit: 7" in r.stdout
         meta = json.loads((_run_dir(root, r.stdout) / "meta.json").read_text(encoding="utf-8"))
         assert meta["process_exit"] == 7 and meta["wrapper_exit"] == 4 and meta["status"] == "scope_violation"
-        # without strict the runtime failure is what the status reports, scope stays informative
+        # Without strict mode the scope violation remains a report and runtime failure stays primary.
         with _fake_env(FAKE_WRITES="w=outside2.txt", FAKE_EXIT="7"):
             r2 = _run_prefixed(root, "codex", prompt, fake, ["out"])
-        assert r2.returncode == 7 and "status: failed" in r2.stdout and "scope: scope_violation" in r2.stdout
+        assert r2.returncode == 7 and "status: failed" in r2.stdout
+        meta2 = json.loads((_run_dir(root, r2.stdout) / "meta.json").read_text(encoding="utf-8"))
+        assert meta2["scope"]["status"] == "scope_violation"
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -921,9 +1000,12 @@ TESTS = [
     test_kit_rev_null_without_git,
     test_read_scope_parsed_and_null,
     test_common_contract_has_source_line,
+    test_result_contract_is_structured_and_free_prose_is_inconclusive,
+    test_fresh_worker_receipt_limit_matches_contract_boundary,
     test_scope_violation_detected_outside_prefix_and_symlink_escape,
     test_scope_ok_within_prefix_and_unchecked_without_prefix,
     test_scope_violation_is_report_only_without_strict,
+    test_strict_scope_detects_git_and_immediate_parent_writes,
     test_read_scope_accepts_declaration_variants,
     test_write_prefix_boundaries_fail_closed,
     test_scope_preexisting_symlink_under_prefix_is_violation,

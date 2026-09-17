@@ -291,6 +291,14 @@ STRINGS = {
         "en": "last {date} · unharvested decision-grade items {count} (threshold {threshold})",
         "ko": "마지막 {date} · 미수확 판정급 {count}건 (임계 {threshold})",
     },
+    "doctor.egress_empty": {
+        "en": "egress.model_send.deny_prefixes is empty; model sends are not classified",
+        "ko": "egress.model_send.deny_prefixes가 비었다. 모델 전송 등급이 열려 있다",
+    },
+    "doctor.egress_ok": {
+        "en": "model-send policy deny={deny} · allow={allow}",
+        "ko": "모델 전송 정책 deny={deny} · allow={allow}",
+    },
     "doctor.valve_skip": {
         "en": "context={context}; remote check skipped{extra}. Change context to work if handling company material",
         "ko": "context={context} — 원격 검사 안 함{extra}. 회사 자료를 다루면 context를 work로 바꿔라",
@@ -441,6 +449,7 @@ STRINGS = {
     "doctor.check.tools_recall": {"en": "tools · recall sources", "ko": "도구 · recall 소스"},
     "doctor.check.tools_ledger": {"en": "tools · ledger", "ko": "도구 · 원장"},
     "doctor.check.tools_portrait": {"en": "tools · person ledger", "ko": "도구 · 인물 원장"},
+    "doctor.check.valve_egress": {"en": "valve · model send", "ko": "밸브 · 모델 전송"},
     "doctor.check.valve_remote": {"en": "valve · remote check", "ko": "밸브 · 원격 검사"},
     "doctor.check.valve_ignored": {"en": "valve · fuel untracked", "ko": "밸브 · 연료 비추적"},
     "doctor.check.valve_symlinks": {"en": "valve · tracked symlinks", "ko": "밸브 · 추적 심볼릭링크"},

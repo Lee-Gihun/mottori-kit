@@ -10,6 +10,21 @@ if [[ "$MODE" != "--check" && "$MODE" != "--repair" ]]; then
   echo "usage: bash tools/install_hooks.sh --check|--repair" >&2
   exit 2
 fi
+LANG_CODE="${MOTTORI_LANG:-ko}"
+
+status_line() {
+  local status="$1" target="$2"
+  if [[ "$LANG_CODE" == "en" ]]; then
+    echo "$status: $target"
+    return
+  fi
+  case "$status" in
+    current) echo "현재(current): $target" ;;
+    missing) echo "없음(missing): $target" ;;
+    owned-drift) echo "소유 표류(owned-drift): $target" ;;
+    foreign) echo "외부 훅(foreign): $target" ;;
+  esac
+}
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEMPLATE="$ROOT/tools/precommit-hook.sh"
@@ -37,12 +52,17 @@ else
   esac
 fi
 HOOK="$DIR/pre-commit"
+PUSH_HOOK="$DIR/pre-push"
 
 # Sentinel 도입 직전 canonical 둘만 migration 대상으로 인정한다. 임의 hook에 설명문으로
 # "mottori gate"가 들어갔다고 소유권을 주장하면 --repair가 foreign 코드를 덮어쓴다.
+# 2026-09-18 실측: v0.4~v0.6으로 배포된 precommit-hook.sh(동일 내용) 해시가 빠져 있어 실제 설치본 전부가
+# foreign으로 분류되고 CHANGELOG의 "[해야 함] install_hooks.sh --repair"를 수행할 수 없었다.
 LEGACY_HASHES="
+c078fa3e14b9a9152bad2ba4540efac5e3ca19e9d8b7467028e07f80dd022141
 28d6734242d51d3b6d63c4b31796864d659c320b85eb48fe803a5d7f807e12ee
 89fe10c571d56547e4235da07a777490f31e32fd2b6169d47bd49f5b4cda261e
+97c1f2144a63fbc3fb120cce56bd32a14b77948872183b73435a2e985fd951f9
 "
 
 sha256() {
@@ -56,60 +76,109 @@ sha256() {
 }
 
 classify() {
-  if [[ ! -e "$HOOK" ]]; then
+  local target="$1"
+  if [[ ! -e "$target" ]]; then
     echo "missing"
-  elif cmp -s "$TEMPLATE" "$HOOK" && [[ -x "$HOOK" ]]; then
+  elif cmp -s "$TEMPLATE" "$target" && [[ -x "$target" ]]; then
     echo "current"
-  elif cmp -s "$TEMPLATE" "$HOOK"; then
+  elif cmp -s "$TEMPLATE" "$target"; then
     echo "owned-drift"
-  elif grep -Fxq "$(sha256 "$HOOK")" <<< "$LEGACY_HASHES"; then
+  elif grep -Fxq "$(sha256 "$target")" <<< "$LEGACY_HASHES"; then
     echo "owned-drift"
   else
     echo "foreign"
   fi
 }
 
-STATUS="$(classify)"
+STATUS="$(classify "$HOOK")"
+PUSH_STATUS="$(classify "$PUSH_HOOK")"
 if [[ "$MODE" == "--check" ]]; then
-  echo "$STATUS: $HOOK"
+  if [[ "$STATUS" == "current" && "$PUSH_STATUS" == "current" ]]; then
+    if [[ "$LANG_CODE" == "en" ]]; then
+      echo "current: $HOOK + $PUSH_HOOK"
+    else
+      echo "현재(current): $HOOK + $PUSH_HOOK"
+    fi
+    exit 0
+  fi
+  status_line "$STATUS" "$HOOK"
+  status_line "$PUSH_STATUS" "$PUSH_HOOK"
   if [[ "$STATUS" == "owned-drift" ]]; then
-    echo "template sha256: $(sha256 "$TEMPLATE")"
-    echo "installed sha256: $(sha256 "$HOOK")"
+    if [[ "$LANG_CODE" == "en" ]]; then
+      echo "template sha256: $(sha256 "$TEMPLATE")"
+      echo "installed sha256: $(sha256 "$HOOK")"
+    else
+      echo "템플릿 sha256: $(sha256 "$TEMPLATE")"
+      echo "설치본 sha256: $(sha256 "$HOOK")"
+    fi
     diff -u "$HOOK" "$TEMPLATE" | sed -n '1,40p' || true
   fi
-  [[ "$STATUS" == "current" ]]
-  exit
+  exit 1
 fi
 
-if [[ "$STATUS" == "foreign" ]]; then
-  echo "foreign pre-commit을 덮어쓰지 않는다: $HOOK" >&2
+if [[ "$STATUS" == "foreign" || "$PUSH_STATUS" == "foreign" ]]; then
+  echo "foreign pre-commit/pre-push를 덮어쓰지 않는다: $HOOK ($STATUS), $PUSH_HOOK ($PUSH_STATUS)" >&2
   exit 2
 fi
 
 mkdir -p "$DIR"
 BACKUP=""
+PUSH_BACKUP=""
+ROLLBACK_DIR="$(mktemp -d "$DIR/.mottori-hook-rollback.XXXXXX")"
+HOOK_EXISTED=0
+PUSH_HOOK_EXISTED=0
+if [[ -e "$HOOK" || -L "$HOOK" ]]; then
+  cp -p "$HOOK" "$ROLLBACK_DIR/pre-commit"
+  HOOK_EXISTED=1
+fi
+if [[ -e "$PUSH_HOOK" || -L "$PUSH_HOOK" ]]; then
+  cp -p "$PUSH_HOOK" "$ROLLBACK_DIR/pre-push"
+  PUSH_HOOK_EXISTED=1
+fi
 if [[ "$STATUS" == "owned-drift" ]]; then
   BACKUP="$HOOK.bak.$(date +%Y%m%dT%H%M%S).$$"
   cp -p "$HOOK" "$BACKUP"
 fi
+if [[ "$PUSH_STATUS" == "owned-drift" ]]; then
+  PUSH_BACKUP="$PUSH_HOOK.bak.$(date +%Y%m%dT%H%M%S).$$"
+  cp -p "$PUSH_HOOK" "$PUSH_BACKUP"
+fi
 TMP="$DIR/.pre-commit.$$.tmp"
-cleanup() { rm -f "$TMP"; }
+PUSH_TMP="$DIR/.pre-push.$$.tmp"
+cleanup() { rm -f "$TMP" "$PUSH_TMP"; rm -rf "$ROLLBACK_DIR"; }
 trap cleanup EXIT
 cp "$TEMPLATE" "$TMP"
+cp "$TEMPLATE" "$PUSH_TMP"
 chmod 755 "$TMP"
+chmod 755 "$PUSH_TMP"
 mv -f "$TMP" "$HOOK"
+mv -f "$PUSH_TMP" "$PUSH_HOOK"
 
 rollback() {
-  if [[ -n "$BACKUP" && -e "$BACKUP" ]]; then
-    cp -p "$BACKUP" "$HOOK"
+  if [[ "$HOOK_EXISTED" -eq 1 ]]; then
+    cp -p "$ROLLBACK_DIR/pre-commit" "$HOOK"
   else
     rm -f "$HOOK"
   fi
+  if [[ "$PUSH_HOOK_EXISTED" -eq 1 ]]; then
+    cp -p "$ROLLBACK_DIR/pre-push" "$PUSH_HOOK"
+  else
+    rm -f "$PUSH_HOOK"
+  fi
 }
 
-if ! cmp -s "$TEMPLATE" "$HOOK" || [[ ! -x "$HOOK" ]]; then
+if ! cmp -s "$TEMPLATE" "$HOOK" || [[ ! -x "$HOOK" ]] \
+   || ! cmp -s "$TEMPLATE" "$PUSH_HOOK" || [[ ! -x "$PUSH_HOOK" ]]; then
   rollback
   echo "repair 검증 실패, 원상 복구: $HOOK" >&2
+  exit 1
+fi
+
+# setup creates the legacy baseline before hooks. Repair upgrades it to a keyed hash+HMAC document.
+# Fixtures without a baseline are hook-only tests and intentionally skip this step.
+if [[ -f "$ROOT/state/.gate-baseline.json" ]] && ! python3 "$ROOT/tools/gate.py" seal-baseline >/dev/null; then
+  rollback
+  echo "baseline seal 실패, hook 원상 복구" >&2
   exit 1
 fi
 
@@ -123,5 +192,15 @@ if [[ "$GOT" != "$NONCE" ]]; then
   exit 1
 fi
 
-echo "current: $HOOK (exact template + executable + direct hook probe)"
-[[ -z "$BACKUP" ]] || echo "backup: $BACKUP"
+if [[ "$LANG_CODE" == "en" ]]; then
+  echo "current: $HOOK + $PUSH_HOOK (exact template + executable + direct hook probe + sealed baseline)"
+else
+  echo "현재(current): $HOOK + $PUSH_HOOK (정확한 템플릿 + 실행 가능 + 직접 훅 검사 + 봉인된 기준선)"
+fi
+if [[ "$LANG_CODE" == "en" ]]; then
+  [[ -z "$BACKUP" ]] || echo "backup: $BACKUP"
+  [[ -z "$PUSH_BACKUP" ]] || echo "backup: $PUSH_BACKUP"
+else
+  [[ -z "$BACKUP" ]] || echo "백업(backup): $BACKUP"
+  [[ -z "$PUSH_BACKUP" ]] || echo "백업(backup): $PUSH_BACKUP"
+fi

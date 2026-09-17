@@ -12,6 +12,108 @@ system/instance-rules.md, system/decisions.md, system/rituals.local.md, `state/`
 
 ---
 
+## v0.7 · 2026-09-18 (스웜 파도 2 B그룹 통합)
+
+### `[알아둘 것]` 공개 state를 추적하는 인스턴스에서도 index 검사가 돈다
+
+근거 표지: `test:tools/test_enforce.py::test_tracked_public_state_is_not_forbidden`.
+
+`tools/enforce.py`의 금지 경로 판정은 고정 목록이 아니라 "저장소의 ignore 규칙이 덮는 경로를 force-add했는가"다.
+`_private/`는 어느 index에서든 위반이고, `state/`와 인스턴스 소유 파일(memory-config·decisions·instance-rules·
+rituals.local)은 새 킷 인스턴스처럼 ignore돼 있을 때만 위반이다. 원 워크스페이스처럼 공개 projection과 결정 기록을
+일부러 추적하는 인스턴스는 위반이 아니다. 이식 실측(2026-09-18): 고정 목록이 원 인스턴스의 추적 중인 state 파일
+전부를 위반으로 냈다. 같은 이유로 `test_install_checks`의 X12, `test_enforce`의 sync inventory,
+`test_tool_entrypoints`의 sync wrapper 검사는 킷 전용 파일이 없는 트리에서 "해당없음"을 출력 줄로 남기고 건너뛴다.
+symlink·submodule 규칙은 이번 커밋이 올리는 항목(HEAD 대비 변경분)에만 걸린다. HEAD에 이미 있는 항목까지 걸면 과거
+트리가 모든 커밋을 영구히 막는다 (`test:tools/test_enforce.py::test_tracked_markdown_symlink_in_head_is_not_reflagged`).
+pre-push는 config 없는 킷 트리(setup.sh와 templates가 있는 checkout)를 인스턴스가 아니라고 판정해 허용 줄을 내고
+통과시키며, 그 밖의 판정 불능은 그대로 차단한다 (`test:tools/test_enforce.py::test_prepush_allows_presetup_kit_tree_and_blocks_unknown_context`).
+
+### `[자동]` 문장 감사표도 review manifest가 추적한다
+
+근거 표지: `test:tools/test_manifests.py::test_review`.
+
+`system/reviews/content-audit.tsv`를 fresh worker 전달 경로에 등록했다. 그래서 산출물이 아직
+추적되지 않은 작업 클론과 상류에 적용된 뒤의 클론이 같은 text inventory를 검사한다.
+
+### `[해야 함]` hook 재설치가 baseline을 봉인하고 work push를 닫는다
+
+근거 표지: `test:tools/test_enforce.py::test_G10_signed_baseline_rejects_direct_mutation`.
+
+pull 뒤 `bash tools/install_hooks.sh --repair`를 다시 실행한다. pre-commit과 pre-push가 한 쌍으로
+설치되고 기존 gate baseline은 SHA-256과 repository-local HMAC으로 봉인된다. work context의 local
+commit과 push, force-add한 state/private, staged symlink와 submodule은 fail-close한다. 같은 OS 사용자가
+`.git`의 hook과 key를 함께 바꾸는 공격은 local source만으로 막을 수 없어 remote required check 또는
+read-only 자격증명이 계속 필요하다.
+
+### `[알아둘 것]` strict worker scope와 운영 준비 검사가 더 좁게 실패한다
+
+근거 표지: `test:tools/test_fresh_worker.py::test_strict_scope_detects_git_and_immediate_parent_writes`.
+
+`--write-prefix`를 선언한 run은 strict 옵션 유무와 관계없이 위반에서 exit 4이며, `--strict-scope`는
+prefix 없이 실행되지 않는다. strict 검사는 `.git`과 전용 immediate parent의 직접 변경도 기록한다.
+`python3 tools/doctor.py --ready`는 instance context 누락과
+`instance-rules.md`의 `CHANGEME`를 FAIL로 둔다. 기본 doctor는 첫 설치의 기계 검증 계약을 유지한다.
+
+### `[자동]` sync inventory 단일화와 실패 rollback
+
+`sync_engine.sh`는 `fresh_worker.py`의 `SYNC_FILES`를 직접 읽고, 복사·각인·재수입·manifest 검증 중
+실패하면 기존 destination 파일을 복원한다. `rec.py check`의 crash와 출력 trailer 부재도 doctor FAIL이다.
+
+### `[알아둘 것]` private 경로와 모델 전송 등급을 분리한다
+
+근거 표지: `test:tools/test_egress.py::test_strict_egress_refuses_before_runtime_or_run_record`.
+
+config schema v4에 optional `egress.model_send`가 생겼다. 필드가 없으면 `_private/` deny가 기본이라
+기존 인스턴스가 손으로 올릴 schema version은 없다. `fresh_worker.py`는 deny 경로 참조 수를 receipt에
+표시하고 실제 private 원문이 run의 `prompt.md`나 `result.txt`에 복제되면 `egress.log`에 출발지와
+목적지를 남긴다. `--strict-egress`는 해당 참조가 있는 실행을 runtime 시작 전에 거부한다. doctor는
+유효 정책의 deny 목록이 비면 FAIL한다.
+
+### `[자동]` 위험 기반 테스트 매트릭스와 변이·우회 핀이 회귀에 들어간다
+
+근거 표지: `test:tools/test_matrix_check.py::main`.
+
+배포 실행물 28개의 U·S·N·M·E2E 적용 여부를 `system/test-matrix.yaml`에서 관리한다. critical 8개는
+세 경계 테스트와 변이 probe, fresh-install E2E가 모두 있어야 하며 필수 셀이 비거나 테스트 파일에서
+도구 이름을 찾지 못하면 doctor 회귀가 실패한다. 기본 회귀는 과거 생존 변이 4개만 다시 재고,
+`python3 tools/test_mutation.py --full`이 비교 반전·early return·상수 변경 24개 전부를 잰다.
+H1 공격 29건은 `tools/test_bypass_pins.py`가 현재 동작을 고정하며, 열린 우회는 `EXPECT_HOLE=True`로
+드러낸다. 60초 예산을 지키기 위해 중복 fresh-install 표면은 관련 suite의 `--full`로 분리했다.
+
+### `[알아둘 것]` 예정된 worker batch의 slot coverage를 terminal meta로 판정한다
+
+근거 표지: `paper:2609.01992`, `experiment:X11`.
+
+`python3 tools/worker_batch.py create <manifest> --slots a,b,c --prompts ...`가 실행 전에 slot과
+원본 prompt SHA를 고정한다. `fresh_worker.py --batch-manifest <manifest> --slot <name>`은 manifest
+SHA, slot, 원본 prompt SHA를 meta.json v2의 선택형 `batch` 필드에 기록한다. 두 인자를 쓰지 않는
+기존 단일 run의 meta 필드와 4,096-byte receipt 계약은 그대로다.
+
+`python3 tools/worker_batch.py verify <manifest> --runs <runs-dir>`는 terminal meta를 대조해 완전하면
+`PASS`(exit 0), terminal 누락이면 누락 slot과 `INCONCLUSIVE_COVERAGE`(exit 2), prompt SHA 불일치나
+중복 terminal이면 `FAIL`(exit 1)을 낸다. 이 도구는 worker를 실행하거나 fan-out, scheduler를 제공하지
+않는다.
+
+### `[알아둘 것]` 첫 설치 게이트가 판독 불능 출력을 실패로 닫는다
+
+근거 표지: `paper:2609.02246`, `experiment:X12`.
+
+`tools/test_fresh_install.sh`는 linkcheck의 종료코드 0과 정확히 하나인 정상 요약 줄을 함께
+확인한다. doctor는 종료코드 0에 더해 중복 키 없는 JSON, 검사 목록과 일치하는 summary를 요구한다.
+빈 출력, 중복 요약, 깨진 JSON, `FAIL 0`인데 비정상 종료한 결과는 PASS가 아니라 `측정불능` FAIL이다.
+정상 설치의 표 형식은 그대로다.
+
+### `[자동]` 메인 컨텍스트 바이트와 파도 receipt를 계측한다
+
+근거 표지: `test:tools/test_receipts.py::test_aggregate_eight_runs_into_one_bounded_wave_receipt`.
+
+`python3 tools/context_budget.py [전사.jsonl] --budget <bytes>`가 main-thread JSONL의 훅 주입,
+worker receipt, 도구 stdout, 사용자, 모델 payload를 UTF-8 bytes로 나누고 큰 도구 호출 20개를
+보여준다. 합계가 예산을 넘으면 `budget WARN`과 exit 1을 반환한다. `python3 tools/receipts.py
+aggregate <run-id>...`는 최대 8개 run의 판정, 증거 경로, 미지를 한 행씩 보존한 4,096-byte 이하
+receipt 하나를 만든다. 기존 인스턴스가 손으로 바꿀 파일은 없다.
+
 ## v0.6 · 2026-09-17 (스웜 파도 1+2A 통합)
 
 ### `[알아둘 것]` 공용 엔진 회귀는 설치된 인스턴스에서도 돈다
@@ -161,8 +263,7 @@ FIX 판정을 반영했고, 남긴 것은 실제 Git 2.35 바이너리·Python 3
 (setup 전)의 linkcheck는 setup이 만드는 7개 경로(config·인스턴스 문서 셋·두 NOW·게이트 기준선)를 BROKEN이 아니라
 `PENDING`으로 따로 센다 (`broken: 0 · pending(setup 전): N`); setup 뒤에는 같은 참조가 없으면 BROKEN이다.
 `now.py check`의 드라이브 인박스 검사는 개인 장비 어댑터(`drive_inbox.py`)가 없으면 경고 없이 건너뛴다(이전엔 킷
-클론마다 "인박스 검사 실패" 경고). `c_git`은 2.36 미만을 FAIL로 낸다(`install_hooks.sh`가 `git hook run`을 쓴다;
-업그레이드로 고칠 수 있는 결함이라 FAIL이다). 킷 드리프트 검사는 `fresh_worker.py` 각인 줄을 정규화해 비교한다.
+클론마다 "인박스 검사 실패" 경고). 킷 드리프트 검사는 `fresh_worker.py` 각인 줄을 정규화해 비교한다.
 
 ### `[알아둘 것]` 철학 한 줄과 LICENSE(MIT)
 
@@ -335,3 +436,9 @@ Codex 훅 3종 · 추적 심볼릭 링크 · config 스키마 · 업스트림 �
 - 규약 20문서 (PRD 둘 · rituals · 렌즈 13종 · deep-pass · WORKING-WITH-AI)
 - 훅 5종 (Claude 3 + Codex 2), 전부 경로 상대
 - 인스턴스 배선을 system/memory-config.json으로 분리
+
+## 기록 근거 연결
+
+이 파일의 명령형 문장은 새 규칙이 아니라 해당 릴리스에서 기존 인스턴스가 해야 할
+마이그레이션을 적은 것이다. Why는 각 항목의 근거 표지, KIT-DR, 테스트 경로에 있으며,
+개수 변화는 해당 릴리스 시점의 등록 목록을 세어 보여주는 이력값이다.

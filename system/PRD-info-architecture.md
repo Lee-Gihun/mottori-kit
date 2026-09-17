@@ -262,3 +262,58 @@ A-3의 본질은 *존재를 모르는 것*이므로 조회 규율만으로 막�
 | `v0.1` | 2026-08-10 | 현재 초안. **미구현** — §11의 D1~D7 미결, §6.1~6.7 구현물 없음 |
 | — | 2026-08-10 | §9 절차에 따라 D1~D7 확정 기입(근거는 `build-log.md`). §6.4 요건과 구현의 격차를 D8로 신규 등록. **정책 변경 없음 — 결정 기입과 공백 등록뿐이다.** 구현은 완료됐으나 §10-2 미판정이므로 버전은 `v0.1` 유지 |
 | `v1.0` | (예정) | §10-2 신선 세션 검증 통과 시 부여 |
+
+## 구현 정합 현황 (2026-09-17 감사)
+
+아래 표는 계약을 바꾸지 않고 현재 구현과의 차이를 표시한다. `미구현`은 대응 동작이 없거나 계약과
+반대로 동작하는 경우, `부분 구현`은 일부 경로나 규율만 있는 경우다. 이 표를 두는 이유는 구현되지
+않은 계약을 현재 동작처럼 읽는 것을 막으면서도 원래 요구와 닫는 테스트를 보존하기 위해서다.
+
+| PRD 절 | 계약 | 상태 | 현재 코드 근거 | 처리 |
+|---|---|---|---|---|
+| info-architecture 문서규율 L5-6,262-263 | 현재 버전 표시는 구현 상태와 일치해야 한다 | 미구현 | tools/rec.py:1-383; system/PRD-info-architecture.md:5-6,262-263 | 원 계약 보존, 미구현 표시 |
+| info-architecture §3 L56 | 신선 세션 핵심 사실 20문 오답 0이다 | 미구현 | tools/rec.py:287-290 | 원 계약 보존, 미구현 표시 |
+| info-architecture §3 L57 | 재제안은 0건이다 | 부분 구현 | tools/rec.py:34-41,99-130 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §3 L58 | 임의 주장을 30초 안에 원점까지 추적한다 | 부분 구현 | tools/rec.py:180-209 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §4.1 L78 | 정보 등급은 원점으로부터 파생 거리로 정한다 | 부분 구현 | tools/rec.py:28-31,180-209 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §4.2 L84 | 사실 기록은 append-only이며 수정은 상태 전이로만 한다 | 부분 구현 | tools/rec.py:300-352 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §4.2 L85 | 해석은 파생물이며 폐기 후 재생성 가능하다 | 부분 구현 | tools/rec.py:99-130 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §4.3 L91 | 저장·bootstrap·조회·발화·정정·감사에 다중 방어한다 | 부분 구현 | tools/coherence.py:1-145; tools/rec.py:1-383 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §4.4 L95 | 기록 없음·낡음·모순의 기본은 모른다이다 | 부분 구현 | tools/rec.py:160-162 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §5 L107 | 규칙은 모든 정보·전 도메인에 적용한다 | 부분 구현 | AGENTS.md:19-54 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §5 L108 | 기록 적극 추출은 수요 주도로 한다 | 부분 구현 | tools/rec.py:300-352 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §5 L110 | 동결 영역은 참조만 하고 갱신하지 않는다 | 부분 구현 | AGENTS.md:21-25 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.1 L120 | 한 레코드는 한 사실이다 | 부분 구현 | tools/rec.py:24-31,300-352 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.1 L121 | 필수 필드는 내용·출처·발화자·날짜·상태·태그·관계다 | 부분 구현 | tools/rec.py:28-31,212-254 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.1 L123 | 결정됨 항목 재제안은 버그다 | 부분 구현 | tools/rec.py:34-36,99-130 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.1 L124 | 철회됨 기록을 삭제하지 않는다 | 미구현 | tools/rec.py:29,34-41 | 원 계약 보존, 미구현 표시 |
+| info-architecture §6.2 L128 | 키워드·주제·상태·인물·기간으로 조회한다 | 부분 구현 | tools/rec.py:135-168 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.2 L130 | 감사 사슬을 사실→파생→전사→원점으로 한 번에 출력한다 | 부분 구현 | tools/rec.py:180-209 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.3 L139 | T1 사실 단언은 조회 필수다 | 부분 구현 | AGENTS.md:33-35 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.3 L140 | T2 제안은 조회와 결정됨 확인이 필수다 | 부분 구현 | AGENTS.md:33-35 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.3 L141 | T3 문서 작성·갱신은 조회와 충돌 검사가 필수다 | 부분 구현 | tools/coherence.py:1-145 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.4 L147 | 핫셋은 세션 시작 시 자동 로드한다 | 미구현 | .claude/settings.json:3-9; tools/now.py:648-696 | 원 계약 보존, 미구현 표시 |
+| info-architecture §6.4 L147 | 핫셋은 결정됨·철회됨·고하중 사실·미해결을 담는다 | 부분 구현 | tools/rec.py:28-41,99-130 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.4 L149 | 핫셋에 상한을 두고 국면 종료 시 콜드로 강등한다 | 부분 구현 | tools/rec.py:28,99-132,241-243 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.5 L157 | 정정·새 원점 사실·결정·상태 전이에 즉시 한 번 쓴다 | 부분 구현 | tools/rec.py:300-352 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.5 L160 | 매 턴 스캔을 금지한다 | 부분 구현 | .claude/settings.json:23-59; tools/gate.py:326-371 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.5 L161 | 세션 종료 시 일괄 기록을 금지한다 | 부분 구현 | .claude/settings.json:53-59 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.6 L165 | 유저 정정은 I/A 실패 유형으로 분류해 기록한다 | 미구현 | tools/rec.py:257-267 | 원 계약 보존, 미구현 표시 |
+| info-architecture §6.6 L167 | 구체 사례의 유일한 거처는 telemetry다 | 미구현 | tools/rec.py:257-267 | 원 계약 보존, 미구현 표시 |
+| info-architecture §6.7 L171 | 새 세션이 PRD와 핫셋 존재를 자동 인지한다 | 부분 구현 | AGENTS.md:61; tools/now.py:237-254 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §6.7 L172 | 부트스트랩은 유저 명시 지시에 의존하지 않는다 | 부분 구현 | .claude/settings.json:3-9 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §7 L196 | 처방 전 이미 수행·결정된 것을 먼저 묻는다 | 부분 구현 | AGENTS.md:33-35 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §7 L197 | 발화에서 사실·전언·추론 등급을 밝힌다 | 부분 구현 | tools/rec.py:29,164-168 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §7 L199 | 모르면 모른다고 한다 | 부분 구현 | tools/rec.py:160-162 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §8 L206 | 구조 재구성 전 rollback 가능한 상태를 만든다 | 부분 구현 | tools/rec.py:270-297 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §8 L207 | 비공개·동결·인용 제한을 기록도 상속한다 | 부분 구현 | .gitignore:16-55; AGENTS.md:21-25 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §8 L208 | 커밋·푸시는 유저 권한이고 에이전트는 파일 작성까지만 한다 | 부분 구현 | tools/fresh_worker.py:171-181 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §10 L224 | 신선 세션에서 성공 기준 1~4를 필수 검증한다 | 미구현 | tools/hook_canary.py:1-136 | 원 계약 보존, 미구현 표시 |
+| info-architecture §10 L225 | 없는 것을 물으면 모른다, 지어내면 실패다 | 부분 구현 | tools/rec.py:160-162 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §10 L226 | 기록이 기존 문서와 모순되지 않는지 회귀 검증한다 | 부분 구현 | tools/coherence.py:1-145 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §10 L227 | 일상 대화 체감 지연 부하 검증을 한다 | 미구현 | 해당 없음 | 원 계약 보존, 미구현 표시 |
+| info-architecture §11 D4 L242 | telemetry는 독립 파일이고 동일 유형 3회면 메모리 승격한다 | 미구현 | tools/rec.py:262,287 | 원 계약 보존, 미구현 표시 |
+| info-architecture §11 D5 L243 | 부트스트랩은 프로젝트 지시 2종과 메모리 3중이다 | 부분 구현 | AGENTS.md:33-35,61; CLAUDE.md:1 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §11 D6 L244 | 기존 문서와 기록은 병존하고 기록→문서 단방향 참조다 | 부분 구현 | tools/rec.py:30-31,180-209 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §11 D7 L245 | 핫셋은 건수 상한과 국면 종료 강등을 병용한다 | 부분 구현 | tools/rec.py:28,99-132 | 원 계약 보존, 부분 구현 표시 |
+| info-architecture §11 D8 L251 | 진짜 자동 핫셋 로드는 승인 전 열린 결정이다 | 미구현 | .claude/settings.json:3-9 | 원 계약 보존, 미구현 표시 |
