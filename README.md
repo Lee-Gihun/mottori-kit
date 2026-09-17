@@ -8,7 +8,7 @@ Claude Code와 Codex가 같은 규약 위에서 돌고, 컴팩션을 넘어 작�
 2026-09-17 기준 통과한다). 그 뒤 국경 선언(`system/instance-rules.md`)과 CHECKLIST의 사람 확인
 항목은 네가 쓰는 시간이다.
 
-**English quickstart.** Requires Python 3.8+, git 2.36+, macOS or Linux; `claude`, `codex` and `node` are
+**English quickstart.** Requires Python 3.8+, git 2.5+, Bash 3.2+, macOS or Linux; `claude`, `codex` and `node` are
 optional. Run `bash setup.sh --name <name> --context personal|work` (`work` makes `doctor` reject pushes to
 remotes outside the allowlist), then `bash tools/install_hooks.sh --repair`, then `python3 tools/doctor.py`:
 `FAIL` must be zero, `warn` is acceptable, `--` means not applicable. Replace every `CHANGEME` in
@@ -45,11 +45,13 @@ tools/           엔진. 핵심 넷은 memlib · now · recall · rec
   recall.py      전사 원장 표적 검색 (Claude jsonl + Codex rollout)
   rec.py         개인 사실 원장 — 원자 노트 + 감사 사슬
   fresh_worker.py 광역 작업을 fresh+ephemeral run으로 격리하고 bounded receipt만 반환
+  receipts.py    worker run 영수증의 한 줄 원장 · 상세 재출력 · 토큰 비용 히스토그램
   ask_codex.sh   Codex 발주. 기본 fresh 경로는 fresh_worker에 위임
-  doctor.py      설치 검증기 (검사 34개 + 사람이 확인할 4개)
+  doctor.py      설치 검증기 (검사 37개 + 사람이 확인할 4개, `--json` 지원)
   test_fresh_install.sh  낯선 첫 설치를 임시 클론에서 재현하는 검사기
 system/          규약. PRD 둘 · rituals · 렌즈 13종 · deep-pass · WORKING-WITH-AI
-.claude/         Claude 훅 (SessionStart · PreCompact · UserPromptSubmit · PostToolUse · Stop) + 슬래시 커맨드 4종
+  skills/        런타임 중립 정본 workflow. adapter는 tools/skill_adapters.py가 생성·검사
+.claude/         Claude 훅 (SessionStart · PreCompact · UserPromptSubmit · PostToolUse · Stop) + 슬래시 커맨드 5종
 .codex/          Codex 훅 2종 (SessionStart · PreCompact)
 templates/       인스턴스가 채울 것들
 ```

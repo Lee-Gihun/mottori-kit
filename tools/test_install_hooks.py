@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""install_hooks.sh regressions in disposable Git repositories."""
+import hashlib
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def fixture():
+    root = tempfile.mkdtemp(prefix="install-hooks-fixture-")
+    subprocess.run(["git", "init", "-q", root], check=True)
+    os.makedirs(os.path.join(root, "tools"))
+    for name in ("install_hooks.sh", "precommit-hook.sh"):
+        shutil.copy2(os.path.join(HERE, name), os.path.join(root, "tools", name))
+    return root
+
+
+def run(root, mode):
+    return subprocess.run(["bash", "tools/install_hooks.sh", mode], cwd=root,
+                          capture_output=True, text=True)
+
+
+def hook_path(root):
+    result = subprocess.run(
+        ["git", "rev-parse", "--git-path", "hooks"],
+        cwd=root, capture_output=True, text=True, check=True)
+    hooks = result.stdout.strip()
+    if not os.path.isabs(hooks):
+        hooks = os.path.join(root, hooks)
+    return os.path.join(os.path.realpath(hooks), "pre-commit")
+
+
+def test_repair_then_check_installs_exact_executable():
+    root = fixture()
+    try:
+        hook = hook_path(root)
+        missing = run(root, "--check")
+        assert missing.returncode != 0 and "missing:" in missing.stdout
+        assert not os.path.exists(hook)
+
+        repaired = run(root, "--repair")
+        assert repaired.returncode == 0, repaired.stdout + repaired.stderr
+        checked = run(root, "--check")
+        assert checked.returncode == 0 and "current:" in checked.stdout
+        assert open(hook, "rb").read() == open(
+            os.path.join(root, "tools", "precommit-hook.sh"), "rb").read()
+        assert os.stat(hook).st_mode & stat.S_IXUSR
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_check_reports_owned_drift_and_repair_backs_it_up():
+    root = fixture()
+    try:
+        assert run(root, "--repair").returncode == 0
+        hook = hook_path(root)
+        text = open(hook, encoding="utf-8").read().replace(
+            "# MOTTORI_PRECOMMIT_HOOK_V1\n", "")
+        with open(hook, "w", encoding="utf-8") as f:
+            f.write(text)
+        drifted_hash = hashlib.sha256(open(hook, "rb").read()).hexdigest()
+
+        checked = run(root, "--check")
+        assert checked.returncode != 0 and "owned-drift:" in checked.stdout
+        repaired = run(root, "--repair")
+        assert repaired.returncode == 0, repaired.stdout + repaired.stderr
+        backups = [os.path.join(os.path.dirname(hook), name)
+                   for name in os.listdir(os.path.dirname(hook))
+                   if name.startswith("pre-commit.bak.")]
+        assert len(backups) == 1
+        assert hashlib.sha256(open(backups[0], "rb").read()).hexdigest() == drifted_hash
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_foreign_precommit_aborts_without_overwrite():
+    root = fixture()
+    try:
+        hook = hook_path(root)
+        os.makedirs(os.path.dirname(hook), exist_ok=True)
+        foreign = b"#!/bin/sh\necho foreign-hook\n"
+        with open(hook, "wb") as f:
+            f.write(foreign)
+        before = hashlib.sha256(open(hook, "rb").read()).hexdigest()
+
+        result = run(root, "--repair")
+        after = hashlib.sha256(open(hook, "rb").read()).hexdigest()
+        assert result.returncode == 2
+        assert "foreign pre-commit" in result.stderr
+        assert before == after
+        assert not [name for name in os.listdir(os.path.dirname(hook))
+                    if name.startswith("pre-commit.bak.")]
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+TESTS = [
+    test_repair_then_check_installs_exact_executable,
+    test_check_reports_owned_drift_and_repair_backs_it_up,
+    test_foreign_precommit_aborts_without_overwrite,
+]
+
+
+def main():
+    failed = []
+    for test in TESTS:
+        try:
+            test()
+            print(f"✓ {test.__name__}")
+        except Exception as exc:  # noqa: BLE001
+            failed.append(test.__name__)
+            print(f"✗ {test.__name__}: {type(exc).__name__}: {exc}")
+    print(f"install hooks: {len(TESTS) - len(failed)}/{len(TESTS)} passed")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

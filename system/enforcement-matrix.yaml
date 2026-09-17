@@ -1,0 +1,3953 @@
+{
+  "schema_version": 1,
+  "status_definitions": {
+    "ENFORCED": "경계가 실패를 멈추고 positive/negative fixture, 우회 기록, 잔여 위험 기록이 모두 있다.",
+    "DETECTED": "기계가 위반을 찾지만 동작을 항상 막거나 우회를 기록하지는 않는다.",
+    "REVIEW": "사람의 판정 또는 준수로만 닫힌다.",
+    "UNENFORCED": "자동 검출·차단 경계가 없다."
+  },
+  "rules": [
+    {
+      "id": "agents-core-1",
+      "origin": "AGENTS",
+      "source_key": "1",
+      "sources": [
+        "AGENTS.md 상시 코어 1"
+      ],
+      "invariant": "동결 구역은 읽기만 하고 외부 발송은 사람만 하며 데이터 국경은 구조로 막는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "agents-core-2",
+      "origin": "AGENTS",
+      "source_key": "2",
+      "sources": [
+        "AGENTS.md 상시 코어 2"
+      ],
+      "invariant": "상태 정본은 public NOW와 local overlay의 합친 view이며 판결급 사건은 발생한 턴에 적절한 scope로 기록한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "agents-core-3",
+      "origin": "AGENTS",
+      "source_key": "3",
+      "sources": [
+        "AGENTS.md 상시 코어 3"
+      ],
+      "invariant": "개인 사실과 과거 발화는 원장을 조회하고 모르면 모른다고 하며 처방 전 이미 한 일을 묻는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "agents-core-4",
+      "origin": "AGENTS",
+      "source_key": "4",
+      "sources": [
+        "AGENTS.md 상시 코어 4"
+      ],
+      "invariant": "등록된 깊은 스레드는 서류철을 먼저 읽고 떠날 때 델타를 남긴다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "agents-core-5",
+      "origin": "AGENTS",
+      "source_key": "5",
+      "sources": [
+        "AGENTS.md 상시 코어 5"
+      ],
+      "invariant": "외부 문안에는 em-dash를 쓰지 않고 발송·커밋·푸시는 명시 위임 없이는 사람이 집행한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "agents-core-6",
+      "origin": "AGENTS",
+      "source_key": "6",
+      "sources": [
+        "AGENTS.md 상시 코어 6"
+      ],
+      "invariant": "전수 수집·대규모 병렬·장기 실행 전에 WORKING-WITH-AI를 읽는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "agents-core-7",
+      "origin": "AGENTS",
+      "source_key": "7",
+      "sources": [
+        "AGENTS.md 상시 코어 7"
+      ],
+      "invariant": "PRD와 DR 정책 변경은 문서와 결정 기록에서만 수행한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-session-view",
+      "origin": "rituals",
+      "source_key": "session-view",
+      "sources": [
+        "system/rituals.md §세션 진입·복구"
+      ],
+      "invariant": "public NOW와 local overlay를 합친 view가 상태 정본이고 overlay 부재는 unavailable이다.",
+      "boundary": "test",
+      "fail_close": "검사가 실패 상태 또는 경고를 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_state_runtime.py",
+        "negative": "tools/test_state_runtime.py"
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "rituals-session-fallback",
+      "origin": "rituals",
+      "source_key": "session-fallback",
+      "sources": [
+        "system/rituals.md §세션 진입·복구"
+      ],
+      "invariant": "상태 주입이 없으면 doctor로 진단하고 두 NOW를 직접 읽는다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "rituals-handoff-first",
+      "origin": "rituals",
+      "source_key": "handoff-first",
+      "sources": [
+        "system/rituals.md §세션 진입·복구"
+      ],
+      "invariant": "장기 작업 인수는 HANDOFF와 작업 상태 도구에서 시작한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "rituals-compaction-provisional",
+      "origin": "rituals",
+      "source_key": "compaction-provisional",
+      "sources": [
+        "system/rituals.md §세션 진입·복구"
+      ],
+      "invariant": "컴팩션 요약의 상태·깊이 단언은 정본 확인 전까지 잠정이다.",
+      "boundary": "hook",
+      "fail_close": "검사가 실패 상태 또는 경고를 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_hook_runtime.py",
+        "negative": "tools/test_hook_runtime.py"
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "rituals-procedure-location",
+      "origin": "rituals",
+      "source_key": "procedure-location",
+      "sources": [
+        "system/rituals.md §판결급 이벤트"
+      ],
+      "invariant": "컴팩션 직후 첫 읽기 뒤 현재 절차 위치와 다음 허용 단계를 한 줄로 적는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-event-log",
+      "origin": "rituals",
+      "source_key": "event-log",
+      "sources": [
+        "system/rituals.md §판결급 이벤트"
+      ],
+      "invariant": "결정·국면 변화·발사는 같은 턴에 기록하고 민감하거나 불확실하면 private로 내린다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-canonical-date",
+      "origin": "rituals",
+      "source_key": "canonical-date",
+      "sources": [
+        "system/rituals.md §판결급 이벤트"
+      ],
+      "invariant": "트랙 정본의 갱신일을 사건과 함께 맞춘다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-hotset-query",
+      "origin": "rituals",
+      "source_key": "hotset-query",
+      "sources": [
+        "system/rituals.md §개인 사실"
+      ],
+      "invariant": "세션 시작과 사실 단언 전에 핫셋과 사실 원장을 조회한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-hotset-render",
+      "origin": "rituals",
+      "source_key": "hotset-render",
+      "sources": [
+        "system/rituals.md §개인 사실"
+      ],
+      "invariant": "사실 레코드 변경 뒤 핫셋을 재렌더하고 생성물을 직접 수정하지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-source-conflict",
+      "origin": "rituals",
+      "source_key": "source-conflict",
+      "sources": [
+        "system/rituals.md §개인 사실"
+      ],
+      "invariant": "전사와 사람 기억이 충돌하면 양쪽 출처를 드러내 판정을 받는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-post-checks",
+      "origin": "rituals",
+      "source_key": "post-checks",
+      "sources": [
+        "system/rituals.md §재편·새 산출물"
+      ],
+      "invariant": "재편 뒤 linkcheck broken 0과 now check drift 0을 확인한다.",
+      "boundary": "gate",
+      "fail_close": "검사가 실패 상태 또는 경고를 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "rituals-state-consistency",
+      "origin": "rituals",
+      "source_key": "state-consistency",
+      "sources": [
+        "system/rituals.md §재편·새 산출물"
+      ],
+      "invariant": "상태 문서에는 갱신일을 쓰고 같은 사실의 다른 문서와 정합을 확인한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-existing-checkers",
+      "origin": "rituals",
+      "source_key": "existing-checkers",
+      "sources": [
+        "system/rituals.md §재편·새 산출물"
+      ],
+      "invariant": "새 산출물에는 linkcheck, now check, coherence 순으로 기존 검사기를 먼저 쓴다.",
+      "boundary": "gate",
+      "fail_close": "검사가 실패 상태 또는 경고를 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "rituals-inspect-output",
+      "origin": "rituals",
+      "source_key": "inspect-output",
+      "sources": [
+        "system/rituals.md §재편·새 산출물"
+      ],
+      "invariant": "도구 종료코드뿐 아니라 도구가 보고한 결과를 확인한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-file-naming",
+      "origin": "rituals",
+      "source_key": "file-naming",
+      "sources": [
+        "system/rituals.md §문서·파일 컨벤션"
+      ],
+      "invariant": "신규 작업 산출물은 kebab-case와 날짜를 쓰고 코드와 벤더 원본은 각 관례를 따른다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-message-body",
+      "origin": "rituals",
+      "source_key": "message-body",
+      "sources": [
+        "system/rituals.md §문서·파일 컨벤션"
+      ],
+      "invariant": "복붙 문안은 body 파일로 분리하고 발송 후 완료 날짜를 표시한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-private-dumps",
+      "origin": "rituals",
+      "source_key": "private-dumps",
+      "sources": [
+        "system/rituals.md §문서·파일 컨벤션"
+      ],
+      "invariant": "개인 대화 덤프는 _private/dumps에만 둔다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-outbound-preflight",
+      "origin": "rituals",
+      "source_key": "outbound-preflight",
+      "sources": [
+        "system/rituals.md §외부 문안 작성"
+      ],
+      "invariant": "발신 산출물 본문 전 문서 역할과 실제 정합 앵커를 작업 로그에 적는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-outbound-flow",
+      "origin": "rituals",
+      "source_key": "outbound-flow",
+      "sources": [
+        "system/rituals.md §외부 문안 작성"
+      ],
+      "invariant": "외부 문안은 근거·임무, 닫기, 골격, 정지, 자세·경제성, 수신자 재구성 순서로 작성한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-outbound-single-mission",
+      "origin": "rituals",
+      "source_key": "outbound-single-mission",
+      "sources": [
+        "system/rituals.md §외부 문안 작성"
+      ],
+      "invariant": "외부 문안은 필요한 논리와 온기를 보존하되 두 번째 임무와 자기평가를 싣지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-border-direction",
+      "origin": "rituals",
+      "source_key": "border-direction",
+      "sources": [
+        "system/rituals.md §데이터 국경"
+      ],
+      "invariant": "데이터 국경 방향은 instance context에 맞춰 정의하고 다른 인스턴스 규약을 복사하지 않는다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "rituals-human-import",
+      "origin": "rituals",
+      "source_key": "human-import",
+      "sources": [
+        "system/rituals.md §데이터 국경"
+      ],
+      "invariant": "경계를 넘는 반입은 사람만 수행한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-single-landing",
+      "origin": "rituals",
+      "source_key": "single-landing",
+      "sources": [
+        "system/rituals.md §데이터 국경"
+      ],
+      "invariant": "반입물은 _private 아래 한 착지점에 모으고 커밋·인용·외부 전송하지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-abstract-only",
+      "origin": "rituals",
+      "source_key": "abstract-only",
+      "sources": [
+        "system/rituals.md §데이터 국경"
+      ],
+      "invariant": "추적 문서에는 민감 원료가 아닌 추상 수준만 기록한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-instance-border",
+      "origin": "rituals",
+      "source_key": "instance-border",
+      "sources": [
+        "system/rituals.md §데이터 국경"
+      ],
+      "invariant": "instance-rules에 반입물·착지점·반출 금지 대상을 선언한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-lens-trigger",
+      "origin": "rituals",
+      "source_key": "lens-trigger",
+      "sources": [
+        "system/rituals.md §사고렌즈"
+      ],
+      "invariant": "렌즈는 막힌 문제·설계·결정·명시 요청에서만 호출한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-lens-label",
+      "origin": "rituals",
+      "source_key": "lens-label",
+      "sources": [
+        "system/rituals.md §사고렌즈"
+      ],
+      "invariant": "렌즈 적용 뒤 해당 렌즈 시금석 절에 사용 라벨을 남긴다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-lens-ledger-private",
+      "origin": "rituals",
+      "source_key": "lens-ledger-private",
+      "sources": [
+        "system/rituals.md §사고렌즈"
+      ],
+      "invariant": "렌즈 사용 원장은 인스턴스 밖으로 반출하지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-irreversible-human",
+      "origin": "rituals",
+      "source_key": "irreversible-human",
+      "sources": [
+        "system/rituals.md §외부 시스템 조작"
+      ],
+      "invariant": "제출·발송·결제·서명 버튼은 사람만 누른다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "rituals-portal-read-default",
+      "origin": "rituals",
+      "source_key": "portal-read-default",
+      "sources": [
+        "system/rituals.md §외부 시스템 조작"
+      ],
+      "invariant": "업무·금융 포털은 읽기가 기본이고 클릭·입력은 지시가 있을 때만 한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "rituals-form-prior-decision",
+      "origin": "rituals",
+      "source_key": "form-prior-decision",
+      "sources": [
+        "system/rituals.md §외부 시스템 조작"
+      ],
+      "invariant": "폼 빈칸을 채우기 전에 과거 판정의 근거를 찾는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-credentials-human",
+      "origin": "rituals",
+      "source_key": "credentials-human",
+      "sources": [
+        "system/rituals.md §외부 시스템 조작"
+      ],
+      "invariant": "로그인과 비밀번호 입력은 사람이 한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "rituals-recall-bounded",
+      "origin": "rituals",
+      "source_key": "recall-bounded",
+      "sources": [
+        "system/rituals.md §기억 시스템 운용"
+      ],
+      "invariant": "recall 결과는 현재 질문에 묶인 몇 줄로만 사용하고 known-item 실패를 기록한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-gardener-proposal",
+      "origin": "rituals",
+      "source_key": "gardener-proposal",
+      "sources": [
+        "system/rituals.md §기억 시스템 운용"
+      ],
+      "invariant": "정원사는 제안만 하며 저위험 위생만 에이전트가 집행 후 보고한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-ideas-deferred",
+      "origin": "rituals",
+      "source_key": "ideas-deferred",
+      "sources": [
+        "system/rituals.md §기억 시스템 운용"
+      ],
+      "invariant": "발산 아이디어는 실행하지 않고 journal idea로 적립한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "rituals-instance-local",
+      "origin": "rituals",
+      "source_key": "instance-local",
+      "sources": [
+        "system/rituals.md §이 인스턴스만의 의식"
+      ],
+      "invariant": "인스턴스 의식은 rituals.local에 쓰고 업스트림 rituals를 수정하지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-info-change-discipline",
+      "origin": "PRD-info",
+      "source_key": "change-discipline",
+      "sources": [
+        "system/PRD-info-architecture.md 문서 지위"
+      ],
+      "invariant": "정책 변경은 PRD를 먼저 고치고 이력에 남기며 구현부터 바꾸지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-version-contract",
+      "origin": "PRD-info",
+      "source_key": "version-contract",
+      "sources": [
+        "system/PRD-info-architecture.md 버전 규약"
+      ],
+      "invariant": "버전은 구현·검증된 상태에만 부여한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-tracked-spec",
+      "origin": "PRD-info",
+      "source_key": "tracked-spec",
+      "sources": [
+        "system/PRD-info-architecture.md 위치"
+      ],
+      "invariant": "스펙은 변경 이력이 있는 추적 공간에 둔다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-measurable-success",
+      "origin": "PRD-info",
+      "source_key": "measurable-success",
+      "sources": [
+        "system/PRD-info-architecture.md §3"
+      ],
+      "invariant": "성공 판정은 오답 0, 재제안 0, 30초 감사, 정정 재발 0, 체감 지연 없음으로 측정한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-source-distance",
+      "origin": "PRD-info",
+      "source_key": "source-distance",
+      "sources": [
+        "system/PRD-info-architecture.md §4.1"
+      ],
+      "invariant": "정보 권위는 파일 종류가 아니라 원점에서의 파생 거리로 정한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-user-origin",
+      "origin": "PRD-info",
+      "source_key": "user-origin",
+      "sources": [
+        "system/PRD-info-architecture.md §4.1"
+      ],
+      "invariant": "소유자의 결정·선호·계획·정정은 소유자 발화가 원점이다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-conflict-visible",
+      "origin": "PRD-info",
+      "source_key": "conflict-visible",
+      "sources": [
+        "system/PRD-info-architecture.md §4.1"
+      ],
+      "invariant": "파생 기록과 사람 기억이 충돌하면 어느 쪽도 조용히 채택하지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-append-facts",
+      "origin": "PRD-info",
+      "source_key": "append-facts",
+      "sources": [
+        "system/PRD-info-architecture.md §4.2"
+      ],
+      "invariant": "사실 기록은 추가 전용이고 수정은 대체·철회 상태 전이로 한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-discard-interpretation",
+      "origin": "PRD-info",
+      "source_key": "discard-interpretation",
+      "sources": [
+        "system/PRD-info-architecture.md §4.2"
+      ],
+      "invariant": "해석은 파생물로 취급하고 오독 시 기록을 건드리지 않고 다시 만든다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-layered-defense",
+      "origin": "PRD-info",
+      "source_key": "layered-defense",
+      "sources": [
+        "system/PRD-info-architecture.md §4.3"
+      ],
+      "invariant": "동일 오류를 저장·로드·조회·발화·정정·감사 여러 층에서 잡는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-degraded-unknown",
+      "origin": "PRD-info",
+      "source_key": "degraded-unknown",
+      "sources": [
+        "system/PRD-info-architecture.md §4.4"
+      ],
+      "invariant": "기록이 없거나 낡거나 모순되면 추측 대신 모른다고 한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-zero-user-maintenance",
+      "origin": "PRD-info",
+      "source_key": "zero-user-maintenance",
+      "sources": [
+        "system/PRD-info-architecture.md §4.5"
+      ],
+      "invariant": "에이전트가 유지하고 소유자는 정정만 하도록 설계한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-all-domains",
+      "origin": "PRD-info",
+      "source_key": "all-domains",
+      "sources": [
+        "system/PRD-info-architecture.md §5"
+      ],
+      "invariant": "출처·조회·불변성·열화 규칙은 모든 도메인에 첫날부터 적용한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-demand-extraction",
+      "origin": "PRD-info",
+      "source_key": "demand-extraction",
+      "sources": [
+        "system/PRD-info-architecture.md §5"
+      ],
+      "invariant": "적극 추출은 휘발성과 결정 하중이 높은 영역부터 수요 주도로 한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-frozen-exclusion",
+      "origin": "PRD-info",
+      "source_key": "frozen-exclusion",
+      "sources": [
+        "system/PRD-info-architecture.md §5"
+      ],
+      "invariant": "동결 영역은 참조만 하고 갱신하지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-atomic-fact",
+      "origin": "PRD-info",
+      "source_key": "atomic-fact",
+      "sources": [
+        "system/PRD-info-architecture.md §6.1"
+      ],
+      "invariant": "사실 레코드 하나에는 사실 하나만 둔다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-fact-fields",
+      "origin": "PRD-info",
+      "source_key": "fact-fields",
+      "sources": [
+        "system/PRD-info-architecture.md §6.1"
+      ],
+      "invariant": "사실 레코드는 내용·출처·발화자·날짜·상태·태그·대체/철회 관계를 가진다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-decided-no-reoffer",
+      "origin": "PRD-info",
+      "source_key": "decided-no-reoffer",
+      "sources": [
+        "system/PRD-info-architecture.md §6.1"
+      ],
+      "invariant": "결정됨 상태 항목은 재제안하지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-retain-withdrawn",
+      "origin": "PRD-info",
+      "source_key": "retain-withdrawn",
+      "sources": [
+        "system/PRD-info-architecture.md §6.1"
+      ],
+      "invariant": "철회된 사실을 삭제하지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-query-dimensions",
+      "origin": "PRD-info",
+      "source_key": "query-dimensions",
+      "sources": [
+        "system/PRD-info-architecture.md §6.2"
+      ],
+      "invariant": "사실은 키워드·주제·상태·인물·기간으로 조회 가능해야 한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-fulltext-path",
+      "origin": "PRD-info",
+      "source_key": "fulltext-path",
+      "sources": [
+        "system/PRD-info-architecture.md §6.2"
+      ],
+      "invariant": "태그와 별개로 전문 검색 경로를 항상 둔다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-audit-chain",
+      "origin": "PRD-info",
+      "source_key": "audit-chain",
+      "sources": [
+        "system/PRD-info-architecture.md §6.2"
+      ],
+      "invariant": "사실에서 원점 파일까지 감사 사슬을 한 번에 출력한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-tiered-query",
+      "origin": "PRD-info",
+      "source_key": "tiered-query",
+      "sources": [
+        "system/PRD-info-architecture.md §6.3"
+      ],
+      "invariant": "사실 단언은 조회, 제안은 조회와 결정됨 확인, 문서 변경은 조회와 충돌 검사를 거친다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-hotset-auto",
+      "origin": "PRD-info",
+      "source_key": "hotset-auto",
+      "sources": [
+        "system/PRD-info-architecture.md §6.4"
+      ],
+      "invariant": "세션 시작에 위험도가 높은 소규모 핫셋을 자동 로드한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-hotset-cap",
+      "origin": "PRD-info",
+      "source_key": "hotset-cap",
+      "sources": [
+        "system/PRD-info-architecture.md §6.4"
+      ],
+      "invariant": "핫셋은 상한을 두고 국면 종료 시 콜드셋으로 강등한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-inline-triggers",
+      "origin": "PRD-info",
+      "source_key": "inline-triggers",
+      "sources": [
+        "system/PRD-info-architecture.md §6.5"
+      ],
+      "invariant": "정정·새 원점 사실·결정·상태 전이는 발생 즉시 기록한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-no-turn-scan",
+      "origin": "PRD-info",
+      "source_key": "no-turn-scan",
+      "sources": [
+        "system/PRD-info-architecture.md §6.5"
+      ],
+      "invariant": "매 턴 스캔과 세션 종료 일괄 기록을 하지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-telemetry",
+      "origin": "PRD-info",
+      "source_key": "telemetry",
+      "sources": [
+        "system/PRD-info-architecture.md §6.6"
+      ],
+      "invariant": "소유자 정정은 I/A 실패 유형으로 분류해 telemetry에 기록한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-auto-bootstrap",
+      "origin": "PRD-info",
+      "source_key": "auto-bootstrap",
+      "sources": [
+        "system/PRD-info-architecture.md §6.7"
+      ],
+      "invariant": "새 세션은 PRD와 핫셋의 존재를 자동 인지한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-graph-after-consistency",
+      "origin": "PRD-info",
+      "source_key": "graph-after-consistency",
+      "sources": [
+        "system/PRD-info-architecture.md §6.8"
+      ],
+      "invariant": "링크 그래프는 기록 정합성이 안정된 뒤 도입한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-overengineering-boundary",
+      "origin": "PRD-info",
+      "source_key": "overengineering-boundary",
+      "sources": [
+        "system/PRD-info-architecture.md §6.9"
+      ],
+      "invariant": "명시된 재검토 조건 전에는 자동 색인·전문 기록화·임베딩·실시간 동기화·그래프·조기 일반화를 만들지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-ask-before-prescribe",
+      "origin": "PRD-info",
+      "source_key": "ask-before-prescribe",
+      "sources": [
+        "system/PRD-info-architecture.md §7"
+      ],
+      "invariant": "처방 전에 이미 수행·결정된 것을 묻는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-speech-grades",
+      "origin": "PRD-info",
+      "source_key": "speech-grades",
+      "sources": [
+        "system/PRD-info-architecture.md §7"
+      ],
+      "invariant": "발화할 때 사실·전언·추론 등급을 구분한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-correction-immediate",
+      "origin": "PRD-info",
+      "source_key": "correction-immediate",
+      "sources": [
+        "system/PRD-info-architecture.md §7"
+      ],
+      "invariant": "정정을 즉시 반영하고 재발을 막는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-no-checklist-bloat",
+      "origin": "PRD-info",
+      "source_key": "no-checklist-bloat",
+      "sources": [
+        "system/PRD-info-architecture.md §7"
+      ],
+      "invariant": "이미 닫힌 항목을 체크리스트에 남겨 소유자 주의를 낭비하지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-rollback-first",
+      "origin": "PRD-info",
+      "source_key": "rollback-first",
+      "sources": [
+        "system/PRD-info-architecture.md §8"
+      ],
+      "invariant": "구조 재구성 전 롤백 가능한 상태를 만든다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-handling-inheritance",
+      "origin": "PRD-info",
+      "source_key": "handling-inheritance",
+      "sources": [
+        "system/PRD-info-architecture.md §8"
+      ],
+      "invariant": "기록은 프로젝트의 비공개·동결·인용 제한을 상속한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-human-vcs",
+      "origin": "PRD-info",
+      "source_key": "human-vcs",
+      "sources": [
+        "system/PRD-info-architecture.md §8"
+      ],
+      "invariant": "커밋과 푸시는 소유자 권한이고 에이전트는 파일 작성까지만 한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-design-alternatives",
+      "origin": "PRD-info",
+      "source_key": "design-alternatives",
+      "sources": [
+        "system/PRD-info-architecture.md §9"
+      ],
+      "invariant": "결정마다 대안 2~3개를 비교하고 결정과 근거를 기록한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-validation-suite",
+      "origin": "PRD-info",
+      "source_key": "validation-suite",
+      "sources": [
+        "system/PRD-info-architecture.md §10"
+      ],
+      "invariant": "동작·신선 세션·없는 사실 함정·모순 회귀·대화 부하를 검증한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-info-fresh-required",
+      "origin": "PRD-info",
+      "source_key": "fresh-required",
+      "sources": [
+        "system/PRD-info-architecture.md §10"
+      ],
+      "invariant": "신선 세션 검증은 필수이며 통과 시에만 v1.0을 부여한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-authority-order",
+      "origin": "PRD-session",
+      "source_key": "authority-order",
+      "sources": [
+        "system/PRD-session-memory.md §3.1"
+      ],
+      "invariant": "개인 원장·전사·journal·서류철·트랙 정본이 생성물·포인터·컨텍스트보다 우선한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-claim-authority",
+      "origin": "PRD-session",
+      "source_key": "claim-authority",
+      "sources": [
+        "system/PRD-session-memory.md §3.1.1"
+      ],
+      "invariant": "권위는 파일이 아니라 주장 종류에 따라 발화·DR·NOW view·ledger·서류철에 배정한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-role-user-filter",
+      "origin": "PRD-session",
+      "source_key": "role-user-filter",
+      "sources": [
+        "system/PRD-session-memory.md §3.1.1"
+      ],
+      "invariant": "recall은 시스템 주입·복제 이력·컴팩션 요약을 소유자 발화에서 기본 제외한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-visibility-allowlist",
+      "origin": "PRD-session",
+      "source_key": "visibility-allowlist",
+      "sources": [
+        "system/PRD-session-memory.md §3.2"
+      ],
+      "invariant": "명시된 public track만 추적 journal에 기록하고 미등재와 private override는 local로 내린다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-privacy-fail-close",
+      "origin": "PRD-session",
+      "source_key": "privacy-fail-close",
+      "sources": [
+        "system/PRD-session-memory.md §3.2"
+      ],
+      "invariant": "config 부재·파손·schema 불일치는 local로 fail-close하고 경고한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-no-private-promotion",
+      "origin": "PRD-session",
+      "source_key": "no-private-promotion",
+      "sources": [
+        "system/PRD-session-memory.md §3.2"
+      ],
+      "invariant": "private 파생 사건의 public 승격은 공유 capsule을 새로 쓰는 사람 판정만 허용한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-overlay-status",
+      "origin": "PRD-session",
+      "source_key": "overlay-status",
+      "sources": [
+        "system/PRD-session-memory.md §3.2"
+      ],
+      "invariant": "SessionStart view는 overlay의 available·degraded·unavailable/corrupt를 구분한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-public-survives-local",
+      "origin": "PRD-session",
+      "source_key": "public-survives-local",
+      "sources": [
+        "system/PRD-session-memory.md §3.2"
+      ],
+      "invariant": "local render 실패가 유효한 public injection을 없애지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-private-no-public-bytes",
+      "origin": "PRD-session",
+      "source_key": "private-no-public-bytes",
+      "sources": [
+        "system/PRD-session-memory.md §3.2"
+      ],
+      "invariant": "private 기록은 public journal과 public NOW bytes를 바꾸지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-registry-conflict",
+      "origin": "PRD-session",
+      "source_key": "registry-conflict",
+      "sources": [
+        "system/PRD-session-memory.md §3.2"
+      ],
+      "invariant": "private registry key 충돌·중복은 skip하고 상태를 degraded로 내린다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-atomic-transaction",
+      "origin": "PRD-session",
+      "source_key": "atomic-transaction",
+      "sources": [
+        "system/PRD-session-memory.md §3.2"
+      ],
+      "invariant": "journal append부터 snapshot publish까지 repo-wide lock과 fsync·atomic replace로 직렬화한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-rollback-transaction",
+      "origin": "PRD-session",
+      "source_key": "rollback-transaction",
+      "sources": [
+        "system/PRD-session-memory.md §3.2"
+      ],
+      "invariant": "post-publish 검증 실패 시 snapshot과 append·mtime을 모두 rollback한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-malformed-visible",
+      "origin": "PRD-session",
+      "source_key": "malformed-visible",
+      "sources": [
+        "system/PRD-session-memory.md §3.2"
+      ],
+      "invariant": "malformed 사건 줄을 조용히 버리지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-freshness-calendar",
+      "origin": "PRD-session",
+      "source_key": "freshness-calendar",
+      "sources": [
+        "system/PRD-session-memory.md §3.2"
+      ],
+      "invariant": "freshness는 local calendar date 경계로 계산한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-staged-marker",
+      "origin": "PRD-session",
+      "source_key": "staged-marker",
+      "sources": [
+        "system/PRD-session-memory.md §3.2"
+      ],
+      "invariant": "pre-commit은 staged content fingerprint와 snapshot bytes를 함께 검증한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-history-preserved",
+      "origin": "PRD-session",
+      "source_key": "history-preserved",
+      "sources": [
+        "system/PRD-session-memory.md §3.2"
+      ],
+      "invariant": "기존 reachable journal/blob 삭제는 별도 파괴 승인 없이는 하지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-one-dossier",
+      "origin": "PRD-session",
+      "source_key": "one-dossier",
+      "sources": [
+        "system/PRD-session-memory.md §3.3"
+      ],
+      "invariant": "살아 있는 깊은 스레드마다 정본 서류철 하나를 지정한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-dossier-five",
+      "origin": "PRD-session",
+      "source_key": "dossier-five",
+      "sources": [
+        "system/PRD-session-memory.md §3.3"
+      ],
+      "invariant": "서류철은 현재 위치·확정·기각·미결·다음 수 다섯 칸을 유지한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-dossier-ritual",
+      "origin": "PRD-session",
+      "source_key": "dossier-ritual",
+      "sources": [
+        "system/PRD-session-memory.md §3.3"
+      ],
+      "invariant": "떠날 때 5줄 이내 델타를 남기고 복귀할 때 서류철부터 읽는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-targeted-recall",
+      "origin": "PRD-session",
+      "source_key": "targeted-recall",
+      "sources": [
+        "system/PRD-session-memory.md §3.4"
+      ],
+      "invariant": "깊은 논의 전 표적 질의로 원문을 확인하고 전체 전사를 수동으로 읽지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-bounded-recall",
+      "origin": "PRD-session",
+      "source_key": "bounded-recall",
+      "sources": [
+        "system/PRD-session-memory.md §3.4"
+      ],
+      "invariant": "회상 결과는 현재 질문에 결속한 몇 줄로만 주입한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-owner-quote-recall",
+      "origin": "PRD-session",
+      "source_key": "owner-quote-recall",
+      "sources": [
+        "system/PRD-session-memory.md §3.4"
+      ],
+      "invariant": "소유자의 정확한 발화를 판정할 때는 요약이 아니라 recall 원문을 사용한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-stdlib-recall",
+      "origin": "PRD-session",
+      "source_key": "stdlib-recall",
+      "sources": [
+        "system/PRD-session-memory.md §3.4"
+      ],
+      "invariant": "recall 구현은 표준 라이브러리만 사용한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-gardener-no-execute",
+      "origin": "PRD-session",
+      "source_key": "gardener-no-execute",
+      "sources": [
+        "system/PRD-session-memory.md §3.5"
+      ],
+      "invariant": "정원사는 제안만 하고 집행은 세션과 소유자 판정 뒤에 한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-gardener-evidence",
+      "origin": "PRD-session",
+      "source_key": "gardener-evidence",
+      "sources": [
+        "system/PRD-session-memory.md §3.5"
+      ],
+      "invariant": "정원사 서류철 검증은 recall 원문 슬라이스를 증거로 사용한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-core-budget",
+      "origin": "PRD-session",
+      "source_key": "core-budget",
+      "sources": [
+        "system/PRD-session-memory.md §3.6"
+      ],
+      "invariant": "상시 코어는 7개 이하이고 나머지는 조건부 로드로 이동한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-rule-why",
+      "origin": "PRD-session",
+      "source_key": "rule-why",
+      "sources": [
+        "system/PRD-session-memory.md §3.6"
+      ],
+      "invariant": "모든 상시 규칙에는 Why를 붙이고 근거 없는 규칙은 삭제 후보로 둔다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-embedding-gate",
+      "origin": "PRD-session",
+      "source_key": "embedding-gate",
+      "sources": [
+        "system/PRD-session-memory.md §3.7"
+      ],
+      "invariant": "known-item 실패 등 명시 트리거 전에는 임베딩·그래프를 도입하지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-lexical-remains",
+      "origin": "PRD-session",
+      "source_key": "lexical-remains",
+      "sources": [
+        "system/PRD-session-memory.md §3.7"
+      ],
+      "invariant": "임베딩 도입 후에도 원문 정본과 lexical 검색을 유지한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-non-goals",
+      "origin": "PRD-session",
+      "source_key": "non-goals",
+      "sources": [
+        "system/PRD-session-memory.md §3.8"
+      ],
+      "invariant": "DB·프레임워크·대개편·대화 미러링·통찰 저장소·멀티에이전트 토폴로지를 만들지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-success-budgets",
+      "origin": "PRD-session",
+      "source_key": "success-budgets",
+      "sources": [
+        "system/PRD-session-memory.md §4"
+      ],
+      "invariant": "NOW와 SessionStart는 각 6000 bytes 이하, worker receipt는 4096 bytes 이하로 유지한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-decision-record",
+      "origin": "PRD-session",
+      "source_key": "decision-record",
+      "sources": [
+        "system/PRD-session-memory.md §8"
+      ],
+      "invariant": "설계 결정은 이유·맥락·기각 대안·참조와 함께 decisions 단일 파일에 기록한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-schema-canon",
+      "origin": "PRD-session",
+      "source_key": "schema-canon",
+      "sources": [
+        "system/PRD-session-memory.md §9"
+      ],
+      "invariant": "스키마 정본은 memlib 선언부 하나이고 나머지 도구와 생성물이 import한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-journal-schema",
+      "origin": "PRD-session",
+      "source_key": "journal-schema",
+      "sources": [
+        "system/PRD-session-memory.md §9"
+      ],
+      "invariant": "journal 줄은 timezone·허용 type·ref 문법을 따르고 now log가 위반을 거부한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-now-order",
+      "origin": "PRD-session",
+      "source_key": "now-order",
+      "sources": [
+        "system/PRD-session-memory.md §9"
+      ],
+      "invariant": "NOW는 신선도·트랙·스레드·루프·최근 사건·정본 포인터 고정 순서를 따른다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-hook-context",
+      "origin": "PRD-session",
+      "source_key": "hook-context",
+      "sources": [
+        "system/PRD-session-memory.md §10.1"
+      ],
+      "invariant": "SessionStart는 두 NOW를 6000 bytes 안에서 합쳐 주입하고 상태 등급을 표시한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-hook-precompact",
+      "origin": "PRD-session",
+      "source_key": "hook-precompact",
+      "sources": [
+        "system/PRD-session-memory.md §10.1"
+      ],
+      "invariant": "PreCompact는 컴팩션 사건을 journal에 기록한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-hook-failsafe",
+      "origin": "PRD-session",
+      "source_key": "hook-failsafe",
+      "sources": [
+        "system/PRD-session-memory.md §10.1"
+      ],
+      "invariant": "모든 훅은 즉시 fail-safe하되 내부 실패는 fallback이 발화하도록 nonzero로 전달한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-hook-proof-limit",
+      "origin": "PRD-session",
+      "source_key": "hook-proof-limit",
+      "sources": [
+        "system/PRD-session-memory.md §10.1"
+      ],
+      "invariant": "direct command 검사는 fired/effect 증거로 승격하지 않고 positive/negative canary만 인정한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-gardener-loop",
+      "origin": "PRD-session",
+      "source_key": "gardener-loop",
+      "sources": [
+        "system/PRD-session-memory.md §10.3"
+      ],
+      "invariant": "정원사 제안은 사람 판정 뒤 집행하고 journal decision과 DR에 연결한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-handoff-order",
+      "origin": "PRD-session",
+      "source_key": "handoff-order",
+      "sources": [
+        "system/PRD-session-memory.md §10.4"
+      ],
+      "invariant": "핸드오프는 NOW view, journal 최근, 서류철, 필요 시 recall 순서로 읽는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-single-agents",
+      "origin": "PRD-session",
+      "source_key": "single-agents",
+      "sources": [
+        "system/PRD-session-memory.md §10.4"
+      ],
+      "invariant": "런타임 공통 규약은 AGENTS 하나이며 CLAUDE는 exact import한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-worker-isolation",
+      "origin": "PRD-session",
+      "source_key": "worker-isolation",
+      "sources": [
+        "system/PRD-session-memory.md §10.5"
+      ],
+      "invariant": "광역 작업은 fresh ephemeral worker로 격리하고 전문은 private run record에 둔다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-worker-receipt",
+      "origin": "PRD-session",
+      "source_key": "worker-receipt",
+      "sources": [
+        "system/PRD-session-memory.md §10.5"
+      ],
+      "invariant": "master에는 고정 필드와 UTF-8-safe result의 4096-byte receipt만 반환한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-worker-boundary",
+      "origin": "PRD-session",
+      "source_key": "worker-boundary",
+      "sources": [
+        "system/PRD-session-memory.md §10.5"
+      ],
+      "invariant": "Claude worker는 read-only이고 Codex worker는 workspace-write이며 connector·network·plugin·fan-out을 닫는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-worker-meta",
+      "origin": "PRD-session",
+      "source_key": "worker-meta",
+      "sources": [
+        "system/PRD-session-memory.md §10.5"
+      ],
+      "invariant": "run meta는 rev·dirty·hash·usage·read scope·write scope 계보를 기록한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "사람의 검토와 준수에 의존한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "prd-session-strict-scope",
+      "origin": "PRD-session",
+      "source_key": "strict-scope",
+      "sources": [
+        "system/PRD-session-memory.md §10.5"
+      ],
+      "invariant": "strict scope에서 prefix 밖 변경은 scope_violation으로 종료하고 meta에 위반을 남긴다.",
+      "boundary": "test",
+      "fail_close": "--strict-scope 위반이면 run status가 scope_violation이고 wrapper exit가 4가 된다.",
+      "fixtures": {
+        "positive": "tools/test_fresh_worker.py",
+        "negative": "tools/test_fresh_worker.py"
+      },
+      "bypass_log": true,
+      "residual": "동시 writer attribution은 격리 없이는 완전히 구분되지 않는다.",
+      "status": "ENFORCED"
+    },
+    {
+      "id": "prd-session-pilot-expiry",
+      "origin": "PRD-session",
+      "source_key": "pilot-expiry",
+      "sources": [
+        "system/PRD-session-memory.md §10.6"
+      ],
+      "invariant": "만료된 수동 파일럿은 새 상시 정본으로 승격하지 않고 종료 증거와 후속 DR로 판정한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-generated-map",
+      "origin": "PRD-session",
+      "source_key": "generated-map",
+      "sources": [
+        "system/PRD-session-memory.md §11"
+      ],
+      "invariant": "memory map은 memlib와 라이브 상태에서 생성하고 손으로 편집하지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-autonomy-levels",
+      "origin": "PRD-session",
+      "source_key": "autonomy-levels",
+      "sources": [
+        "system/PRD-session-memory.md §12"
+      ],
+      "invariant": "구현 세부는 자율, 설계 조정은 DR 기록, 계약 변경은 중단 후 판정 요청으로 구분한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-phase-review",
+      "origin": "PRD-session",
+      "source_key": "phase-review",
+      "sources": [
+        "system/PRD-session-memory.md §12"
+      ],
+      "invariant": "각 Phase는 픽스처 자기검증·고정 완료 보고·소유자 확인 3개 이하를 제공한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "prd-session-prd-freeze",
+      "origin": "PRD-session",
+      "source_key": "prd-freeze",
+      "sources": [
+        "system/PRD-session-memory.md §12"
+      ],
+      "invariant": "PRD·DR 변경은 문서와 이력에서만 하며 운용 실측 전에는 설계를 동결한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "kit-dr-001",
+      "origin": "KIT-DR",
+      "source_key": "DR-001",
+      "sources": [
+        "system/kit-decisions.md DR-001"
+      ],
+      "invariant": "인스턴스 배선은 config 또는 파일 위치에서 유도하고 인스턴스 고유 폴백을 코드에 두지 않는다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "kit-dr-002",
+      "origin": "KIT-DR",
+      "source_key": "DR-002",
+      "sources": [
+        "system/kit-decisions.md DR-002"
+      ],
+      "invariant": "데이터 국경은 gitignore·인스턴스 선언/doctor·pull-only 자격증명 3층으로 둔다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "kit-dr-003",
+      "origin": "KIT-DR",
+      "source_key": "DR-003",
+      "sources": [
+        "system/kit-decisions.md DR-003"
+      ],
+      "invariant": "훅은 세션을 막지 않되 실패 경고나 오류 로그를 남긴다.",
+      "boundary": "test",
+      "fail_close": "검사가 실패 상태 또는 경고를 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_hook_runtime.py",
+        "negative": "tools/test_hook_runtime.py"
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "kit-dr-004",
+      "origin": "KIT-DR",
+      "source_key": "DR-004",
+      "sources": [
+        "system/kit-decisions.md DR-004"
+      ],
+      "invariant": "업스트림 엔진 문서와 인스턴스 문서를 물리적으로 분리하고 setup은 없는 파일만 만든다.",
+      "boundary": "test",
+      "fail_close": "검사가 실패 상태 또는 경고를 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_setup_migration.py",
+        "negative": "tools/test_setup_migration.py"
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "kit-dr-005",
+      "origin": "KIT-DR",
+      "source_key": "DR-005",
+      "sources": [
+        "system/kit-decisions.md DR-005"
+      ],
+      "invariant": "config schema 버전과 변경 지침을 유지하고 뒤처진 config를 doctor FAIL로 알린다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "kit-dr-006",
+      "origin": "KIT-DR",
+      "source_key": "DR-006",
+      "sources": [
+        "system/kit-decisions.md DR-006"
+      ],
+      "invariant": "상태 ledger는 public projection과 local overlay로 분리하고 오류는 private로 fail-close한다.",
+      "boundary": "test",
+      "fail_close": "검사가 실패 상태 또는 경고를 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_state_runtime.py",
+        "negative": "tools/test_state_runtime.py"
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "kit-dr-007",
+      "origin": "KIT-DR",
+      "source_key": "DR-007",
+      "sources": [
+        "system/kit-decisions.md DR-007"
+      ],
+      "invariant": "광역 작업은 bounded worker로 격리하고 공통 지시는 AGENTS 하나만 정본으로 둔다.",
+      "boundary": "test",
+      "fail_close": "검사가 실패 상태 또는 경고를 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_fresh_worker.py",
+        "negative": "tools/test_fresh_worker.py"
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "kit-dr-008",
+      "origin": "KIT-DR",
+      "source_key": "DR-008",
+      "sources": [
+        "system/kit-decisions.md DR-008"
+      ],
+      "invariant": "외부 문안 전에 문서 역할과 정합 앵커를 실제 값으로 기록한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "kit-dr-009",
+      "origin": "KIT-DR",
+      "source_key": "DR-009",
+      "sources": [
+        "system/kit-decisions.md DR-009"
+      ],
+      "invariant": "외부 문안은 닫기·골격·정지 흐름을 따르고 길이 감소를 담백함의 대리값으로 쓰지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "kit-dr-010",
+      "origin": "KIT-DR",
+      "source_key": "DR-010",
+      "sources": [
+        "system/kit-decisions.md DR-010"
+      ],
+      "invariant": "worker meta v2는 하네스·토큰·읽기·write-set 계보를 기록하고 strict일 때만 위반이 status를 바꾼다.",
+      "boundary": "test",
+      "fail_close": "검사가 실패 상태 또는 경고를 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_fresh_worker.py",
+        "negative": "tools/test_fresh_worker.py"
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "kit-dr-011",
+      "origin": "KIT-DR",
+      "source_key": "DR-011",
+      "sources": [
+        "system/kit-decisions.md DR-011"
+      ],
+      "invariant": "릴리스는 낯선 첫 설치 전체 순서를 재현해 통과해야 한다.",
+      "boundary": "test",
+      "fail_close": "검사가 실패 상태 또는 경고를 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_fresh_install.sh",
+        "negative": "tools/test_fresh_install.sh"
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "kit-dr-012",
+      "origin": "KIT-DR",
+      "source_key": "DR-012",
+      "sources": [
+        "system/kit-decisions.md DR-012"
+      ],
+      "invariant": "판정은 bounded receipt로 올리고 게이트 통과와 실패 원인 검토를 분리한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "위반을 자동으로 막거나 검출하는 경계가 없다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "changelog-v02-config",
+      "origin": "CHANGELOG",
+      "source_key": "v0.2-config",
+      "sources": [
+        "CHANGELOG.md v0.2 [해야 함] config schema"
+      ],
+      "invariant": "기존 인스턴스 config를 schema v2 instance 블록으로 갱신한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "changelog-v02-doc-pairs",
+      "origin": "CHANGELOG",
+      "source_key": "v0.2-doc-pairs",
+      "sources": [
+        "CHANGELOG.md v0.2 [해야 함] 규약 문서 쌍"
+      ],
+      "invariant": "인스턴스 고유 규약을 rituals.local·decisions·instance-rules로 이동한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "검사 실행 자체와 경계 밖 행동은 우회 가능하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "hook-claude-session",
+      "origin": "hook",
+      "source_key": "claude:SessionStart:0:0",
+      "sources": [
+        ".claude/settings.json SessionStart"
+      ],
+      "invariant": "Claude SessionStart가 NOW view를 주입하고 실패 시 권위 안내 JSON을 낸다.",
+      "boundary": "hook",
+      "fail_close": "훅 실패는 fallback 또는 marker로 드러난다.",
+      "fixtures": {
+        "positive": "tools/test_hook_runtime.py",
+        "negative": "tools/test_hook_runtime.py"
+      },
+      "bypass_log": false,
+      "residual": "dispatcher 비활성·미발화는 routine 경계가 막지 못하고 canary가 필요하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "hook-claude-precompact",
+      "origin": "hook",
+      "source_key": "claude:PreCompact:0:0",
+      "sources": [
+        ".claude/settings.json PreCompact"
+      ],
+      "invariant": "Claude PreCompact가 사건을 기록하고 실패를 hook-errors에 남긴다.",
+      "boundary": "hook",
+      "fail_close": "훅 실패는 fallback 또는 marker로 드러난다.",
+      "fixtures": {
+        "positive": "tools/test_hook_runtime.py",
+        "negative": "tools/test_hook_runtime.py"
+      },
+      "bypass_log": false,
+      "residual": "dispatcher 비활성·미발화는 routine 경계가 막지 못하고 canary가 필요하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "hook-claude-time",
+      "origin": "hook",
+      "source_key": "claude:UserPromptSubmit:0:0",
+      "sources": [
+        ".claude/settings.json UserPromptSubmit time"
+      ],
+      "invariant": "각 Claude 사용자 프롬프트에 현재 시각을 주입한다.",
+      "boundary": "hook",
+      "fail_close": "훅 실패는 fallback 또는 marker로 드러난다.",
+      "fixtures": {
+        "positive": "tools/test_hook_runtime.py",
+        "negative": "tools/test_hook_runtime.py"
+      },
+      "bypass_log": false,
+      "residual": "dispatcher 비활성·미발화는 routine 경계가 막지 못하고 canary가 필요하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "hook-claude-resume",
+      "origin": "hook",
+      "source_key": "claude:UserPromptSubmit:1:0",
+      "sources": [
+        ".claude/settings.json UserPromptSubmit gate"
+      ],
+      "invariant": "지난 턴 미검증 상태를 resume 게이트가 회수한다.",
+      "boundary": "hook",
+      "fail_close": "훅 실패는 fallback 또는 marker로 드러난다.",
+      "fixtures": {
+        "positive": "tools/test_hook_runtime.py",
+        "negative": "tools/test_hook_runtime.py"
+      },
+      "bypass_log": false,
+      "residual": "dispatcher 비활성·미발화는 routine 경계가 막지 못하고 canary가 필요하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "hook-claude-dirty",
+      "origin": "hook",
+      "source_key": "claude:PostToolUse:0:0",
+      "sources": [
+        ".claude/settings.json PostToolUse"
+      ],
+      "invariant": "Write·Edit·NotebookEdit 뒤 dirty marker를 남긴다.",
+      "boundary": "hook",
+      "fail_close": "훅 실패는 fallback 또는 marker로 드러난다.",
+      "fixtures": {
+        "positive": "tools/test_hook_runtime.py",
+        "negative": "tools/test_hook_runtime.py"
+      },
+      "bypass_log": false,
+      "residual": "dispatcher 비활성·미발화는 routine 경계가 막지 못하고 canary가 필요하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "hook-claude-stop",
+      "origin": "hook",
+      "source_key": "claude:Stop:0:0",
+      "sources": [
+        ".claude/settings.json Stop"
+      ],
+      "invariant": "편집 턴 종료 때 gate check를 실행한다.",
+      "boundary": "hook",
+      "fail_close": "훅 실패는 fallback 또는 marker로 드러난다.",
+      "fixtures": {
+        "positive": "tools/test_hook_runtime.py",
+        "negative": "tools/test_hook_runtime.py"
+      },
+      "bypass_log": false,
+      "residual": "dispatcher 비활성·미발화는 routine 경계가 막지 못하고 canary가 필요하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "hook-codex-session",
+      "origin": "hook",
+      "source_key": "codex:SessionStart:0:0",
+      "sources": [
+        ".codex/hooks.json SessionStart"
+      ],
+      "invariant": "Codex SessionStart가 git root 기준 NOW view를 주입한다.",
+      "boundary": "hook",
+      "fail_close": "훅 실패는 fallback 또는 marker로 드러난다.",
+      "fixtures": {
+        "positive": "tools/test_hook_runtime.py",
+        "negative": "tools/test_hook_runtime.py"
+      },
+      "bypass_log": false,
+      "residual": "dispatcher 비활성·미발화는 routine 경계가 막지 못하고 canary가 필요하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "hook-codex-precompact",
+      "origin": "hook",
+      "source_key": "codex:PreCompact:0:0",
+      "sources": [
+        ".codex/hooks.json PreCompact"
+      ],
+      "invariant": "Codex PreCompact가 사건을 기록하고 실패 로그를 남긴다.",
+      "boundary": "hook",
+      "fail_close": "훅 실패는 fallback 또는 marker로 드러난다.",
+      "fixtures": {
+        "positive": "tools/test_hook_runtime.py",
+        "negative": "tools/test_hook_runtime.py"
+      },
+      "bypass_log": false,
+      "residual": "dispatcher 비활성·미발화는 routine 경계가 막지 못하고 canary가 필요하다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "gate-issues-protocol",
+      "origin": "gate",
+      "source_key": "issues-protocol",
+      "sources": [
+        "tools/gate.py 검사기 계약"
+      ],
+      "invariant": "검사기는 안정 ID와 마지막 #issues 트레일러를 exit 0으로 반환해야 한다.",
+      "boundary": "gate",
+      "fail_close": "경계에서 실패하면 Stop JSON block 또는 pre-commit exit 1을 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "Stop·resume·precommit 밖 writer와 --no-verify는 남는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "gate-set-diff",
+      "origin": "gate",
+      "source_key": "set-diff",
+      "sources": [
+        "tools/gate.py 집합 판정"
+      ],
+      "invariant": "게이트는 이슈 개수가 아닌 현재 집합과 기준선의 차이를 판정한다.",
+      "boundary": "gate",
+      "fail_close": "경계에서 실패하면 Stop JSON block 또는 pre-commit exit 1을 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "Stop·resume·precommit 밖 writer와 --no-verify는 남는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "gate-baseline-human",
+      "origin": "gate",
+      "source_key": "baseline-human",
+      "sources": [
+        "tools/gate.py 기준선"
+      ],
+      "invariant": "기준선 최초 채택은 사람이 baseline 명령으로만 수행한다.",
+      "boundary": "gate",
+      "fail_close": "경계에서 실패하면 Stop JSON block 또는 pre-commit exit 1을 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "Stop·resume·precommit 밖 writer와 --no-verify는 남는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "gate-checker-list",
+      "origin": "gate",
+      "source_key": "checker-list",
+      "sources": [
+        "tools/gate.py _verdict"
+      ],
+      "invariant": "검사기 목록이 기준선과 달라지면 차단한다.",
+      "boundary": "gate",
+      "fail_close": "경계에서 실패하면 Stop JSON block 또는 pre-commit exit 1을 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "Stop·resume·precommit 밖 writer와 --no-verify는 남는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "gate-measurement-fail",
+      "origin": "gate",
+      "source_key": "measurement-fail",
+      "sources": [
+        "tools/gate.py _verdict"
+      ],
+      "invariant": "검사기 nonzero·트레일러 오류·선언 수 불일치는 측정 실패로 차단한다.",
+      "boundary": "gate",
+      "fail_close": "경계에서 실패하면 Stop JSON block 또는 pre-commit exit 1을 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "Stop·resume·precommit 밖 writer와 --no-verify는 남는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "gate-new-issues",
+      "origin": "gate",
+      "source_key": "new-issues",
+      "sources": [
+        "tools/gate.py _verdict"
+      ],
+      "invariant": "기준선에 없던 이슈가 생기면 차단하고 감소만 자동 기준선 갱신한다.",
+      "boundary": "gate",
+      "fail_close": "경계에서 실패하면 Stop JSON block 또는 pre-commit exit 1을 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "Stop·resume·precommit 밖 writer와 --no-verify는 남는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "gate-lock",
+      "origin": "gate",
+      "source_key": "lock",
+      "sources": [
+        "tools/gate.py _lock"
+      ],
+      "invariant": "dirty 표시·검사·기준선 갱신은 lock으로 직렬화한다.",
+      "boundary": "gate",
+      "fail_close": "경계에서 실패하면 Stop JSON block 또는 pre-commit exit 1을 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "Stop·resume·precommit 밖 writer와 --no-verify는 남는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "gate-root",
+      "origin": "gate",
+      "source_key": "root",
+      "sources": [
+        "tools/gate.py _root_ok"
+      ],
+      "invariant": "게이트 실행 root가 도구 위치와 다르면 차단한다.",
+      "boundary": "gate",
+      "fail_close": "경계에서 실패하면 Stop JSON block 또는 pre-commit exit 1을 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "Stop·resume·precommit 밖 writer와 --no-verify는 남는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "gate-pending",
+      "origin": "gate",
+      "source_key": "pending",
+      "sources": [
+        "tools/gate.py cmd_check"
+      ],
+      "invariant": "차단 또는 예외 뒤 pending marker를 유지해 다음 턴에 재검증한다.",
+      "boundary": "gate",
+      "fail_close": "경계에서 실패하면 Stop JSON block 또는 pre-commit exit 1을 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "Stop·resume·precommit 밖 writer와 --no-verify는 남는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "gate-resume",
+      "origin": "gate",
+      "source_key": "resume",
+      "sources": [
+        "tools/gate.py cmd_resume"
+      ],
+      "invariant": "resume은 미검증 상태를 경고하되 사용자 프롬프트 자체는 막지 않는다.",
+      "boundary": "gate",
+      "fail_close": "경계에서 실패하면 Stop JSON block 또는 pre-commit exit 1을 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "Stop·resume·precommit 밖 writer와 --no-verify는 남는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "gate-staged-index",
+      "origin": "gate",
+      "source_key": "staged-index",
+      "sources": [
+        "tools/gate.py cmd_precommit"
+      ],
+      "invariant": "precommit은 index를 별도 트리에 꺼내 staged 도구 문법과 문서 상태를 검사한다.",
+      "boundary": "precommit",
+      "fail_close": "경계에서 실패하면 Stop JSON block 또는 pre-commit exit 1을 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "Stop·resume·precommit 밖 writer와 --no-verify는 남는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "gate-precommit-failclose",
+      "origin": "gate",
+      "source_key": "precommit-failclose",
+      "sources": [
+        "tools/gate.py cmd_precommit"
+      ],
+      "invariant": "precommit에서 root·index·compile·검사 실패가 있으면 commit을 막는다.",
+      "boundary": "precommit",
+      "fail_close": "경계에서 실패하면 Stop JSON block 또는 pre-commit exit 1을 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "Stop·resume·precommit 밖 writer와 --no-verify는 남는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "gate-no-verify-gap",
+      "origin": "gate",
+      "source_key": "no-verify-gap",
+      "sources": [
+        "tools/gate.py 범위"
+      ],
+      "invariant": "git commit --no-verify가 precommit 후방선을 우회하며 이 우회는 자동 기록되지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "--no-verify 우회를 차단하거나 별도 기록하지 않는다.",
+      "status": "UNENFORCED"
+    },
+    {
+      "id": "precommit-template",
+      "origin": "precommit",
+      "source_key": "template",
+      "sources": [
+        "tools/precommit-hook.sh"
+      ],
+      "invariant": "설치된 pre-commit은 MOTTORI_INSTANCE를 지우고 실제 repo root의 gate를 실행한다.",
+      "boundary": "precommit",
+      "fail_close": "gate 실패가 commit을 막는다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "--no-verify 우회는 기록되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "precommit-install-exact",
+      "origin": "precommit",
+      "source_key": "install-exact",
+      "sources": [
+        "tools/install_hooks.sh --check"
+      ],
+      "invariant": "설치본은 tracked template과 byte-exact이고 executable이어야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 drift를 FAIL 또는 WARN으로 보고한다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "설치 drift는 검출하지만 자동 복구하지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "precommit-foreign",
+      "origin": "precommit",
+      "source_key": "foreign",
+      "sources": [
+        "tools/install_hooks.sh --repair"
+      ],
+      "invariant": "foreign pre-commit hook은 덮어쓰지 않는다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "복구가 거부된 뒤 병합 방법은 사람이 결정한다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "precommit-dispatch-probe",
+      "origin": "precommit",
+      "source_key": "dispatch-probe",
+      "sources": [
+        "tools/install_hooks.sh --repair"
+      ],
+      "invariant": "repair는 git dispatcher nonce probe까지 성공해야 완료된다.",
+      "boundary": "test",
+      "fail_close": "probe 실패 시 repair가 rollback하고 exit 1 한다.",
+      "fixtures": {
+        "positive": "tools/test_install_checks.py",
+        "negative": "tools/test_install_checks.py"
+      },
+      "bypass_log": false,
+      "residual": "실제 파일시스템과 Git 버전 조합은 배포 환경마다 다르다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-01",
+      "origin": "doctor",
+      "source_key": "런타임 · python",
+      "sources": [
+        "tools/doctor.py CHECKS \"런타임 · python\""
+      ],
+      "invariant": "Python 3.8 이상이어야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-02",
+      "origin": "doctor",
+      "source_key": "런타임 · node",
+      "sources": [
+        "tools/doctor.py CHECKS \"런타임 · node\""
+      ],
+      "invariant": "node가 없으면 gardener만 사용할 수 없음을 경고한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-03",
+      "origin": "doctor",
+      "source_key": "런타임 · codex CLI",
+      "sources": [
+        "tools/doctor.py CHECKS \"런타임 · codex CLI\""
+      ],
+      "invariant": "codex CLI 부재를 경고한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-04",
+      "origin": "doctor",
+      "source_key": "런타임 · claude CLI",
+      "sources": [
+        "tools/doctor.py CHECKS \"런타임 · claude CLI\""
+      ],
+      "invariant": "claude CLI 부재를 경고한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-05",
+      "origin": "doctor",
+      "source_key": "런타임 · git",
+      "sources": [
+        "tools/doctor.py CHECKS \"런타임 · git\""
+      ],
+      "invariant": "Git 2.36 미만은 pre-commit 후방선을 설치할 수 없으므로 실패다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-06",
+      "origin": "doctor",
+      "source_key": "배선 · memlib ROOT",
+      "sources": [
+        "tools/doctor.py CHECKS \"배선 · memlib ROOT\""
+      ],
+      "invariant": "memlib ROOT와 doctor 실제 root가 같아야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-07",
+      "origin": "doctor",
+      "source_key": "배선 · config",
+      "sources": [
+        "tools/doctor.py CHECKS \"배선 · config\""
+      ],
+      "invariant": "config가 존재하고 CHANGEME와 parse warning 없이 유효해야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-08",
+      "origin": "doctor",
+      "source_key": "배선 · 전사 경로 유도",
+      "sources": [
+        "tools/doctor.py CHECKS \"배선 · 전사 경로 유도\""
+      ],
+      "invariant": "오래 쓴 journal이 있는데 전사 경로가 없으면 유도 실패다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-09",
+      "origin": "doctor",
+      "source_key": "배선 · state/",
+      "sources": [
+        "tools/doctor.py CHECKS \"배선 · state/\""
+      ],
+      "invariant": "state는 존재하고 쓰기 가능하며 journal 문법이 유효해야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-10",
+      "origin": "doctor",
+      "source_key": "배선 · NOW.md",
+      "sources": [
+        "tools/doctor.py CHECKS \"배선 · NOW.md\""
+      ],
+      "invariant": "NOW가 존재하면 byte 상한을 넘지 않아야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-11",
+      "origin": "doctor",
+      "source_key": "훅 · 배선 claude",
+      "sources": [
+        "tools/doctor.py CHECKS \"훅 · 배선 claude\""
+      ],
+      "invariant": "Claude 훅은 필수 capability·유효 command·상대 경로·권위 fallback을 가져야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-12",
+      "origin": "doctor",
+      "source_key": "훅 · 배선 codex",
+      "sources": [
+        "tools/doctor.py CHECKS \"훅 · 배선 codex\""
+      ],
+      "invariant": "Codex 훅은 필수 capability·유효 command·상대 경로·권위 fallback을 가져야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-13",
+      "origin": "doctor",
+      "source_key": "훅 · codex armed",
+      "sources": [
+        "tools/doctor.py CHECKS \"훅 · codex armed\""
+      ],
+      "invariant": "Codex 훅 loader error와 invalid command는 실패이고 미신뢰는 할 일 경고다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-14",
+      "origin": "doctor",
+      "source_key": "훅 · codex 명령 유효성",
+      "sources": [
+        "tools/doctor.py CHECKS \"훅 · codex 명령 유효성\""
+      ],
+      "invariant": "Codex SessionStart command는 root와 subdir에서 JSON을 내고 repo 밖에서는 fallback이어야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-15",
+      "origin": "doctor",
+      "source_key": "훅 · claude 명령 유효성",
+      "sources": [
+        "tools/doctor.py CHECKS \"훅 · claude 명령 유효성\""
+      ],
+      "invariant": "Claude SessionStart 성공 command는 유효 JSON과 context를 내야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-16",
+      "origin": "doctor",
+      "source_key": "훅 · 실패 분기",
+      "sources": [
+        "tools/doctor.py CHECKS \"훅 · 실패 분기\""
+      ],
+      "invariant": "SessionStart 실패 분기는 exit 0 유효 JSON으로 두 NOW와 unavailable을 안내해야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-17",
+      "origin": "doctor",
+      "source_key": "훅 · claude 전역 시각",
+      "sources": [
+        "tools/doctor.py CHECKS \"훅 · claude 전역 시각\""
+      ],
+      "invariant": "전역 사용자 프롬프트 시각 훅 부재를 경고한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-18",
+      "origin": "doctor",
+      "source_key": "훅 · pre-commit 설치본",
+      "sources": [
+        "tools/doctor.py CHECKS \"훅 · pre-commit 설치본\""
+      ],
+      "invariant": "active pre-commit 설치본은 template과 exact이고 executable이어야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-19",
+      "origin": "doctor",
+      "source_key": "훅 · 슬래시 커맨드",
+      "sources": [
+        "tools/doctor.py CHECKS \"훅 · 슬래시 커맨드\""
+      ],
+      "invariant": "Claude slash command 디렉토리와 명령 목록을 보고한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-20",
+      "origin": "doctor",
+      "source_key": "도구 · 실행",
+      "sources": [
+        "tools/doctor.py CHECKS \"도구 · 실행\""
+      ],
+      "invariant": "now·linkcheck·coherence가 계약 종료코드와 트레일러로 측정을 완료해야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-21",
+      "origin": "doctor",
+      "source_key": "도구 · 링크 무결성",
+      "sources": [
+        "tools/doctor.py CHECKS \"도구 · 링크 무결성\""
+      ],
+      "invariant": "linkcheck 결과를 파싱해 broken 0만 통과시킨다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-22",
+      "origin": "doctor",
+      "source_key": "도구 · 정합성",
+      "sources": [
+        "tools/doctor.py CHECKS \"도구 · 정합성\""
+      ],
+      "invariant": "coherence crash와 출력 형식 오류는 실패이고 발견 이슈는 경고한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-23",
+      "origin": "doctor",
+      "source_key": "도구 · 회귀 픽스처",
+      "sources": [
+        "tools/doctor.py CHECKS \"도구 · 회귀 픽스처\""
+      ],
+      "invariant": "등록된 모든 회귀 suite가 실제로 통과해야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": "tools/test_manifests.py",
+        "negative": "tools/test_manifests.py"
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-24",
+      "origin": "doctor",
+      "source_key": "도구 · recall 소스",
+      "sources": [
+        "tools/doctor.py CHECKS \"도구 · recall 소스\""
+      ],
+      "invariant": "recall sessions가 오류 없이 소스를 조회해야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-25",
+      "origin": "doctor",
+      "source_key": "도구 · 원장",
+      "sources": [
+        "tools/doctor.py CHECKS \"도구 · 원장\""
+      ],
+      "invariant": "개인 사실 원장이 있으면 rec check 정합성 문제를 보고한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-26",
+      "origin": "doctor",
+      "source_key": "도구 · 인물 원장",
+      "sources": [
+        "tools/doctor.py CHECKS \"도구 · 인물 원장\""
+      ],
+      "invariant": "인물 원장의 미수확 판정급 사건 임계 초과를 경고한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-27",
+      "origin": "doctor",
+      "source_key": "밸브 · 원격 검사",
+      "sources": [
+        "tools/doctor.py CHECKS \"밸브 · 원격 검사\""
+      ],
+      "invariant": "work 인스턴스 원격은 host/path 기준 allowlist 안이어야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-28",
+      "origin": "doctor",
+      "source_key": "밸브 · 연료 비추적",
+      "sources": [
+        "tools/doctor.py CHECKS \"밸브 · 연료 비추적\""
+      ],
+      "invariant": "work 인스턴스의 state·private·config·일반 문서는 ignore되고 untracked 노출이 없어야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-29",
+      "origin": "doctor",
+      "source_key": "밸브 · 추적 심볼릭링크",
+      "sources": [
+        "tools/doctor.py CHECKS \"밸브 · 추적 심볼릭링크\""
+      ],
+      "invariant": "work 인스턴스에서 _private을 가리키는 추적 symlink가 없어야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-30",
+      "origin": "doctor",
+      "source_key": "게이트 · 산출물 검사누락",
+      "sources": [
+        "tools/doctor.py CHECKS \"게이트 · 산출물 검사누락\""
+      ],
+      "invariant": "새 파일이 있는 현재 내용 상태에는 linkcheck 통과 인증서가 있어야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-31",
+      "origin": "doctor",
+      "source_key": "규약 · AGENTS 단일 정본",
+      "sources": [
+        "tools/doctor.py CHECKS \"규약 · AGENTS 단일 정본\""
+      ],
+      "invariant": "CLAUDE는 AGENTS를 exact import해야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-32",
+      "origin": "doctor",
+      "source_key": "엔진 · config 스키마",
+      "sources": [
+        "tools/doctor.py CHECKS \"엔진 · config 스키마\""
+      ],
+      "invariant": "config schema와 엔진 schema가 일치해야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-33",
+      "origin": "doctor",
+      "source_key": "엔진 · 업스트림",
+      "sources": [
+        "tools/doctor.py CHECKS \"엔진 · 업스트림\""
+      ],
+      "invariant": "배포 인스턴스 엔진의 로컬 수정과 upstream 지연을 보고한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-34",
+      "origin": "doctor",
+      "source_key": "엔진 · 킷 드리프트",
+      "sources": [
+        "tools/doctor.py CHECKS \"엔진 · 킷 드리프트\""
+      ],
+      "invariant": "킷과 인스턴스 공유 도구의 바이트 drift를 정규화 후 보고한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "doctor 실행 전·후 변경이나 WARN/SKIP 정책은 차단되지 않는다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-35",
+      "origin": "doctor",
+      "source_key": "훅 · PreCompact claude",
+      "sources": [
+        "tools/doctor.py CHECKS \"훅 · PreCompact claude\""
+      ],
+      "invariant": "Claude PreCompact 명령은 격리 인스턴스에서 성공하고 journal 사건을 남겨야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": "tools/test_doctor_json.py",
+        "negative": "tools/test_doctor_json.py"
+      },
+      "bypass_log": false,
+      "residual": "실제 runtime dispatcher firing은 수동 canary 영역이다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-36",
+      "origin": "doctor",
+      "source_key": "훅 · PreCompact codex",
+      "sources": [
+        "tools/doctor.py CHECKS \"훅 · PreCompact codex\""
+      ],
+      "invariant": "Codex PreCompact 명령은 격리 인스턴스에서 성공하고 journal 사건을 남겨야 한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": "tools/test_doctor_json.py",
+        "negative": "tools/test_doctor_json.py"
+      },
+      "bypass_log": false,
+      "residual": "실제 runtime dispatcher firing은 수동 canary 영역이다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-37",
+      "origin": "doctor",
+      "source_key": "도구 · 워커 영수증",
+      "sources": [
+        "tools/doctor.py CHECKS \"도구 · 워커 영수증\""
+      ],
+      "invariant": "최근 7일 bounded worker run의 비용·실패율·읽기 오류를 영수증 원장에서 다시 계산한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": "tools/test_receipts.py",
+        "negative": "tools/test_receipts.py"
+      },
+      "bypass_log": false,
+      "residual": "원장이 없거나 실패율이 높아도 작업을 차단하지 않고 관측만 한다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-manual-1",
+      "origin": "doctor",
+      "source_key": "SessionStart dispatcher와 모델 effect가 실제로 이어졌는가",
+      "sources": [
+        "tools/doctor.py MANUAL \"SessionStart dispatcher와 모델 effect가 실제로 이어졌는가\""
+      ],
+      "invariant": "SessionStart의 실제 dispatcher firing과 모델 effect는 positive/disabled-negative canary로 사람이 확인한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "routine doctor로 자동 증명할 수 없다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "doctor-manual-2",
+      "origin": "doctor",
+      "source_key": "PreCompact 훅이 컴팩션 때 실제로 도는가",
+      "sources": [
+        "tools/doctor.py MANUAL \"PreCompact 훅이 컴팩션 때 실제로 도는가\""
+      ],
+      "invariant": "다음 실제 컴팩션 뒤 journal 사건을 사람이 확인한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "routine doctor로 자동 증명할 수 없다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "doctor-manual-3",
+      "origin": "doctor",
+      "source_key": "Codex가 AGENTS.md를 읽고 규약을 따르는가",
+      "sources": [
+        "tools/doctor.py MANUAL \"Codex가 AGENTS.md를 읽고 규약을 따르는가\""
+      ],
+      "invariant": "Codex 응답이 공통 규약을 따르는지 발주 후 사람이 확인한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "routine doctor로 자동 증명할 수 없다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "doctor-manual-4",
+      "origin": "doctor",
+      "source_key": "회사 정책상 이 도구들을 써도 되는가",
+      "sources": [
+        "tools/doctor.py MANUAL \"회사 정책상 이 도구들을 써도 되는가\""
+      ],
+      "invariant": "녹취·전사 도구 사용 전 회사 동의·보존·반출 정책을 사람이 확인한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": null,
+      "residual": "routine doctor로 자동 증명할 수 없다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "manifest-review-coverage",
+      "origin": "manifest",
+      "source_key": "review-coverage",
+      "sources": [
+        "tools/test_manifests.py test_review"
+      ],
+      "invariant": "review manifest path 집합은 tracked text와 일치하고 미분류·유령이 없어야 한다.",
+      "boundary": "test",
+      "fail_close": "검사가 실패 상태를 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_manifests.py",
+        "negative": "tools/test_manifests.py"
+      },
+      "bypass_log": false,
+      "residual": "테스트를 실행하지 않는 변경은 막지 못한다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "manifest-fixtures",
+      "origin": "manifest",
+      "source_key": "fixture-existence",
+      "sources": [
+        "tools/test_manifests.py test_matrix"
+      ],
+      "invariant": "matrix의 non-null fixture는 실제 파일이어야 하고 ENFORCED 행은 여섯 칸이 닫혀야 한다.",
+      "boundary": "test",
+      "fail_close": "검사가 실패 상태를 반환한다.",
+      "fixtures": {
+        "positive": "tools/test_manifests.py",
+        "negative": "tools/test_manifests.py"
+      },
+      "bypass_log": false,
+      "residual": "테스트 실행 자체를 우회할 수 있다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "manifest-doctor-regression",
+      "origin": "manifest",
+      "source_key": "doctor-regression",
+      "sources": [
+        "tools/doctor.py c_regression"
+      ],
+      "invariant": "manifest 테스트는 doctor 회귀 목록에서 실행된다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 regression 실패로 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": "tools/test_manifests.py",
+        "negative": "tools/test_manifests.py"
+      },
+      "bypass_log": false,
+      "residual": "doctor를 실행하지 않으면 탐지되지 않는다.",
+      "status": "DETECTED"
+    }
+  ]
+}

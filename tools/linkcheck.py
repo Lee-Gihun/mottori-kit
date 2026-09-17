@@ -11,6 +11,7 @@ import os, re, subprocess, sys, urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import memlib as M
+from i18n import t
 
 ROOT = M.ROOT
 INCLUDE_ALL = "--all" in sys.argv
@@ -148,19 +149,20 @@ if __name__ == "__main__":
         #
         # ID에 파일과 대상을 둘 다 쓴다. 대상만 쓰면 같은 깨진 대상을 여러 파일에 퍼뜨리는
         # 것을 구분 못 한다. rename이 새 ID를 만드는 비용은 그 놓침보다 싸다 (codex 라운드 4).
-        for rel, t in sorted(broken):
-            print(f"{rel} -> {t}\t깨진 참조 {rel} -> {t}")
+        for rel, target in sorted(broken):
+            print(f"{rel} -> {target}\t" + t("linkcheck.issue", rel=rel, target=target))
         print(f"#issues {len(broken)}")
         sys.exit(0)
 
-    scope = "ALL (동결 포함)" if INCLUDE_ALL else "라이브 문서 (동결 제외)"
-    print(f"[linkcheck] scope={scope}, refs={checked}")
-    for rel, t in sorted(broken):
-        print(f"BROKEN {rel} -> {t}")
+    scope = t("linkcheck.scope_all") if INCLUDE_ALL else t("linkcheck.scope_live")
+    print(t("linkcheck.scope", scope=scope, count=checked))
+    for rel, target in sorted(broken):
+        print(t("linkcheck.broken", rel=rel, target=target))
     pending = getattr(check, "pending", [])
-    for rel, t in sorted(pending):
-        print(f"PENDING {rel} -> {t}  (setup.sh가 만든다 · setup 전 상류 사본)")
-    print(f"[linkcheck] broken: {len(broken)}" + (f" · pending(setup 전): {len(pending)}" if pending else ""))
+    for rel, target in sorted(pending):
+        print(t("linkcheck.pending", rel=rel, target=target))
+    extra = t("linkcheck.pending_count", count=len(pending)) if pending else ""
+    print(t("linkcheck.summary", count=len(broken)) + extra)
     # **자기가 실제로 읽은 것의 해시를 남긴다** (codex 라운드 3 지적).
     # 이전엔 memlib이 git index 해시를 남겼는데, linkcheck는 worktree bytes를 읽고
     # untracked도 본다. 인증서의 입력과 검사기의 입력이 달랐다.

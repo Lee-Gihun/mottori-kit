@@ -12,9 +12,120 @@ system/instance-rules.md, system/decisions.md, system/rituals.local.md, `state/`
 
 ---
 
+## v0.6 · 2026-09-17 (스웜 파도 1+2A 통합)
+
+### `[알아둘 것]` 공용 엔진 회귀는 설치된 인스턴스에서도 돈다
+
+근거 표지: `test:tools/test_evidencecheck.py::test_tree_without_any_target_is_not_applicable`.
+
+이식 실측(2026-09-17): 스웜이 킷 트리에서 만든 회귀 7개가 설치된 인스턴스에서 실패했다. 원인은
+전부 "트리 모양 가정"이었다. 고친 계약: `tools/evidencecheck.py`는 대상 파일(kit-decisions·CHANGELOG·
+enforcement-matrix)이 하나도 없는 트리를 해당없음(issues 0)으로 보고하고, 하나라도 있으면 나머지 부재를
+`missing-file`로 낸다. `memlib.SCHEMA_CHANGES`는 언어별 문안이라 `MOTTORI_LANG=en` doctor 출력에 한글이
+없다. doctor 회귀 목록은 공용 suite와 킷 전용 suite(`test_setup_migration`·`test_portability`·
+`test_manifests`·`test_skill_parity`, 하나라도 없으면 FAIL)로 나뉜다. `test_memlib_journal`·`test_coherence`는
+`templates/`(킷) 또는 `system/`(인스턴스)의 config로 fixture를 만들고, `test_i18n`의 영어 표면 검사는
+`setup.sh`가 없는 트리에서 "해당없음"을 요약 줄에 남기고 건너뛴다. 인스턴스 쪽 `kit_sync`는 ssh git URL의
+`git@host`를 개인 식별자로 보지 않는다.
+
+### `[알아둘 것]` macOS와 Linux의 셸 차이를 회귀로 막는다
+
+근거 표지: `test:tools/test_portability.py::test_shell_syntax`.
+
+설치 셸은 Bash 3.2 문법만 쓰며 임시 파일을 운영체제 기본 임시 디렉토리에 만든다. pre-commit 설치는
+`sha256sum`을 먼저 쓰고 `shasum`, Python 순으로 폴백하며, Git 2.36의 `git hook run`과 Git 2.31의
+`--path-format` 없이 설치본을 검증한다. `tools/test_portability.py`가 금지 패턴, Bash 일반·POSIX 문법,
+`shasum` 없는 PATH와 구버전 Git 명령 부재 픽스처를 검사하고 doctor 회귀 목록에도 포함된다.
+지원 범위와 실기·추정 구분은 `SETUP.md`의 지원 매트릭스가 정본이다.
+
+### `[알아둘 것]` fresh worker가 detached worktree에서 원본과 분리되어 쓸 수 있다
+
+근거 표지: `test:tools/test_fresh_worker.py::test_worktree_patch_extracts_modified_new_and_deleted_files`.
+
+`fresh_worker.py --worktree=head|dirty`는 run 디렉토리 아래에 detached worktree를 만들고 worker의
+cwd와 `MOTTORI_INSTANCE`를 그곳으로 바꾼다. `head`는 HEAD 그대로, `dirty`는 원본의 tracked diff를
+먼저 적용한다. worker 종료 뒤 수정·신규·삭제를 `patch.diff`로, 신규 경로를 `untracked.txt`로 남기고
+worktree를 제거한다. meta v2에는 worktree mode·base revision·patch hash·파일 목록이, receipt에는
+`patch: N files (+A/-D)`가 추가된다. 4,096-byte 상한은 그대로다.
+
+worktree에는 local instance 파일 네 개만 복사하고 빈 `state/`를 제공한다. 복사본은 patch에 들어가지
+않는다. `--write-prefix`와 `--strict-scope`는 격리된 worktree를 기준으로 검사하므로 dispatcher와 상태
+logger의 동시 쓰기가 worker 위반으로 섞이지 않는다. `ask_codex.sh`는 `MOTTORI_WORKTREE=1`이면 dirty
+worktree 모드를 전달한다.
+
+### `[알아둘 것]` journal 경계와 config 경로 검증이 fail-close한다
+
+근거 표지: `test:tools/test_state_runtime.py::test_unterminated_tail_refuses_append_without_merging`.
+
+`parse_journal(strict=True)`는 UTF-8 BOM과 마지막 줄 개행 누락을 손상으로 거부한다. non-strict는 같은
+경계를 `errors`에 남긴다. `+0900` offset은 기존 문법대로 수용하며, 사건은 timestamp 문자열이 아니라
+파싱한 aware datetime으로 안정 정렬한다. config는 track canonical의 절대경로와 `..` 탈출, host·remote·
+명시적 local path로 해석할 수 없는 `remote_allowlist` 항목을 거부한다. 고정 seed 생성 회귀 303건을
+`tools/test_memlib_journal.py`에 두고 doctor 회귀 목록에 포함했다.
+
+### `[자동]` 배포 도구 7개의 회귀가 doctor 기본 게이트에 들어간다
+
+`recall.py`·`rec.py`·`hookdiag.py`·`install_hooks.sh`·`coherence.py`·`build_memory_map.py`·
+`codex_root_thread.py`의 공개 경계를 임시 디렉토리와 서브프로세스로 검증하는 회귀 17개를 추가했다.
+`python3 tools/doctor.py`는 새 suite 5개를 기본 회귀 목록에서 실행한다. 새 suite 합계는 이 변경 시점
+실측 1.5초라 `--full` 분리 없이 매번 실행한다.
+
+### `[자동]` worker run 영수증 원장과 7일 건전성 계기
+
+`python3 tools/receipts.py list`가 `_private/work/runs/*/meta.json`을 사람이 훑는 한 줄/run과 합계로
+보여준다. `show <id>`는 meta 요약과 bounded receipt를 재출력하고, `cost`는 런타임별 토큰 합계와
+하루 단위 히스토그램을 낸다. doctor는 최근 7일 run 수·토큰·실패율을 다시 계산하며 실패율이 50%를
+초과하면 warn이다. 기존 인스턴스가 손으로 바꿀 파일은 없다.
+
+### `[자동]` doctor JSON 출력과 PreCompact 명령 효과 검사
+
+`python3 tools/doctor.py --json`은 검사별 `name`·`status`·`detail`, 상태별 요약, 수동 확인 목록을
+JSON으로 내며 텍스트 기본 출력은 그대로다. 첫 설치 게이트도 이 계약을 읽어 FAIL과 warn을 센다.
+Claude와 Codex의 PreCompact 명령은 각각 임시 인스턴스에서 실행해 journal의 `컴팩션 발생` 기록까지
+확인한다. 사람이 확인할 것은 명령 효과가 아니라 실제 런타임 dispatcher의 발화다. SessionStart와
+PreCompact의 실제 발화는 별도 작업으로 세어 수동 목록은 4개다. `hook_canary.py --all`은 nonce 없이
+런타임별 마지막 판정과 시각을 state 아래의 hook-canary.json에 남기고, doctor는 파일이 있을 때
+fired/effect 표시에 반영한다.
+
+### `[알아둘 것]` 설치 표면이 사용자 언어를 따른다
+
+근거 표지: `test:tools/test_i18n.py::test_language_selection`.
+
+`doctor`, `setup`, `linkcheck`, 게이트 차단문은 `MOTTORI_LANG=en|ko`를 우선하고, 미설정이면
+`LC_ALL` 또는 `LANG`이 `ko`로 시작할 때 한국어, 그 밖에는 영어를 쓴다. 기존 한국어 문장은
+`MOTTORI_LANG=ko`에서 유지된다. 판정과 종료코드는 바뀌지 않는다.
+
+### `[자동]` 추적 텍스트와 규칙 강제 수준을 manifest 두 개로 검사한다
+
+`system/review-manifest.yaml`은 추적 텍스트의 분류·소유자·소비자·의존성을 전수 기록하고,
+`system/enforcement-matrix.yaml`은 규칙 원천별 경계·픽스처·우회 기록·잔여 위험을 판정한다.
+`tools/test_manifests.py`가 누락·유령·미분류·fixture 경로와 ENFORCED 행의 닫힘을 검사하며 doctor
+회귀 목록에도 포함된다. 새 엔진 텍스트나 doctor·훅 규칙을 추가하면 manifest도 함께 갱신한다.
+
+### `[해야 함]` 근거 참조 계약이 게이트에 들어갔다
+
+근거 표지: `test:tools/test_evidencecheck.py::test_gate_consumes_evidencecheck_issues_end_to_end`.
+DR 맥락, CHANGELOG의 `[해야 함]`·`[알아둘 것]`, enforcement matrix의 ENFORCED 행에 근거 표지를
+요구한다. `tools/evidencecheck.py`가 문법과 로컬 ID 존재를 검사하고 gate와 pre-commit이 이슈
+집합을 소비한다. 표지의 내용 적합성은 독립 검토가 맡는다.
+pull 뒤 `python3 tools/gate.py baseline`을 사람이 한 번 실행해 새 검사기 목록을 명시적으로 채택한다.
+
+### `[알아둘 것]` 논문에서 킷 제안까지 가는 정본 workflow와 runtime adapter 생성기
+
+근거 표지: `test:tools/test_skill_parity.py::test_both_runtime_adapters_embed_exact_canonical_bytes`.
+
+`system/skills/paper-to-kit.md` v1이 수집, 논문별 카드, 독립 교차 대조, 근거 표지와 예약 실험을
+가진 제안, 사람 판정 대기를 한 경로로 고정한다. workflow의 쓰기는 실행 디렉터리 안 분석 산출물뿐이고
+킷 파일 수정은 0건이다. Claude command는 정본에서 생성된다. Codex skill 설치 경로는 아직 고정하지
+않았으며 `python3 tools/skill_adapters.py codex <출력할-SKILL.md>`처럼 대상 경로를 명시한다.
+`tools/test_skill_parity.py`가 두 runtime adapter에 정본 bytes가 그대로 들어가는지, 생성물이 낡으면
+검사가 실패하는지 확인한다.
+
 ## v0.5 · 2026-09-17
 
 ### `[알아둘 것]` 낯선 첫 설치가 실제로 통과한다 (`tools/test_fresh_install.sh`)
+
+근거 표지: `test:tools/test_install_checks.py::test_linkcheck_exit_codes_and_pending`.
 
 v0.4를 임시 디렉토리에 클론해 README대로 돌리자 `bash setup.sh`가 tty 없이 **아무 출력 없이 exit 1** 했고
 (`read`가 EOF를 만나 set -e), 인자를 줘도 첫 doctor가 FAIL 4(codex 미신뢰·깨진 참조 2·회귀 12/13·검사 기록 없는
@@ -29,6 +140,8 @@ doctor의 ROOT 불일치) · `test_setup_migration.py` 픽스처가 부모의 `M
 
 ### `[알아둘 것]` 실패가 조용히 성공으로 읽히던 경로 넷을 닫았다 (독립 결함 감사 17건 반영)
 
+근거 표지: `test:tools/test_install_checks.py::test_gate_check_blocks_when_measure_raises`.
+
 `setup.sh`는 doctor·기준선이 실패하면 안내문을 끝까지 인쇄한 뒤 exit 1 한다(이전엔 FAIL을 보여주고도 0).
 `linkcheck.py` normal mode는 broken이 있으면 exit 1이다(`--issues`는 그대로 0). Stop 게이트는 검사기 자신이
 예외를 내면 무출력 0이 아니라 차단 JSON을 내고 pending을 남기며, UserPromptSubmit 회수 경로는 경고 JSON을
@@ -42,6 +155,8 @@ FIX 판정을 반영했고, 남긴 것은 실제 Git 2.35 바이너리·Python 3
 
 ### `[알아둘 것]` doctor·linkcheck·now.py check의 늑대소년 3건 제거
 
+근거 표지: `test:tools/test_install_checks.py::test_doctor_codex_armed_and_git_version`.
+
 `훅 · codex armed`의 "미신뢰"는 사람이 codex를 한 번 띄워야만 풀리므로 FAIL이 아니라 warn+할 일이다. 상류 사본
 (setup 전)의 linkcheck는 setup이 만드는 7개 경로(config·인스턴스 문서 셋·두 NOW·게이트 기준선)를 BROKEN이 아니라
 `PENDING`으로 따로 센다 (`broken: 0 · pending(setup 전): N`); setup 뒤에는 같은 참조가 없으면 BROKEN이다.
@@ -51,11 +166,15 @@ FIX 판정을 반영했고, 남긴 것은 실제 Git 2.35 바이너리·Python 3
 
 ### `[알아둘 것]` 철학 한 줄과 LICENSE(MIT)
 
+근거 표지: `decision:KIT-DR-012`.
+
 README 첫 절에 소유자가 정한 철학이 들어갔다: 사람의 주의가 가장 비싼 자원, 토큰이 가장 싼 자원, 사람은 무한
 스레드 하나만 상대한다. 그 아래 규칙 둘(판정은 영수증으로만 · 통과와 원인은 따로 검증한다)은 KIT-DR-012.
 LICENSE는 MIT다. 독립 문서 감사가 "라이선스 검사하는 조직에서는 사용 자체가 막힌다"고 지적했다.
 
 ### `[알아둘 것]` 문서가 코드와 맞는다 (독립 문서 감사 39건 반영)
+
+근거 표지: `experiment:documentation-audit-20260917`.
 
 SETUP: setup이 만드는 파일 전체 목록과 되돌리기 목록, git 2.36·macOS/Linux 전제, FAIL·warn·`--`의 뜻, Codex 훅
 신뢰 승인 단계, `git pull` 뒤 재실행 순서(§5a), 트랙 등록 뒤 `render` 필요. README: 명령 넷 + 영어 quickstart 한 문단,
@@ -79,10 +198,14 @@ HEAD), `kit_dirty`(엔진 디렉토리 tools/ 범위 porcelain), `engine_sha256`
 
 ### `[알아둘 것]` worker 결과의 주장에는 출처 경로가 붙는다
 
+근거 표지: `paper:2609.06702`.
+
 common 계약에 한 줄이 늘었다: 출처 없는 주장은 remaining unknowns로 내려간다 (2609.06702 App. F.2).
 기존 발주문은 그대로 돈다.
 
 ### `[알아둘 것]` `--write-prefix DIR`(반복 가능)로 Codex 워커의 write-set을 검사한다
+
+근거 표지: `paper:2609.04170`.
 
 실행 전후 workspace 스냅샷(lstat: kind·size·mtime_ns·ctime_ns·mode, 디렉터리 포함, `.git`·run-record 트리 제외)을
 비교해 prefix 밖 변경과 symlink 탈출을 `scope.violations`에 기록한다. prefix 아래 **기존** symlink도 밖을 가리키면
@@ -97,6 +220,8 @@ DR-049 closeout의 "allowlist·denylist 검사기" 구체화 (2609.04170 §2.2·
 
 ### `[알아둘 것]` 규약 문서에 근거 행 8줄
 
+근거 표지: `paper:2609.09134`.
+
 rituals(컴팩션 뒤 절차 위치 1줄), WORKING-WITH-AI(§4 present/effective, §5 발주 형태 넷, §9 국소 correction),
 README(Why는 실측 우선), PRD-session-memory §3.8(토폴로지 비목표), debate/README(파일 목록은 생성물만).
 전부 논문 식별자와 DR-053이 붙어 있다. 인스턴스 사본에도 같은 줄이 있다.
@@ -105,11 +230,15 @@ README(Why는 실측 우선), PRD-session-memory §3.8(토폴로지 비목표), 
 
 ### `[알아둘 것]` 공통 지시 정본이 `AGENTS.md` 하나로 바뀌었다
 
+근거 표지: `decision:KIT-DR-007`.
+
 `CLAUDE.md`는 이제 exact `@AGENTS.md` import다. 인스턴스 규약이 필요하면 이전처럼
 system/instance-rules.md에 쓴다. 업스트림 `AGENTS.md`나 `CLAUDE.md`에 직접 쓴 내용은 pull 전에
 인스턴스 파일로 옮겨라.
 
 ### `[알아둘 것]` fresh 발주의 프롬프트는 workspace 안에 둔다
+
+근거 표지: `test:tools/test_fresh_worker.py::test_prompt_boundaries_fail_closed`.
 
 `ask_codex.sh`의 기본 경로가 bounded worker로 바뀌었다. `/tmp`나 symlink의 프롬프트는 거부한다.
 `system/debate/_p_*.md`처럼 workspace 안의 무시되는 파일을 쓴다.
@@ -122,6 +251,8 @@ trace는 `_private/work/runs/`에 보관한다. 호출자에게는 bounded recei
 
 ### `[알아둘 것]` 외부 문안은 본문 전에 두 줄을 보인다
 
+근거 표지: `decision:KIT-DR-008`.
+
 에이전트가 발신 산출물을 쓰기 전에 독자·승인자·목적함수와 실제 근거 경로를 먼저 보여주고 바로
 계속한다. 승인 단계가 아니다. 담백한 문체는 새 스킬이나 길이 제한이 아니라 `system/rituals.md`의
 10건 파일럿으로 들어갔다.
@@ -129,6 +260,8 @@ trace는 `_private/work/runs/`에 보관한다. 호출자에게는 bounded recei
 ## v0.2 · 2026-08-24
 
 ### `[해야 함]` config schema v1 → v2
+
+근거 표지: `decision:KIT-DR-005`.
 
 system/memory-config.json에 `instance` 블록과 `schema_version`이 필요하다.
 
@@ -149,6 +282,8 @@ system/memory-config.json에 `instance` 블록과 `schema_version`이 필요하�
 
 ### `[해야 함]` 규약 문서가 엔진/인스턴스 쌍으로 갈라졌다
 
+근거 표지: `decision:KIT-DR-004`.
+
 지금까지 `system/rituals.md`와 system/decisions.md에 직접 쓴 게 있다면 옮겨야 한다.
 그대로 두면 다음 pull에서 충돌하거나 되돌아간다.
 
@@ -164,6 +299,8 @@ system/memory-config.json에 `instance` 블록과 `schema_version`이 필요하�
 
 ### `[알아둘 것]` `.gitignore`가 기본 거부로 바뀌었다
 
+근거 표지: `decision:KIT-DR-002`.
+
 이전에는 `state/`와 `_private/`만 무시했다. 그래서 **평범한 경로의 회사 자료가 그냥 커밋됐다**
 (company/tracker.md 같은 것). 지금은 전부 무시하고 엔진 파일만 되살린다.
 
@@ -171,6 +308,8 @@ system/memory-config.json에 `instance` 블록과 `schema_version`이 필요하�
 **뒤집어 말하면 그 문서들은 이 리포로 백업되지 않는다** — 별도 백업이 필요하다.
 
 ### `[알아둘 것]` 전사 경로 유도 규칙이 바뀌었다
+
+근거 표지: `experiment:transcript-path-derivation-20260824`.
 
 `~/.claude/projects` 디렉토리명 규칙을 `[/_]` → `-`로 알고 있었는데 실제로는
 `[^A-Za-z0-9-]` → `-`다. 공백이나 점이 든 경로(`~/My Work/kit`, `~/work.v2`)에 클론했다면

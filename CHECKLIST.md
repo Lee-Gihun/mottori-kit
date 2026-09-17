@@ -42,16 +42,17 @@ declared·command-valid·armed(Codex 신뢰)까지 재고, 실제로 발화해 �
   이쪽에서 밀 수 없게. `.gitignore`가 데이터를 막고 자격증명이 코드를 막는 이중 구조다
 - `[ ]` `system/instance-rules.md`의 국경 선언을 채웠는가 (CHANGEME가 남아 있으면 안 썼다는 뜻)
 
-## C. 훅 — doctor가 "유효 JSON"까지만 아는 것
+## C. 훅: doctor가 명령 효과까지 알고 실제 발화는 모르는 것
 
-doctor는 훅 명령이 올바른 JSON을 뱉는 것까지 확인한다. 그 JSON이 **실제로 모델
-컨텍스트에 들어갔는지**는 확인할 수 없다. 훅 출력은 모델에게만 가고 셸로 안 오기 때문이다.
+doctor는 SessionStart 명령 출력과 PreCompact 명령의 journal 효과를 임시 인스턴스에서 확인한다.
+그 명령이 런타임 dispatcher에서 **실제로 발화했는지**, SessionStart 출력이 모델 컨텍스트에
+들어갔는지는 확인할 수 없다.
 
 - `[ ]` **SessionStart 주입 확인.** 새 세션을 열고 그대로 물어라:
   > 지금 NOW에 뭐라고 적혀 있어?
 
   파일을 읽지 않고 바로 답하면 주입된 것이다. 읽으러 가면 주입이 안 된 것이다
-- `[ ]` **PreCompact 기록 확인.** 다음 컴팩션이 일어난 뒤:
+- `[ ]` **PreCompact 실제 발화 확인.** 명령 효과는 doctor가 검증했다. 다음 실제 컴팩션이 일어난 뒤:
   ```bash
   tail -3 state/journal-$(date +%Y-%m).md   # "컴팩션 발생" 줄이 있어야 한다
   cat state/.hook-errors.log 2>/dev/null    # 있으면 훅이 실패한 기록이다

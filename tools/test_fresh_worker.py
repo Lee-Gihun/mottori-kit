@@ -31,6 +31,49 @@ def _run(root, runtime, prompt, binary):
     )
 
 
+def _git_ok(root, *args):
+    return subprocess.run(
+        ["git", *args], cwd=root, check=True, text=True, capture_output=True,
+    ).stdout.strip()
+
+
+def _init_worktree_repo():
+    root = Path(tempfile.mkdtemp(prefix="fresh-worker-worktree-"))
+    (root / "state").mkdir()
+    (root / "system").mkdir()
+    (root / "AGENTS.md").write_text("rules\n", encoding="utf-8")
+    (root / "base.txt").write_text("base\n", encoding="utf-8")
+    (root / "delete.txt").write_text("delete me\n", encoding="utf-8")
+    (root / "state" / ".gitkeep").write_text("", encoding="utf-8")
+    (root / ".gitignore").write_text(
+        "/_private/\n/system/memory-config.json\n/system/instance-rules.md\n"
+        "/system/decisions.md\n/system/rituals.local.md\n/state/*\n!/state/.gitkeep\n",
+        encoding="utf-8",
+    )
+    _git_ok(root, "init", "-q")
+    _git_ok(root, "add", ".")
+    _git_ok(root, "-c", "user.name=t", "-c", "user.email=t@x", "commit", "-q", "-m", "init")
+    for name in ("memory-config.json", "instance-rules.md", "decisions.md", "rituals.local.md"):
+        (root / "system" / name).write_text(f"instance {name}\n", encoding="utf-8")
+    prompt = root / "prompt.md"
+    prompt.write_text("work in isolation\n", encoding="utf-8")
+    fake = root / "fake codex"
+    _script(fake, _CODEX_WRITER)
+    return root, prompt, fake
+
+
+def _run_worktree(root, prompt, binary, mode="head", prefixes=(), strict=False, extra_env=None):
+    env = dict(os.environ, MOTTORI_INSTANCE=str(root),
+               MOTTORI_FRESH_WORKER_CODEX_BIN=str(binary), **(extra_env or {}))
+    argv = [sys.executable, str(WORKER), "--runtime", "codex", f"--worktree={mode}"]
+    if strict:
+        argv.append("--strict-scope")
+    for prefix in prefixes:
+        argv += ["--write-prefix", prefix]
+    argv.append(str(prompt))
+    return subprocess.run(argv, cwd=root, env=env, text=True, capture_output=True)
+
+
 def _run_dir(root, receipt):
     line = next(x for x in receipt.splitlines() if x.startswith("run: "))
     return root / line.split(": ", 1)[1]
@@ -399,11 +442,117 @@ for spec in os.environ.get("FAKE_WRITES", "").split(";"):
         old_text = target.read_text(encoding="utf-8")
         target.write_text("B" * len(old_text), encoding="utf-8")
         os.utime(target, ns=(st.st_atime_ns, st.st_mtime_ns))
+    elif kind == "r":
+        target.unlink()
 out = pathlib.Path(args[args.index("--output-last-message") + 1])
 out.write_text("읽음: 없음\\nDONE\\nUNREAD: 없음\\n", encoding="utf-8")
 print(json.dumps({"type":"turn.completed","usage":{"input_tokens":3,"output_tokens":4}}))
 sys.exit(int(os.environ.get("FAKE_EXIT", "0")))
 """
+
+
+def test_worktree_is_created_with_minimum_instance_state_and_cleaned():
+    root, prompt, fake = _init_worktree_repo()
+    try:
+        checker = root / "fake checker"
+        _script(checker, """
+import json, os, pathlib, sys
+args = sys.argv[1:]
+sys.stdin.read()
+root = pathlib.Path.cwd()
+assert os.environ["MOTTORI_INSTANCE"] == str(root)
+for name in ("memory-config.json", "instance-rules.md", "decisions.md", "rituals.local.md"):
+    assert (root / "system" / name).read_text(encoding="utf-8") == f"instance {name}\\n"
+assert [p.name for p in (root / "state").iterdir()] == [".gitkeep"]
+assert not (root / "_private").exists()
+out = pathlib.Path(args[args.index("--output-last-message") + 1])
+out.write_text("DONE\\n", encoding="utf-8")
+print(json.dumps({"type":"turn.completed"}))
+""")
+        r = _run_worktree(root, prompt, checker)
+        assert r.returncode == 0, (r.stdout, r.stderr)
+        run = _run_dir(root, r.stdout)
+        meta = json.loads((run / "meta.json").read_text(encoding="utf-8"))
+        assert meta["worktree"]["mode"] == "head"
+        assert len(meta["worktree"]["base_rev"]) == 40
+        assert meta["worktree"]["files"] == []
+        assert not (run / "wt").exists()
+        assert str(run / "wt") not in _git_ok(root, "worktree", "list", "--porcelain")
+        assert (run / "patch.diff").read_bytes() == b""
+        assert (run / "untracked.txt").read_text(encoding="utf-8") == ""
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_worktree_patch_extracts_modified_new_and_deleted_files():
+    root, prompt, fake = _init_worktree_repo()
+    try:
+        r = _run_worktree(
+            root, prompt, fake, extra_env={"FAKE_WRITES": "w=base.txt;w=new.txt;r=delete.txt"}
+        )
+        assert r.returncode == 0, (r.stdout, r.stderr)
+        assert "patch: 3 files (+2/-2)" in r.stdout
+        run = _run_dir(root, r.stdout)
+        patch = (run / "patch.diff").read_text(encoding="utf-8")
+        assert "diff --git a/base.txt b/base.txt" in patch
+        assert "diff --git a/new.txt b/new.txt" in patch
+        assert "diff --git a/delete.txt b/delete.txt" in patch
+        assert (run / "untracked.txt").read_text(encoding="utf-8") == "new.txt\n"
+        meta = json.loads((run / "meta.json").read_text(encoding="utf-8"))
+        assert meta["worktree"]["files"] == ["base.txt", "delete.txt", "new.txt"]
+        assert len(meta["worktree"]["patch_sha256"]) == 64
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_worktree_scope_uses_isolate_and_original_tree_is_unchanged():
+    root, prompt, fake = _init_worktree_repo()
+    try:
+        original = (root / "base.txt").read_bytes()
+        status_before = _git_ok(root, "status", "--porcelain=v1", "--untracked-files=no")
+        r = _run_worktree(
+            root, prompt, fake, prefixes=("allowed",), strict=True,
+            extra_env={"FAKE_WRITES": "w=base.txt;w=allowed/ok.txt"},
+        )
+        assert r.returncode == 4, (r.stdout, r.stderr)
+        run = _run_dir(root, r.stdout)
+        meta = json.loads((run / "meta.json").read_text(encoding="utf-8"))
+        assert meta["scope"]["prefixes"] == ["allowed"]
+        assert {v["path"] for v in meta["scope"]["violations"]} == {"base.txt"}
+        assert meta["worktree"]["files"] == ["allowed/ok.txt", "base.txt"]
+        assert (root / "base.txt").read_bytes() == original
+        assert _git_ok(root, "status", "--porcelain=v1", "--untracked-files=no") == status_before
+        assert not (root / "allowed").exists()
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_worktree_dirty_mode_applies_original_tracked_diff():
+    root, prompt, fake = _init_worktree_repo()
+    try:
+        (root / "base.txt").write_text("dirty source\n", encoding="utf-8")
+        checker = root / "fake dirty checker"
+        _script(checker, """
+import json, pathlib, sys
+args = sys.argv[1:]
+sys.stdin.read()
+root = pathlib.Path.cwd()
+assert root.joinpath("base.txt").read_text(encoding="utf-8") == "dirty source\\n"
+root.joinpath("worker.txt").write_text("worker\\n", encoding="utf-8")
+out = pathlib.Path(args[args.index("--output-last-message") + 1])
+out.write_text("DONE\\n", encoding="utf-8")
+print(json.dumps({"type":"turn.completed"}))
+""")
+        r = _run_worktree(root, prompt, checker, mode="dirty")
+        assert r.returncode == 0, (r.stdout, r.stderr)
+        run = _run_dir(root, r.stdout)
+        meta = json.loads((run / "meta.json").read_text(encoding="utf-8"))
+        assert meta["worktree"]["mode"] == "dirty"
+        assert meta["worktree"]["files"] == ["base.txt", "worker.txt"]
+        assert (root / "base.txt").read_text(encoding="utf-8") == "dirty source\n"
+        assert not (root / "worker.txt").exists()
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def test_scope_violation_detected_outside_prefix_and_symlink_escape():
@@ -789,6 +938,10 @@ TESTS = [
     test_prefix_case_is_not_rewritten_on_case_sensitive_fs,
     test_usage_string_numbers_stay_raw_but_normalize_to_null,
     test_engine_sha256_ignores_sync_stamp_lines,
+    test_worktree_is_created_with_minimum_instance_state_and_cleaned,
+    test_worktree_patch_extracts_modified_new_and_deleted_files,
+    test_worktree_scope_uses_isolate_and_original_tree_is_unchanged,
+    test_worktree_dirty_mode_applies_original_tracked_diff,
 ]
 
 

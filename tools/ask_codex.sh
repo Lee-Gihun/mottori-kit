@@ -32,19 +32,24 @@ cd "$ROOT"
 PROMPT_FILE="$1"
 [ -f "$PROMPT_FILE" ] || { echo "프롬프트 파일 없음: $PROMPT_FILE"; exit 1; }
 LOG="system/debate/_dispatch.log"
-ERR="/tmp/_ask_codex_err.log"
+ERR="$(mktemp)"
+trap 'rm -f "$ERR"' EXIT
 STAMP=$(date '+%Y-%m-%d %H:%M:%S')
 MODE="${2:---fresh}"
 SID="$3"
 
 if [ "$MODE" = "--fresh" ] || [ -z "$MODE" ]; then
   echo "[$STAMP] FRESH <- $PROMPT_FILE" >> "$LOG"
-  # MOTTORI_WRITE_PREFIX=<dir> 로 write-set 검사 범위를 준다(선택). 없으면 scope는 unchecked로 기록된다.
-  if [ -n "${MOTTORI_WRITE_PREFIX:-}" ]; then
-    python3 "$ROOT/tools/fresh_worker.py" --runtime codex --write-prefix "$MOTTORI_WRITE_PREFIX" "$PROMPT_FILE"
-  else
-    python3 "$ROOT/tools/fresh_worker.py" --runtime codex "$PROMPT_FILE"
+  ARGS=(--runtime codex)
+  # MOTTORI_WORKTREE=1이면 dirty worktree 격리를 켠다. 원본 트리의 tracked diff를 worker에 복제한다.
+  if [ "${MOTTORI_WORKTREE:-}" = "1" ]; then
+    ARGS+=(--worktree)
   fi
+  # MOTTORI_WRITE_PREFIX=<dir> 로 worktree 안의 write-set 검사 범위를 준다(선택).
+  if [ -n "${MOTTORI_WRITE_PREFIX:-}" ]; then
+    ARGS+=(--write-prefix "$MOTTORI_WRITE_PREFIX")
+  fi
+  python3 "$ROOT/tools/fresh_worker.py" "${ARGS[@]}" "$PROMPT_FILE"
   echo "[$STAMP] DONE fresh" >> "$LOG"
   exit 0
 fi

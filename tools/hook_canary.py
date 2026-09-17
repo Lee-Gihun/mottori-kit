@@ -6,6 +6,7 @@ prompt, repository, or persistent session. Routine doctor must not invoke this m
 
 Usage: `python3 tools/hook_canary.py` (Codex), `--claude`, or `--all`.
 """
+import datetime
 import json
 import os
 import secrets
@@ -15,6 +16,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+RESULT_PATH = os.path.join(ROOT, "state", "hook-canary.json")
 sys.path.insert(0, HERE)
 import hookdiag  # noqa: E402
 
@@ -113,6 +115,42 @@ def _claude_canary(token):
     return ok
 
 
+def _persist_results(rows, path=None):
+    """Persist only verdicts and timestamps. The secret nonce must never reach disk."""
+    path = path or RESULT_PATH
+    try:
+        payload = json.load(open(path, encoding="utf-8"))
+        if payload.get("schema_version") != 1 or not isinstance(payload.get("runtimes"), dict):
+            payload = {"schema_version": 1, "runtimes": {}}
+    except (FileNotFoundError, OSError, ValueError, TypeError, json.JSONDecodeError):
+        payload = {"schema_version": 1, "runtimes": {}}
+
+    checked_at = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+    for runtime, ok in rows.items():
+        verdict = "verified" if ok else "not_verified"
+        payload["runtimes"][runtime] = {
+            "checked_at": checked_at,
+            "status": "PASS" if ok else "FAIL",
+            "dispatcher_fired": verdict,
+            "effect": verdict,
+        }
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    temporary = f"{path}.tmp-{os.getpid()}"
+    try:
+        with open(temporary, "w", encoding="utf-8") as result_file:
+            json.dump(payload, result_file, ensure_ascii=False, indent=2)
+            result_file.write("\n")
+            result_file.flush()
+            os.fsync(result_file.fileno())
+        os.replace(temporary, path)
+    finally:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+
+
 def main():
     runtime = "codex"
     if "--all" in sys.argv:
@@ -120,16 +158,21 @@ def main():
     elif "--claude" in sys.argv:
         runtime = "claude"
     token = secrets.token_hex(32)
+    results = {}
+    for name, function in (("codex", _codex_canary), ("claude", _claude_canary)):
+        if runtime not in (name, "all"):
+            continue
+        try:
+            results[name] = bool(function(token))
+        except Exception as e:
+            results[name] = False
+            print(f"{name} canary 실패: {type(e).__name__}: {e}", file=sys.stderr)
     try:
-        results = []
-        if runtime in ("codex", "all"):
-            results.append(_codex_canary(token))
-        if runtime in ("claude", "all"):
-            results.append(_claude_canary(token))
-        return 0 if results and all(results) else 1
+        _persist_results(results)
     except Exception as e:
-        print(f"canary 실패: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"canary 결과 저장 실패: {type(e).__name__}: {e}", file=sys.stderr)
         return 1
+    return 0 if results and all(results.values()) else 1
 
 
 if __name__ == "__main__":

@@ -1,0 +1,1673 @@
+{
+  "schema_version": 1,
+  "generated_by": "tools/manifest_build.py",
+  "files": [
+    {
+      "path": ".claude/commands/dossier.md",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude"
+      ],
+      "depends_on": [
+        "tools/now.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": ".claude/commands/garden.md",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude"
+      ],
+      "depends_on": [
+        "tools/wf_gardener.js"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": ".claude/commands/now.md",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude"
+      ],
+      "depends_on": [
+        "tools/now.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": ".claude/commands/paper-to-kit.md",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude"
+      ],
+      "depends_on": [
+        "system/evidence-schema.md",
+        "system/skills/paper-to-kit.md",
+        "tools/skill_adapters.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": ".claude/commands/recall.md",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude"
+      ],
+      "depends_on": [
+        "tools/recall.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": ".claude/settings.json",
+      "kind": "hook",
+      "owner": "kit",
+      "consumers": [
+        "claude",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/doctor.py",
+        "tools/gate.py",
+        "tools/now.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": ".codex/hooks.json",
+      "kind": "hook",
+      "owner": "kit",
+      "consumers": [
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/doctor.py",
+        "tools/now.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": ".gitignore",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CHECKLIST.md",
+        "CLAUDE.md",
+        "LICENSE",
+        "README.md",
+        "SETUP.md",
+        "setup.sh",
+        "state/.gitkeep",
+        "system/debate/README.md",
+        "system/kit-decisions.md",
+        "system/rituals.md"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "AGENTS.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "CLAUDE.md",
+        "README.md",
+        "SETUP.md",
+        "system/PRD-info-architecture.md",
+        "system/PRD-session-memory.md",
+        "system/WORKING-WITH-AI.md",
+        "system/debate/README.md",
+        "system/deep-pass.md",
+        "system/kit-decisions.md",
+        "system/lenses/README.md",
+        "system/rituals.md",
+        "templates/instance-rules.md",
+        "tools/doctor.py",
+        "tools/now.py",
+        "tools/rec.py",
+        "tools/recall.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "CHANGELOG.md",
+      "kind": "evidence",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "LICENSE",
+        "SETUP.md",
+        "setup.sh",
+        "system/enforcement-matrix.yaml",
+        "system/kit-decisions.md",
+        "system/review-manifest.yaml",
+        "system/rituals.md",
+        "system/skills/paper-to-kit.md",
+        "tools/doctor.py",
+        "tools/evidencecheck.py",
+        "tools/gate.py",
+        "tools/receipts.py",
+        "tools/skill_adapters.py",
+        "tools/sync_engine.sh",
+        "tools/test_evidencecheck.py",
+        "tools/test_fresh_install.sh",
+        "tools/test_fresh_worker.py",
+        "tools/test_i18n.py",
+        "tools/test_install_checks.py",
+        "tools/test_manifests.py",
+        "tools/test_memlib_journal.py",
+        "tools/test_portability.py",
+        "tools/test_skill_parity.py",
+        "tools/test_state_runtime.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "CHECKLIST.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".claude/settings.json",
+        ".gitignore",
+        "AGENTS.md",
+        "setup.sh",
+        "tools/ask_codex.sh",
+        "tools/diarize.py",
+        "tools/doctor.py",
+        "tools/gate.py",
+        "tools/install_hooks.sh",
+        "tools/linkcheck.py",
+        "tools/now.py",
+        "tools/recall.py",
+        "tools/transcribe.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "CLAUDE.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude"
+      ],
+      "depends_on": [
+        "AGENTS.md"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "LICENSE",
+      "kind": "evidence",
+      "owner": "kit",
+      "consumers": [
+        "human"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "README.md",
+      "kind": "evidence",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "CHECKLIST.md",
+        "SETUP.md",
+        "setup.sh",
+        "tools/doctor.py",
+        "tools/install_hooks.sh",
+        "tools/skill_adapters.py",
+        "tools/test_fresh_install.sh"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "SETUP.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".claude/settings.json",
+        ".gitignore",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CHECKLIST.md",
+        "CLAUDE.md",
+        "setup.sh",
+        "system/PRD-session-memory.md",
+        "system/rituals.md",
+        "tools/ask_codex.sh",
+        "tools/doctor.py",
+        "tools/fresh_worker.py",
+        "tools/gate.py",
+        "tools/install_hooks.sh",
+        "tools/linkcheck.py",
+        "tools/now.py",
+        "tools/rec.py",
+        "tools/test_fresh_install.sh",
+        "tools/test_portability.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "setup.sh",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "AGENTS.md",
+        "SETUP.md",
+        "templates/decisions.md",
+        "templates/instance-rules.md",
+        "templates/memory-config.json",
+        "templates/rituals.local.md",
+        "tools/doctor.py",
+        "tools/gate.py",
+        "tools/i18n.py",
+        "tools/linkcheck.py",
+        "tools/now.py",
+        "tools/sync_engine.sh"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "state/.gitkeep",
+      "kind": "generated",
+      "owner": "kit",
+      "consumers": [
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/PRD-info-architecture.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/PRD-session-memory.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".claude/settings.json",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "tools/fresh_worker.py",
+        "tools/memlib.py",
+        "tools/recall.py",
+        "tools/wf_gardener.js"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/WORKING-WITH-AI.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        "tools/fresh_worker.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/debate/README.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        "AGENTS.md",
+        "tools/ask_codex.sh",
+        "tools/recall.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/deep-pass.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        "README.md",
+        "system/debate/README.md",
+        "system/lenses/silence.md",
+        "system/person-ledger.md"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/enforcement-matrix.md",
+      "kind": "evidence",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/evidencecheck.py",
+        "tools/gate.py",
+        "tools/precommit-hook.sh",
+        "tools/test_evidencecheck.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/enforcement-matrix.yaml",
+      "kind": "generated",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "system/PRD-info-architecture.md",
+        "system/PRD-session-memory.md",
+        "system/kit-decisions.md",
+        "system/rituals.md",
+        "tools/doctor.py",
+        "tools/gate.py",
+        "tools/install_hooks.sh",
+        "tools/precommit-hook.sh",
+        "tools/test_doctor_json.py",
+        "tools/test_fresh_install.sh",
+        "tools/test_fresh_worker.py",
+        "tools/test_hook_runtime.py",
+        "tools/test_install_checks.py",
+        "tools/test_manifests.py",
+        "tools/test_receipts.py",
+        "tools/test_setup_migration.py",
+        "tools/test_state_runtime.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/evidence-schema.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        "CHANGELOG.md",
+        "system/enforcement-matrix.md",
+        "system/kit-decisions.md",
+        "tools/evidencecheck.py",
+        "tools/gate.py",
+        "tools/test_evidencecheck.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/kit-decisions.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CLAUDE.md",
+        "setup.sh",
+        "system/rituals.md",
+        "tools/memlib.py",
+        "tools/sync_engine.sh",
+        "tools/test_fresh_install.sh",
+        "tools/test_fresh_worker.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/README.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/ergodic.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/feedback-loop.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/fence.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/feynman.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/incentive.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/inversion.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/isomorphism.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/jensen.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/ledger.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/limits.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/marginal.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/mirror.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/silence.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/person-ledger.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/review-manifest.yaml",
+      "kind": "generated",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        ".claude/commands/dossier.md",
+        ".claude/commands/garden.md",
+        ".claude/commands/now.md",
+        ".claude/commands/paper-to-kit.md",
+        ".claude/commands/recall.md",
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        ".gitignore",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CHECKLIST.md",
+        "CLAUDE.md",
+        "LICENSE",
+        "README.md",
+        "SETUP.md",
+        "setup.sh",
+        "state/.gitkeep",
+        "system/PRD-info-architecture.md",
+        "system/PRD-session-memory.md",
+        "system/WORKING-WITH-AI.md",
+        "system/debate/README.md",
+        "system/deep-pass.md",
+        "system/enforcement-matrix.md",
+        "system/enforcement-matrix.yaml",
+        "system/evidence-schema.md",
+        "system/kit-decisions.md",
+        "system/lenses/README.md",
+        "system/lenses/ergodic.md",
+        "system/lenses/feedback-loop.md",
+        "system/lenses/fence.md",
+        "system/lenses/feynman.md",
+        "system/lenses/incentive.md",
+        "system/lenses/inversion.md",
+        "system/lenses/isomorphism.md",
+        "system/lenses/jensen.md",
+        "system/lenses/ledger.md",
+        "system/lenses/limits.md",
+        "system/lenses/marginal.md",
+        "system/lenses/mirror.md",
+        "system/lenses/silence.md",
+        "system/person-ledger.md",
+        "system/reviews/architecture.md",
+        "system/rituals.md",
+        "system/skills/paper-to-kit.md",
+        "templates/decisions.md",
+        "templates/instance-rules.md",
+        "templates/memory-config.json",
+        "templates/rituals.local.md",
+        "tools/ask_codex.sh",
+        "tools/build_memory_map.py",
+        "tools/codex_root_thread.py",
+        "tools/coherence.py",
+        "tools/diarize.py",
+        "tools/doctor.py",
+        "tools/eval_recall.py",
+        "tools/evidencecheck.py",
+        "tools/fresh_worker.py",
+        "tools/gate.py",
+        "tools/hook_canary.py",
+        "tools/hookdiag.py",
+        "tools/i18n.py",
+        "tools/install_hooks.sh",
+        "tools/linkcheck.py",
+        "tools/manifest_build.py",
+        "tools/memlib.py",
+        "tools/now.py",
+        "tools/portrait.py",
+        "tools/precommit-hook.sh",
+        "tools/rec.py",
+        "tools/recall.py",
+        "tools/receipts.py",
+        "tools/skill_adapters.py",
+        "tools/sync_engine.sh",
+        "tools/test_coherence.py",
+        "tools/test_doctor_json.py",
+        "tools/test_evidencecheck.py",
+        "tools/test_fresh_install.sh",
+        "tools/test_fresh_worker.py",
+        "tools/test_hook_runtime.py",
+        "tools/test_hookdiag.py",
+        "tools/test_i18n.py",
+        "tools/test_install_checks.py",
+        "tools/test_install_hooks.py",
+        "tools/test_manifests.py",
+        "tools/test_memcheck.py",
+        "tools/test_memlib_journal.py",
+        "tools/test_portability.py",
+        "tools/test_rec.py",
+        "tools/test_recall.py",
+        "tools/test_receipts.py",
+        "tools/test_setup_migration.py",
+        "tools/test_skill_parity.py",
+        "tools/test_state_runtime.py",
+        "tools/transcribe.py",
+        "tools/wf_gardener.js"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/reviews/architecture.md",
+      "kind": "evidence",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".claude/commands/dossier.md",
+        ".claude/commands/garden.md",
+        ".claude/commands/now.md",
+        ".claude/commands/paper-to-kit.md",
+        ".claude/commands/recall.md",
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        ".gitignore",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CHECKLIST.md",
+        "CLAUDE.md",
+        "LICENSE",
+        "README.md",
+        "SETUP.md",
+        "setup.sh",
+        "state/.gitkeep",
+        "system/PRD-info-architecture.md",
+        "system/PRD-session-memory.md",
+        "system/WORKING-WITH-AI.md",
+        "system/debate/README.md",
+        "system/deep-pass.md",
+        "system/enforcement-matrix.md",
+        "system/enforcement-matrix.yaml",
+        "system/evidence-schema.md",
+        "system/kit-decisions.md",
+        "system/lenses/README.md",
+        "system/lenses/ergodic.md",
+        "system/lenses/feedback-loop.md",
+        "system/lenses/fence.md",
+        "system/lenses/feynman.md",
+        "system/lenses/incentive.md",
+        "system/lenses/inversion.md",
+        "system/lenses/isomorphism.md",
+        "system/lenses/jensen.md",
+        "system/lenses/ledger.md",
+        "system/lenses/limits.md",
+        "system/lenses/marginal.md",
+        "system/lenses/mirror.md",
+        "system/lenses/silence.md",
+        "system/person-ledger.md",
+        "system/review-manifest.yaml",
+        "system/rituals.md",
+        "system/skills/paper-to-kit.md",
+        "templates/decisions.md",
+        "templates/instance-rules.md",
+        "templates/memory-config.json",
+        "templates/rituals.local.md",
+        "tools/ask_codex.sh",
+        "tools/build_memory_map.py",
+        "tools/codex_root_thread.py",
+        "tools/coherence.py",
+        "tools/diarize.py",
+        "tools/doctor.py",
+        "tools/eval_recall.py",
+        "tools/evidencecheck.py",
+        "tools/fresh_worker.py",
+        "tools/gate.py",
+        "tools/hook_canary.py",
+        "tools/hookdiag.py",
+        "tools/i18n.py",
+        "tools/install_hooks.sh",
+        "tools/linkcheck.py",
+        "tools/manifest_build.py",
+        "tools/memlib.py",
+        "tools/now.py",
+        "tools/portrait.py",
+        "tools/precommit-hook.sh",
+        "tools/rec.py",
+        "tools/recall.py",
+        "tools/receipts.py",
+        "tools/skill_adapters.py",
+        "tools/sync_engine.sh",
+        "tools/test_coherence.py",
+        "tools/test_doctor_json.py",
+        "tools/test_evidencecheck.py",
+        "tools/test_fresh_install.sh",
+        "tools/test_fresh_worker.py",
+        "tools/test_hook_runtime.py",
+        "tools/test_hookdiag.py",
+        "tools/test_i18n.py",
+        "tools/test_install_checks.py",
+        "tools/test_install_hooks.py",
+        "tools/test_manifests.py",
+        "tools/test_memcheck.py",
+        "tools/test_memlib_journal.py",
+        "tools/test_portability.py",
+        "tools/test_rec.py",
+        "tools/test_recall.py",
+        "tools/test_receipts.py",
+        "tools/test_setup_migration.py",
+        "tools/test_skill_parity.py",
+        "tools/test_state_runtime.py",
+        "tools/transcribe.py",
+        "tools/wf_gardener.js"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/rituals.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        "AGENTS.md",
+        "CLAUDE.md",
+        "README.md",
+        "system/PRD-session-memory.md",
+        "system/lenses/README.md",
+        "tools/doctor.py",
+        "tools/linkcheck.py",
+        "tools/now.py",
+        "tools/rec.py",
+        "tools/recall.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/skills/paper-to-kit.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        "system/evidence-schema.md"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "templates/decisions.md",
+      "kind": "template",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        "system/kit-decisions.md",
+        "tools/memlib.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "templates/instance-rules.md",
+      "kind": "template",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "AGENTS.md",
+        "system/rituals.md",
+        "tools/doctor.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "templates/memory-config.json",
+      "kind": "template",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        "setup.sh",
+        "tools/memlib.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "templates/rituals.local.md",
+      "kind": "template",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        "system/rituals.md"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/ask_codex.sh",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        "AGENTS.md",
+        "tools/codex_root_thread.py",
+        "tools/fresh_worker.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/build_memory_map.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        ".claude/settings.json",
+        "system/PRD-session-memory.md",
+        "tools/memlib.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/codex_root_thread.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        "AGENTS.md"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/coherence.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/linkcheck.py",
+        "tools/rec.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/diarize.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/doctor.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        ".claude/settings.json",
+        ".gitignore",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "setup.sh",
+        "system/person-ledger.md",
+        "tools/coherence.py",
+        "tools/linkcheck.py",
+        "tools/now.py",
+        "tools/portrait.py",
+        "tools/rec.py",
+        "tools/recall.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/eval_recall.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/evidencecheck.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "CHANGELOG.md",
+        "system/enforcement-matrix.md",
+        "system/kit-decisions.md"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/fresh_worker.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "AGENTS.md"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/gate.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/install_hooks.sh"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/hook_canary.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/hookdiag.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/i18n.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "AGENTS.md",
+        "CHECKLIST.md",
+        "CLAUDE.md",
+        "SETUP.md",
+        "setup.sh",
+        "system/kit-decisions.md",
+        "tools/doctor.py",
+        "tools/gate.py",
+        "tools/hook_canary.py",
+        "tools/install_hooks.sh",
+        "tools/linkcheck.py",
+        "tools/now.py",
+        "tools/transcribe.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/install_hooks.sh",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/precommit-hook.sh"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/linkcheck.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "CLAUDE.md",
+        "setup.sh"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/manifest_build.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "system/enforcement-matrix.yaml",
+        "system/review-manifest.yaml",
+        "tools/test_manifests.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/memlib.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "system/PRD-session-memory.md",
+        "tools/now.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/now.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "system/PRD-session-memory.md",
+        "tools/memlib.py",
+        "tools/rec.py",
+        "tools/recall.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/portrait.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "system/person-ledger.md"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/precommit-hook.sh",
+      "kind": "hook",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/gate.py",
+        "tools/install_hooks.sh"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/rec.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "README.md"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/recall.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "AGENTS.md",
+        "system/PRD-session-memory.md",
+        "tools/memlib.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/receipts.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/skill_adapters.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/sync_engine.sh",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/fresh_worker.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_coherence.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "README.md",
+        "tools/build_memory_map.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_doctor_json.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_evidencecheck.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "CHANGELOG.md",
+        "system/enforcement-matrix.md",
+        "system/evidence-schema.md",
+        "system/kit-decisions.md",
+        "tools/evidencecheck.py",
+        "tools/gate.py",
+        "tools/precommit-hook.sh"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_fresh_install.sh",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "SETUP.md",
+        "setup.sh",
+        "tools/doctor.py",
+        "tools/install_hooks.sh",
+        "tools/linkcheck.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_fresh_worker.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "README.md",
+        "state/.gitkeep"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_hook_runtime.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/install_hooks.sh"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_hookdiag.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_i18n.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "setup.sh",
+        "tools/doctor.py",
+        "tools/gate.py",
+        "tools/linkcheck.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_install_checks.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "README.md",
+        "SETUP.md",
+        "tools/linkcheck.py",
+        "tools/now.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_install_hooks.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/install_hooks.sh"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_manifests.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        "system/enforcement-matrix.yaml",
+        "system/review-manifest.yaml",
+        "tools/manifest_build.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_memcheck.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_memlib_journal.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_portability.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "setup.sh",
+        "tools/ask_codex.sh",
+        "tools/install_hooks.sh",
+        "tools/precommit-hook.sh",
+        "tools/sync_engine.sh",
+        "tools/test_fresh_install.sh"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_rec.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/rec.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_recall.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "AGENTS.md"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_receipts.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_setup_migration.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "setup.sh",
+        "tools/now.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_skill_parity.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_state_runtime.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "README.md"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/transcribe.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/wf_gardener.js",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "system/PRD-session-memory.md",
+        "tools/memlib.py",
+        "tools/now.py",
+        "tools/recall.py"
+      ],
+      "reviewed_at": null
+    }
+  ]
+}

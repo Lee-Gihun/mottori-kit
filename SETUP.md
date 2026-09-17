@@ -27,12 +27,29 @@
 
 ```bash
 python3 --version     # 3.8 이상
-git --version         # 2.36 이상 (pre-commit 후방선 설치가 `git hook run`을 쓴다)
+git --version         # 2.5 이상
+bash --version        # 3.2 이상
 which claude codex    # 없어도 설치는 된다. 둘 다 없으면 fresh worker와 훅 주입만 못 쓴다
 node --version        # 정원사(/garden)용. 없어도 나머지는 다 돈다
 ```
 
-macOS·Linux 전용이다 (게이트가 `fcntl` 잠금, 훅 설치가 `shasum`을 쓴다). Windows는 WSL에서.
+코어 설치는 macOS와 Linux를 대상으로 한다. 훅 설치는 GNU `sha256sum`, BSD `shasum`, Python 순으로
+SHA-256 구현을 고른다. 임시 파일은 운영체제의 기본 임시 디렉토리에 만든다. Windows native는
+`fcntl` 잠금을 제공하지 않아 지원하지 않으며 WSL은 아직 실기 검증하지 않았다.
+
+### 지원 매트릭스
+
+| 대상 | 상태 | 근거와 범위 |
+|---|---|---|
+| macOS, Darwin 25.3, Apple Silicon | 실기 검증 | Bash 3.2.57, Python 3.9.6, Apple Git 2.50.1에서 전체 회귀와 fresh install을 통과했다. |
+| Bash 3.2 | 실기 검증 | 이 머신의 기본 Bash 3.2로 여섯 셸 진입점의 일반 문법과 POSIX 모드 문법을 검사하고 fresh install을 통과했다. |
+| `shasum` 없는 PATH | 픽스처 검증 | `tools/test_portability.py`가 `shasum`을 제공하지 않고 `sha256sum`만 제공해 훅 체크섬 분기를 실행한다. |
+| Git 2.5 이상, 2.36 미만 | 픽스처 검증 | 같은 테스트가 `git hook run`과 `--path-format`을 거부하는 Git wrapper로 훅 설치를 실행한다. 실제 구버전 바이너리는 시험하지 않았다. |
+| Ubuntu·Debian 기본 이미지 | 추정 지원 | GNU/BSD 전용 `sed -i`, `stat`, `date` 형식과 고정 `/tmp`를 정적 검사로 막는다. 이 작업 환경에서는 Linux 컨테이너를 실행하지 못해 실기 미검증이다. |
+| Windows native | 미지원 | `fcntl`과 Unix 훅 실행 모델이 필요하다. WSL도 현재는 미검증이다. |
+
+`claude`, `codex`, `node`, `ffmpeg`, `mlx_whisper`를 쓰는 선택 기능은 각 행의 코어 설치 검증 범위에
+포함되지 않는다. 이 표의 검증 명령은 §3과 `tools/test_portability.py`가 정본이다.
 
 ## 2. 인스턴스 설정 만들기
 

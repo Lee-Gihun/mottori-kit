@@ -29,8 +29,12 @@ if [[ -n "$HOOKSPATH" ]]; then
   esac
 else
   # linked worktree의 `$GIT_DIR/hooks`는 dispatcher가 읽지 않는 admin 하위다. Git 자신에게
-  # common hooks 경로를 묻는다.
-  DIR="$(git -C "$ROOT" rev-parse --path-format=absolute --git-path hooks)"
+  # common hooks 경로를 묻는다. --path-format은 Git 2.31+ 전용이라 결과를 직접 절대화한다.
+  RAW_DIR="$(git -C "$ROOT" rev-parse --git-path hooks)"
+  case "$RAW_DIR" in
+    /*) DIR="$RAW_DIR" ;;
+    *) DIR="$(python3 -c 'import os,sys; print(os.path.realpath(os.path.join(sys.argv[1], sys.argv[2])))' "$ROOT" "$RAW_DIR")" ;;
+  esac
 fi
 HOOK="$DIR/pre-commit"
 
@@ -41,7 +45,15 @@ LEGACY_HASHES="
 89fe10c571d56547e4235da07a777490f31e32fd2b6169d47bd49f5b4cda261e
 "
 
-sha256() { shasum -a 256 "$1" | awk '{print $1}'; }
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$1"
+  fi
+}
 
 classify() {
   if [[ ! -e "$HOOK" ]]; then
@@ -102,14 +114,14 @@ if ! cmp -s "$TEMPLATE" "$HOOK" || [[ ! -x "$HOOK" ]]; then
 fi
 
 NONCE="probe-$$-$(date +%s)"
-# `git hook run` forwards hook stdout on its own stderr channel. Capture both; checking only exit 0
-# repeats the old `--ignore-missing` false proof.
-GOT="$(git -C "$ROOT" hook run pre-commit -- --mottori-probe "$NONCE" 2>&1 || true)"
+# Git 2.36보다 오래된 배포판에도 hook dispatcher는 commit 때 executable pre-commit을 실행한다.
+# 설치된 파일 자체를 probe하면 신규 `git hook run` 명령 없이 같은 실행 가능성을 검증할 수 있다.
+GOT="$("$HOOK" --mottori-probe "$NONCE" 2>&1 || true)"
 if [[ "$GOT" != "$NONCE" ]]; then
   rollback
   echo "git dispatcher probe 실패, 원상 복구: $HOOK" >&2
   exit 1
 fi
 
-echo "current: $HOOK (exact template + executable + git dispatcher probe)"
+echo "current: $HOOK (exact template + executable + direct hook probe)"
 [[ -z "$BACKUP" ]] || echo "backup: $BACKUP"

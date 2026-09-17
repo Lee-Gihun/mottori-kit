@@ -13,7 +13,7 @@
 set -uo pipefail
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KEEP=0; [ "${1:-}" = "--keep" ] && KEEP=1
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/kit-fresh.XXXXXX")"
+TMP="$(mktemp -d)"
 DEST="$TMP/kit fresh"          # 공백 든 경로: 2026-08-24 실측 버그(경로 유도 규칙)의 재발 방지
 cleanup() { [ "$KEEP" -eq 1 ] && echo "kept: $DEST" || rm -rf "$TMP"; }
 trap cleanup EXIT
@@ -59,12 +59,34 @@ bash tools/install_hooks.sh --repair >/dev/null 2>&1 && step "install_hooks --re
 lc="$(python3 tools/linkcheck.py 2>&1)"; broken="$(echo "$lc" | sed -n 's/.*broken: \([0-9]*\).*/\1/p' | tail -1)"
 [ "${broken:-x}" = "0" ] && step "linkcheck broken" "0" || { step "linkcheck broken" "${broken:-측정불능}"; echo "$lc" | grep BROKEN | head -5; fail=1; }
 
-# 4. doctor
-dr="$(python3 tools/doctor.py 2>&1)"
-nf="$(echo "$dr" | sed -n 's/.*ok \([0-9]*\) · FAIL \([0-9]*\) · warn \([0-9]*\).*/\2/p' | tail -1)"
-nw="$(echo "$dr" | sed -n 's/.*ok \([0-9]*\) · FAIL \([0-9]*\) · warn \([0-9]*\).*/\3/p' | tail -1)"
-if [ "${nf:-x}" = "0" ]; then step "doctor FAIL / warn" "0 / ${nw:-?}"; else
-  step "doctor FAIL / warn" "${nf:-측정불능} / ${nw:-?}"; echo "$dr" | grep -E "^\[ FAIL \]" | head -6; fail=1; fi
+# 4. doctor. 사람용 문자열을 grep하지 않고 공개 JSON 계약만 읽는다.
+doctor_json="$TMP/doctor.json"; doctor_err="$TMP/doctor.err"
+python3 tools/doctor.py --json >"$doctor_json" 2>"$doctor_err"; doctor_rc=$?
+metrics="$(python3 - "$doctor_json" <<'PY'
+import json, sys
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+summary = payload["summary"]
+print(summary["fail"], summary["warn"])
+PY
+)"; metrics_rc=$?
+nf=""; nw=""
+[ $metrics_rc -eq 0 ] && read -r nf nw <<< "$metrics"
+if [ "${nf:-x}" = "0" ] && [ $doctor_rc -eq 0 ]; then
+  step "doctor FAIL / warn" "0 / ${nw:-?}"
+else
+  step "doctor FAIL / warn" "${nf:-측정불능} / ${nw:-?}"
+  if [ $metrics_rc -eq 0 ]; then
+    python3 - "$doctor_json" <<'PY'
+import json, sys
+for row in json.load(open(sys.argv[1], encoding="utf-8"))["checks"]:
+    if row["status"] == "FAIL":
+        print(f"[ FAIL ] {row['name']}  {row['detail']}")
+PY
+  else
+    tail -6 "$doctor_err"
+  fi
+  fail=1
+fi
 
 # 5. 회귀 픽스처 (킷에 실린 것 전부)
 for t in tools/test_*.py; do
@@ -74,7 +96,7 @@ done
 
 # 6. 두 번째 setup은 멈춰야 한다 (덮어쓰기 금지 계약)
 out2="$(bash setup.sh < /dev/null 2>&1)"; rc2=$?
-if [ $rc2 -eq 0 ] && echo "$out2" | grep -q "이미 세팅"; then step "setup.sh 재실행 (덮지 않음)" "ok"; else
+if [ $rc2 -eq 0 ] && echo "$out2" | grep -Eq "이미 세팅|already set up"; then step "setup.sh 재실행 (덮지 않음)" "ok"; else
   step "setup.sh 재실행 (덮지 않음)" "FAIL exit=$rc2"; fail=1; fi
 
 echo
