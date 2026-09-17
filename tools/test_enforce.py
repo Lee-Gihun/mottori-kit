@@ -422,6 +422,9 @@ TESTS = [
     test_sync_inventory_is_single_source_and_partial_copy_rolls_back,
     test_sync_second_destination_copy_failure_rolls_back_first_copy,
     test_E1_rec_check_crash_is_doctor_fail,
+    test_tracked_public_state_is_not_forbidden,
+    test_tracked_markdown_symlink_in_head_is_not_reflagged,
+    test_prepush_allows_presetup_kit_tree_and_blocks_unknown_context,
 ]
 
 
