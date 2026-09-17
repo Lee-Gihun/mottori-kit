@@ -9,6 +9,7 @@ import datetime
 import hashlib
 import os
 import re
+import urllib.parse
 
 
 def _resolve_root():
@@ -33,17 +34,35 @@ def _resolve_root():
 # 2026-08-24 실측: instance.context를 추가했을 때 옛 config는 그 필드가 없어 밸브가
 # 조용히 꺼진 채로 돌 뻔했다. 조용한 뒤처짐이 이 상수의 존재 이유다.
 SCHEMA_VERSION = 4
+# 언어별 문안. doctor가 MOTTORI_LANG에 따라 고르므로 EN 출력에 한글이 섞이지 않는다 (test_i18n).
 SCHEMA_CHANGES = {
-    2: ("instance 블록 신설 — 데이터 국경의 근거값.\n"
-        '      "instance": {"name": "...", "context": "work|personal", "remote_allowlist": []}\n'
-        "      context가 없으면 밸브 검사가 personal로 간주하고 원격을 안 본다"),
-    3: ("journal_visibility 신설 — public allowlist 밖 사건은 local-private로 fail-close.\n"
-        '      "journal_visibility": {"public_tracks": ["system", "research", ...]}\n'
-        "      private thread metadata는 추적 threads[]가 아니라 _private/state/threads.json에 둔다"),
-    4: ("legacy journal cutover 신설 — allowlist 추가가 과거 private-derived body를 재승격하지 않게 한다.\n"
-        '      "legacy_cutoff": null|"ISO8601", "legacy_public_tracks": [...]\n'
-        "      기존 인스턴스는 migration 시각과 그때의 public_tracks를 고정한다"),
+    2: {"ko": ("instance 블록 신설 — 데이터 국경의 근거값.\n"
+               '      "instance": {"name": "...", "context": "work|personal", "remote_allowlist": []}\n'
+               "      context가 없으면 밸브 검사가 personal로 간주하고 원격을 안 본다"),
+        "en": ("new instance block: the ground truth for the data border.\n"
+               '      "instance": {"name": "...", "context": "work|personal", "remote_allowlist": []}\n'
+               "      without context the valve check assumes personal and ignores remotes")},
+    3: {"ko": ("journal_visibility 신설 — public allowlist 밖 사건은 local-private로 fail-close.\n"
+               '      "journal_visibility": {"public_tracks": ["system", "research", ...]}\n'
+               "      private thread metadata는 추적 threads[]가 아니라 _private/state/threads.json에 둔다"),
+        "en": ("new journal_visibility: events outside the public allowlist fail closed to local-private.\n"
+               '      "journal_visibility": {"public_tracks": ["system", "research", ...]}\n'
+               "      private thread metadata lives in _private/state/threads.json, not in tracked threads[]")},
+    4: {"ko": ("legacy journal cutover 신설 — allowlist 추가가 과거 private-derived body를 재승격하지 않게 한다.\n"
+               '      "legacy_cutoff": null|"ISO8601", "legacy_public_tracks": [...]\n'
+               "      기존 인스턴스는 migration 시각과 그때의 public_tracks를 고정한다"),
+        "en": ("new legacy journal cutover: adding to the allowlist must not re-promote old private-derived bodies.\n"
+               '      "legacy_cutoff": null|"ISO8601", "legacy_public_tracks": [...]\n'
+               "      existing instances pin the migration time and the public_tracks of that moment")},
 }
+
+
+def _schema_lang():
+    try:
+        from i18n import language
+        return language()
+    except Exception:  # noqa: BLE001 — i18n 부재·오류면 원문(ko)
+        return "ko"
 
 ROOT = _resolve_root()
 CONFIG_PATH = os.path.join(ROOT, "system", "memory-config.json")
@@ -105,6 +124,9 @@ def _validate_config_shape(data):
     instance = data.get("instance", {})
     if "remote_allowlist" in instance and not isinstance(instance["remote_allowlist"], list):
         raise ValueError("config.instance.remote_allowlist가 list가 아님")
+    if "remote_allowlist" in instance and not all(
+            _valid_remote_allowlist_entry(x) for x in instance["remote_allowlist"]):
+        raise ValueError("config.instance.remote_allowlist에 유효하지 않은 host/remote가 있음")
 
     for i, row in enumerate(data.get("episodic_sources", [])):
         if not isinstance(row, dict):
@@ -119,6 +141,13 @@ def _validate_config_shape(data):
         for key in ("key", "name", "canonical"):
             if not isinstance(row.get(key), str) or not row[key]:
                 raise ValueError(f"config.tracks[{i}].{key}가 비어 있음")
+        canonical = row["canonical"]
+        if (os.path.isabs(canonical)
+                or re.match(r"^[A-Za-z]:[/\\]", canonical)
+                or canonical.startswith("\\\\")
+                or ".." in re.split(r"[/\\]+", canonical)):
+            raise ValueError(
+                f"config.tracks[{i}].canonical이 안전한 상대경로가 아님")
         if "also" in row and not (isinstance(row["also"], list)
                                    and all(isinstance(x, str) for x in row["also"])):
             raise ValueError(f"config.tracks[{i}].also가 string list가 아님")
@@ -180,6 +209,44 @@ def _validate_config_shape(data):
         if key in thresholds and not 1024 <= thresholds[key] <= 6000:
             raise ValueError(f"config.thresholds.{key}가 1024..6000 범위가 아님")
     return data
+
+
+def _valid_remote_host(host):
+    """Return whether host is a syntactically bounded DNS name or IP literal."""
+    if not isinstance(host, str) or not host or len(host) > 253:
+        return False
+    host = host.rstrip(".")
+    if ":" in host:  # URL parsing strips IPv6 brackets.
+        import ipaddress
+        try:
+            ipaddress.ip_address(host)
+            return True
+        except ValueError:
+            return False
+    label = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
+    return bool(host) and all(label.match(part) for part in host.split("."))
+
+
+def _valid_remote_allowlist_entry(value):
+    """Accept hosts, remote URLs/scp forms, and explicit local repository paths."""
+    if not isinstance(value, str) or not value or value != value.strip():
+        return False
+    if value.startswith(("/", "~/", "./", "../")):
+        return True
+    if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", value):
+        try:
+            parsed = urllib.parse.urlsplit(value)
+            host = parsed.hostname
+        except ValueError:
+            return False
+        return _valid_remote_host(host)
+    scp = re.match(r"^(?:[^@/:\s]+@)?([^@/:\s]+):(.+)$", value)
+    if scp:
+        return _valid_remote_host(scp.group(1)) and not any(c.isspace() for c in scp.group(2))
+    host, _, path = value.partition("/")
+    return (_valid_remote_host(host)
+            and not any(c.isspace() for c in path)
+            and not value.startswith(("?", "#")))
 
 
 def _load_config():
@@ -278,7 +345,8 @@ def schema_gap():
     """config가 엔진보다 뒤처졌으면 (현재, 기대, 해야 할 일 목록)을 준다. 아니면 None."""
     if CONFIG_SCHEMA >= SCHEMA_VERSION:
         return None
-    todo = [f"v{v}: {SCHEMA_CHANGES[v]}" for v in sorted(SCHEMA_CHANGES)
+    lang = _schema_lang()
+    todo = [f"v{v}: {SCHEMA_CHANGES[v].get(lang, SCHEMA_CHANGES[v]['ko'])}" for v in sorted(SCHEMA_CHANGES)
             if CONFIG_SCHEMA < v <= SCHEMA_VERSION]
     return CONFIG_SCHEMA, SCHEMA_VERSION, todo
 
@@ -355,6 +423,12 @@ def validate_line(line):
     return None
 
 
+def _parse_journal_timestamp(value):
+    """Parse the journal grammar on Python versions that reject compact UTC offsets."""
+    compact = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", value)
+    return datetime.datetime.fromisoformat(compact)
+
+
 def parse_journal(visibility=None, strict=False, errors=None, physical_visibilities=None):
     """public/local journal을 합쳐 시간순으로 읽는다.
 
@@ -374,7 +448,19 @@ def parse_journal(visibility=None, strict=False, errors=None, physical_visibilit
             if not re.match(r"journal-\d{4}-\d{2}\.md$", f):
                 continue
             path = os.path.join(base, f)
-            for lineno, line in enumerate(open(path, encoding="utf-8"), 1):
+            raw_bytes = open(path, "rb").read()
+            boundary_errors = []
+            if raw_bytes.startswith(b"\xef\xbb\xbf"):
+                boundary_errors.append("UTF-8 BOM 금지")
+            if raw_bytes and not raw_bytes.endswith(b"\n"):
+                boundary_errors.append("마지막 줄 개행 없음")
+            for boundary_error in boundary_errors:
+                message = f"{path}:1: {boundary_error}"
+                if strict:
+                    raise ValueError("journal 손상: " + message)
+                errors.append(message)
+            text = raw_bytes.decode("utf-8")
+            for lineno, line in enumerate(text.splitlines(), 1):
                 raw = line.strip()
                 m = JOURNAL_LINE.match(raw)
                 if not m:
@@ -392,7 +478,7 @@ def parse_journal(visibility=None, strict=False, errors=None, physical_visibilit
                     continue
                 row = m.groupdict()
                 try:
-                    row_dt = datetime.datetime.fromisoformat(row["ts"])
+                    row_dt = _parse_journal_timestamp(row["ts"])
                 except ValueError as e:
                     if strict:
                         raise ValueError(f"journal 손상: {path}:{lineno}: timestamp {row['ts']}") from e
@@ -411,10 +497,12 @@ def parse_journal(visibility=None, strict=False, errors=None, physical_visibilit
                 else:
                     scope = journal_visibility(row["track"])
                 if visibility is None or visibility == scope:
-                    row.update(visibility=scope, source=path, order=order)
+                    row.update(visibility=scope, source=path, order=order, _parsed_dt=row_dt)
                     out.append(row)
                 order += 1
-    out.sort(key=lambda e: (e["ts"], e["order"]))
+    out.sort(key=lambda e: (e["_parsed_dt"], e["order"]))
+    for row in out:
+        del row["_parsed_dt"]
     return out
 
 

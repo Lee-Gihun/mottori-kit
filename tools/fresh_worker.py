@@ -44,6 +44,12 @@ KIT_SYNC_SOURCE_SHA256 = None   # source manifest: sha over the kit files that w
 ENGINE_FILES = ("fresh_worker.py", "memlib.py")
 SYNC_FILES = ("fresh_worker.py", "test_fresh_worker.py", "ask_codex.sh")
 STAMP_PREFIXES = ("KIT_REV_EMBEDDED =", "KIT_SYNC_DIRTY =", "KIT_SYNC_ENGINE_SHA256 =", "KIT_SYNC_SOURCE_SHA256 =")
+WORKTREE_INSTANCE_FILES = (
+    "system/memory-config.json",
+    "system/instance-rules.md",
+    "system/decisions.md",
+    "system/rituals.local.md",
+)
 
 CAPABILITIES = {
     "claude": "read-only",
@@ -445,10 +451,10 @@ WRAPPER_SCOPE_VIOLATION = 4
 SCOPE_LIST_CAP = 500
 
 
-def _normalize_prefix(prefix):
+def _normalize_prefix(prefix, root=None):
     """A write prefix is a ROOT-relative directory path with no symlink component. It may not exist yet."""
-    absolute = os.path.abspath(prefix if os.path.isabs(prefix) else os.path.join(ROOT, prefix))
-    root = os.path.abspath(ROOT)
+    root = os.path.abspath(root or ROOT)
+    absolute = os.path.abspath(prefix if os.path.isabs(prefix) else os.path.join(root, prefix))
     try:
         rel = os.path.relpath(absolute, root)
     except ValueError:
@@ -483,7 +489,7 @@ def _normalize_prefix(prefix):
     return "/".join(canonical)
 
 
-def _workspace_snapshot(exclude_rel):
+def _workspace_snapshot(exclude_rel, root=None):
     """path -> (kind, size, mtime_ns, ctime_ns, mode) for every entry under ROOT except .git and
     the run-record tree. Directories are entries too (kind 'dir').
 
@@ -492,8 +498,10 @@ def _workspace_snapshot(exclude_rel):
     and mode catches chmod (review R2). Symlinks are recorded as their own entries (kind 'link');
     their targets are not followed.
     """
-    root = os.path.abspath(ROOT)
+    root = os.path.abspath(root or ROOT)
     runs_rel = os.path.relpath(RUN_ROOT, root).replace(os.sep, "/")
+    if runs_rel == ".." or runs_rel.startswith("../"):
+        runs_rel = None
     snap = {}
 
     def fingerprint(st, kind):
@@ -508,7 +516,7 @@ def _workspace_snapshot(exclude_rel):
             rel = f"{rel_dir}/{d}" if rel_dir else d
             # .git and the whole run-record tree belong to the wrapper, not to the worker's write-set.
             # (Concurrent runs would otherwise see each other's records as changes.)
-            if d == ".git" or rel == exclude_rel or rel == runs_rel:
+            if d == ".git" or rel == exclude_rel or (runs_rel is not None and rel == runs_rel):
                 continue
             full = os.path.join(dirpath, d)
             try:
@@ -523,6 +531,8 @@ def _workspace_snapshot(exclude_rel):
         dirnames[:] = keep
         for name in filenames:
             rel = f"{rel_dir}/{name}" if rel_dir else name
+            if rel == ".git":
+                continue
             try:
                 st = os.lstat(os.path.join(dirpath, name))
             except OSError:
@@ -536,13 +546,14 @@ def _under(path, prefix):
     return path == prefix or path.startswith(prefix + "/")
 
 
-def _scope_report(prefixes, before, after, seconds):
+def _scope_report(prefixes, before, after, seconds, root=None):
     changed = sorted((set(before) | set(after)) - {p for p in before if p in after and before[p] == after[p]})
     violations = []
-    root_real = os.path.realpath(ROOT)
+    root = root or ROOT
+    root_real = os.path.realpath(root)
 
     def link_escapes(path):
-        target_real = os.path.realpath(os.path.join(ROOT, path))
+        target_real = os.path.realpath(os.path.join(root, path))
         if not target_real.startswith(root_real + os.sep):
             return True
         target_rel = os.path.relpath(target_real, root_real).replace(os.sep, "/")
@@ -589,11 +600,122 @@ def _scope_report(prefixes, before, after, seconds):
     }
 
 
+def _git_process(args, cwd, input_bytes=None, timeout=30):
+    try:
+        return subprocess.run(
+            ["git", *args], cwd=cwd, input=input_bytes, capture_output=True,
+            timeout=timeout, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise InputError(f"git 실행 실패: {type(e).__name__}")
+
+
+def _git_require(args, cwd, input_bytes=None):
+    proc = _git_process(args, cwd, input_bytes=input_bytes)
+    if proc.returncode != 0:
+        detail = proc.stderr.decode("utf-8", errors="replace").strip()
+        raise InputError(f"git {' '.join(args[:2])} 실패: {detail or 'exit ' + str(proc.returncode)}")
+    return proc.stdout
+
+
+def _remove_worktree(worktree):
+    proc = _git_process(["worktree", "remove", "--force", worktree], ROOT)
+    if proc.returncode != 0:
+        detail = proc.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"worktree 정리 실패: {detail or proc.returncode}")
+
+
+def _prepare_worktree(run_dir, mode):
+    base_raw = _git_require(["rev-parse", "HEAD"], ROOT)
+    base_rev = base_raw.decode("ascii", errors="strict").strip()
+    worktree = os.path.join(run_dir, "wt")
+    added = False
+    try:
+        _git_require(["worktree", "add", "--detach", worktree, "HEAD"], ROOT)
+        added = True
+        if mode == "dirty":
+            dirty = _git_require(["diff", "HEAD", "--binary"], ROOT)
+            if dirty:
+                _git_require(["apply", "-"], worktree, input_bytes=dirty)
+        copied = []
+        for rel in WORKTREE_INSTANCE_FILES:
+            source = os.path.join(ROOT, rel)
+            if not os.path.isfile(source):
+                continue
+            destination = os.path.join(worktree, rel)
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            shutil.copy2(source, destination)
+            copied.append(rel)
+        os.makedirs(os.path.join(worktree, "state"), exist_ok=True)
+        return os.path.realpath(worktree), {
+            "mode": mode,
+            "base_rev": base_rev,
+            "patch_sha256": None,
+            "files": [],
+            "added": 0,
+            "deleted": 0,
+        }, copied
+    except BaseException:
+        if added:
+            _remove_worktree(worktree)
+        raise
+
+
+def _worktree_pathspec(copied):
+    return [".", *[f":(exclude){rel}" for rel in copied]]
+
+
+def _capture_worktree(worktree, run_dir, copied):
+    pathspec = _worktree_pathspec(copied)
+    raw_untracked = _git_require(
+        ["ls-files", "--others", "--exclude-standard", "-z", "--", *pathspec], worktree,
+    )
+    untracked = sorted(
+        p for p in raw_untracked.decode("utf-8", errors="surrogateescape").split("\0") if p
+    )
+    if untracked:
+        _git_require(["add", "-N", "--", *untracked], worktree)
+    patch = _git_require(["diff", "HEAD", "--binary", "--", *pathspec], worktree)
+    raw_files = _git_require(["diff", "HEAD", "--name-only", "-z", "--", *pathspec], worktree)
+    files = sorted(
+        p for p in raw_files.decode("utf-8", errors="surrogateescape").split("\0") if p
+    )
+    numstat = _git_require(["diff", "HEAD", "--numstat", "-z", "--", *pathspec], worktree)
+    added = deleted = 0
+    fields = numstat.decode("utf-8", errors="surrogateescape").split("\0")
+    for field in fields:
+        if not field:
+            continue
+        columns = field.split("\t", 2)
+        if len(columns) >= 2:
+            if columns[0].isdigit():
+                added += int(columns[0])
+            if columns[1].isdigit():
+                deleted += int(columns[1])
+    patch_path = os.path.join(run_dir, "patch.diff")
+    untracked_path = os.path.join(run_dir, "untracked.txt")
+    _private_write(patch_path, patch)
+    _private_write(untracked_path, "".join(f"{path}\n" for path in untracked))
+    return {
+        "patch_sha256": _sha256(patch_path),
+        "files": files,
+        "added": added,
+        "deleted": deleted,
+    }
+
+
 def _write_meta(path, meta):
     _private_write(path, json.dumps(meta, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
 
 def _receipt(meta, result):
+    patch_line = ""
+    worktree = meta.get("worktree") or {}
+    if worktree.get("mode") is not None:
+        patch_line = (
+            f"patch: {len(worktree['files'])} files "
+            f"(+{worktree['added']}/-{worktree['deleted']})\n"
+        )
     fixed = (
         "FRESH_WORKER v1\n"
         f"run: {meta['run']}\n"
@@ -608,6 +730,7 @@ def _receipt(meta, result):
         f"result_bytes: {meta['result_bytes']}\n"
         f"scope: {meta['scope']['status']} (changed {meta['scope']['changed_count']}, "
         f"violations {meta['scope']['violation_count']})\n"
+        f"{patch_line}"
         "result:\n"
     )
     room = RECEIPT_MAX_BYTES - len(fixed.encode("utf-8"))
@@ -620,28 +743,30 @@ def _receipt(meta, result):
     return receipt
 
 
-def run(runtime, prompt_file, write_prefixes=(), strict_scope=False):
-    prefixes = [_normalize_prefix(p) for p in write_prefixes]
-    source, body = read_prompt(prompt_file)
-    run_id, run_dir, started = _new_run(runtime)
+def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
+                   worktree_meta, copied, write_prefixes=(), strict_scope=False):
+    prefixes = [_normalize_prefix(p, root=workspace) for p in write_prefixes]
     rel_run = os.path.relpath(run_dir, ROOT).replace(os.sep, "/")
     for prefix in prefixes:
         # A prefix may not exist yet; create it before the baseline so its own creation is not a
         # change outside itself (review R9). Creating it is the dispatcher's act, not the worker's.
-        os.makedirs(os.path.join(ROOT, prefix), exist_ok=True)
+        os.makedirs(os.path.join(workspace, prefix), exist_ok=True)
     t_scope = time.monotonic()
-    before = _workspace_snapshot(rel_run)
+    exclude_rel = rel_run if os.path.realpath(workspace) == os.path.realpath(ROOT) else "__outside__"
+    before = _workspace_snapshot(exclude_rel, root=workspace)
     scope_seconds = time.monotonic() - t_scope
     prompt_path = os.path.join(run_dir, "prompt.md")
     stream_path = os.path.join(run_dir, "stream.jsonl")
     stderr_path = os.path.join(run_dir, "stderr.log")
     result_path = os.path.join(run_dir, "result.txt")
+    runtime_result_path = (os.path.join(workspace, f".mottori-worker-result-{run_id}")
+                           if worktree_meta["mode"] is not None else result_path)
     meta_path = os.path.join(run_dir, "meta.json")
     effective = _effective_prompt(runtime, body)
     _private_write(prompt_path, effective)
 
     capability = CAPABILITIES[runtime]
-    command = _claude_command() if runtime == "claude" else _codex_command(result_path)
+    command = _claude_command() if runtime == "claude" else _codex_command(runtime_result_path)
     identity = _engine_identity()
     meta = {
         "schema_version": META_SCHEMA_VERSION,
@@ -650,9 +775,10 @@ def run(runtime, prompt_file, write_prefixes=(), strict_scope=False):
         "runtime": runtime,
         "capability": capability,
         **identity,
-        "harness_sha256": _harness_sha256(runtime, command, run_specific=(result_path,)),
+        "harness_sha256": _harness_sha256(runtime, command, run_specific=(runtime_result_path,)),
         "usage": {"raw": None, "input": None, "output": None, "total": None},
         "read_scope": None,
+        "worktree": worktree_meta,
         "scope": {"prefixes": prefixes, "status": "running", "changed_count": 0, "changed": [],
                   "violation_count": 0, "violations": [], "files_scanned": len(before),
                   "seconds": round(scope_seconds, 3)},
@@ -685,7 +811,8 @@ def run(runtime, prompt_file, write_prefixes=(), strict_scope=False):
                     input=effective.encode("utf-8"),
                     stdout=stream,
                     stderr=err,
-                    cwd=ROOT,
+                    cwd=workspace,
+                    env=dict(os.environ, MOTTORI_INSTANCE=workspace),
                     check=False,
                 )
                 process_exit = proc.returncode
@@ -707,20 +834,26 @@ def run(runtime, prompt_file, write_prefixes=(), strict_scope=False):
         result = _claude_result(stream_path)
         if result is not None:
             _private_write(result_path, result)
-    elif runtime == "codex" and os.path.isfile(result_path):
-        result = open(result_path, encoding="utf-8", errors="replace").read()
-        os.chmod(result_path, 0o600)
+    elif runtime == "codex" and os.path.isfile(runtime_result_path):
+        result = open(runtime_result_path, encoding="utf-8", errors="replace").read()
+        if runtime_result_path != result_path:
+            _private_write(result_path, result)
+            os.unlink(runtime_result_path)
+        else:
+            os.chmod(result_path, 0o600)
 
     t_scope = time.monotonic()
-    after = _workspace_snapshot(rel_run)
-    scope = _scope_report(prefixes, before, after, scope_seconds + (time.monotonic() - t_scope))
+    after = _workspace_snapshot(exclude_rel, root=workspace)
+    scope = _scope_report(prefixes, before, after, scope_seconds + (time.monotonic() - t_scope),
+                          root=workspace)
+    if worktree_meta["mode"] is not None:
+        worktree_meta.update(_capture_worktree(workspace, run_dir, copied))
 
     if strict_scope and scope["status"] == "scope_violation":
         # Post-run detection only: nothing is deleted or rolled back; the paths are on record.
         # A violation outranks the runtime's own exit code (review R3): process_exit stays in meta.
-        # Without --strict-scope the violations stay in meta/receipt but do not fail the run, because
-        # a concurrent writer (a background logger, the dispatcher editing a doc) is indistinguishable
-        # from the worker (live canary 2026-09-16: 2 of 2 violations were concurrent writers).
+        # Without --strict-scope the violations stay in meta/receipt but do not fail the run. In
+        # worktree mode they can only come from the worker; legacy mode can include concurrent writers.
         wrapper_exit = WRAPPER_SCOPE_VIOLATION
         status_name = "scope_violation"
         if process_exit == 0 and (result is None or not result.strip()):
@@ -750,7 +883,33 @@ def run(runtime, prompt_file, write_prefixes=(), strict_scope=False):
         "scope": scope,
     })
     _write_meta(meta_path, meta)
-    sys.stdout.write(_receipt(meta, result))
+    return _receipt(meta, result), wrapper_exit
+
+
+def run(runtime, prompt_file, write_prefixes=(), strict_scope=False, worktree_mode=None):
+    source, body = read_prompt(prompt_file)
+    run_id, run_dir, started = _new_run(runtime)
+    workspace = ROOT
+    copied = []
+    worktree_meta = {
+        "mode": None,
+        "base_rev": None,
+        "patch_sha256": None,
+        "files": [],
+        "added": 0,
+        "deleted": 0,
+    }
+    if worktree_mode is not None:
+        workspace, worktree_meta, copied = _prepare_worktree(run_dir, worktree_mode)
+    try:
+        receipt, wrapper_exit = _run_workspace(
+            runtime, source, body, run_id, run_dir, started, workspace, worktree_meta, copied,
+            write_prefixes=write_prefixes, strict_scope=strict_scope,
+        )
+    finally:
+        if worktree_mode is not None:
+            _remove_worktree(workspace)
+    sys.stdout.write(receipt)
     return wrapper_exit
 
 
@@ -764,13 +923,17 @@ def main(argv=None):
                          "is still recorded with scope status 'unchecked'.")
     ap.add_argument("--strict-scope", action="store_true",
                     help="With --write-prefix: a violation makes the run status scope_violation "
-                         "(wrapper_exit 4). Default is report-only, because concurrent writers are "
-                         "indistinguishable from the worker.")
+                         "(wrapper_exit 4). Default is report-only. In worktree mode scope is measured "
+                         "inside the isolate and the original tree is not writable by the worker.")
+    ap.add_argument("--worktree", nargs="?", const="dirty", choices=("head", "dirty"),
+                    help="Run in <run>/wt and extract patch.diff plus untracked.txt. 'head' starts "
+                         "from HEAD; 'dirty' first applies the original tree's tracked git diff. "
+                         "A bare --worktree means dirty.")
     ap.add_argument("prompt_file")
     args = ap.parse_args(argv)
     try:
         return run(args.runtime, args.prompt_file, write_prefixes=args.write_prefix,
-                   strict_scope=args.strict_scope)
+                   strict_scope=args.strict_scope, worktree_mode=args.worktree)
     except InputError as e:
         print(f"fresh-worker input rejected: {e}", file=sys.stderr)
         return 2

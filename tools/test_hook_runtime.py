@@ -87,11 +87,11 @@ def _installer(root, mode):
 
 
 def _hook_path(root):
-    gitdir = subprocess.run(["git", "rev-parse", "--git-dir"], cwd=root,
-                            capture_output=True, text=True, check=True).stdout.strip()
-    if not os.path.isabs(gitdir):
-        gitdir = os.path.join(root, gitdir)
-    return os.path.join(gitdir, "hooks", "pre-commit")
+    hooks = subprocess.run(["git", "rev-parse", "--git-path", "hooks"], cwd=root,
+                           capture_output=True, text=True, check=True).stdout.strip()
+    if not os.path.isabs(hooks):
+        hooks = os.path.join(root, hooks)
+    return os.path.join(os.path.realpath(hooks), "pre-commit")
 
 
 def test_installer_check_is_read_only_and_repair_is_exact():
@@ -164,10 +164,7 @@ def test_installer_uses_common_hooks_in_linked_worktree():
 
         r = _installer(linked, "--repair")
         assert r.returncode == 0, r.stdout + r.stderr
-        hooks = subprocess.run(
-            ["git", "rev-parse", "--path-format=absolute", "--git-path", "hooks"],
-            cwd=linked, capture_output=True, text=True, check=True).stdout.strip()
-        assert os.path.isfile(os.path.join(hooks, "pre-commit"))
+        assert os.path.isfile(_hook_path(linked))
     finally:
         subprocess.run(["git", "worktree", "remove", "--force", linked],
                        cwd=root, capture_output=True)
@@ -199,6 +196,40 @@ def test_canary_parser_reads_only_agent_messages():
     assert messages == ["ABSENT"]
     assert tool_count == 1
     assert token not in "\n".join(messages)
+
+
+def test_all_canary_persists_runtime_results_without_nonce():
+    import hook_canary
+    root = tempfile.mkdtemp(prefix="hook-canary-result-")
+    result_path = os.path.join(root, "state", "hook-canary.json")
+    old_path = hook_canary.RESULT_PATH
+    old_argv = sys.argv[:]
+    old_codex = hook_canary._codex_canary
+    old_claude = hook_canary._claude_canary
+    old_token_hex = hook_canary.secrets.token_hex
+    try:
+        hook_canary.RESULT_PATH = result_path
+        hook_canary._codex_canary = lambda token: True
+        hook_canary._claude_canary = lambda token: False
+        hook_canary.secrets.token_hex = lambda size: "SECRET-NONCE"
+        sys.argv = ["hook_canary.py", "--all"]
+        assert hook_canary.main() == 1
+        payload = json.load(open(result_path, encoding="utf-8"))
+        assert payload["schema_version"] == 1
+        assert set(payload["runtimes"]) == {"codex", "claude"}
+        assert payload["runtimes"]["codex"]["status"] == "PASS"
+        assert payload["runtimes"]["codex"]["effect"] == "verified"
+        assert payload["runtimes"]["claude"]["status"] == "FAIL"
+        assert payload["runtimes"]["claude"]["effect"] == "not_verified"
+        assert all(row["checked_at"] for row in payload["runtimes"].values())
+        assert "SECRET" not in open(result_path, encoding="utf-8").read()
+    finally:
+        hook_canary.RESULT_PATH = old_path
+        hook_canary._codex_canary = old_codex
+        hook_canary._claude_canary = old_claude
+        hook_canary.secrets.token_hex = old_token_hex
+        sys.argv = old_argv
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def test_precommit_now_check_reads_extracted_index_tree():
@@ -303,6 +334,7 @@ TESTS = [
     test_installer_uses_common_hooks_in_linked_worktree,
     test_installer_honors_relative_hookspath,
     test_canary_parser_reads_only_agent_messages,
+    test_all_canary_persists_runtime_results_without_nonce,
     test_precommit_now_check_reads_extracted_index_tree,
 ]
 
