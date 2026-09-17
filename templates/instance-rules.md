@@ -1,57 +1,57 @@
-# 인스턴스 규약 — CHANGEME
+# Instance rules: CHANGEME
 
-*이 파일은 git에 안 올라간다 (`.gitignore`). 이 머신에서만 참인 것을 여기 쓴다.*
-*`AGENTS.md` 상시 코어 1(불가침)이 이 문서를 가리킨다.*
+*This file is not committed because `.gitignore` excludes it. Write only facts specific to this machine here.*
+*Always-on core rule 1 in `AGENTS.md`, Do not touch frozen areas, points to this document.*
 
-작성일: CHANGEME · context: CHANGEME
+Written: CHANGEME · context: CHANGEME
 
 ---
 
-## 1. 동결 구역 — 읽기만, 재구성·삭제·추가 금지
+## 1. Frozen areas: read only; do not reorganize, delete, or add
 
-여기 적힌 경로는 에이전트가 손대지 않는다.
+Agents do not modify paths listed here.
 
-- (예) `evidence/` — 제출 증빙. 원본성 자체가 가치라 재구성이 훼손이다
-- (예) `archive/` — 완결된 기록
+- Example: `evidence/`, submission evidence whose original form is valuable and would be damaged by reconstruction
+- Example: `archive/`, completed records
 - CHANGEME
 
-*비어 있으면 "아직 없음"이라고 쓴다. 빈 채로 두면 안 쓴 건지 없는 건지 모른다.*
+*If there are none yet, write "none yet". A blank section cannot distinguish unwritten from absent.*
 
-## 2. 데이터 국경 — 무엇이 안이고 무엇이 밖인가
+## 2. Data boundary: what is inside and what is outside
 
-`system/rituals.md`의 "데이터 국경" 절이 원리 셋을 준다. 여기서는 **이 인스턴스의 방향**을
-구체적으로 못박는다.
+The Data boundary section of `system/rituals.md` gives three principles. Specify **this instance's direction** here.
 
-**반입물 (밖 → 여기).** 무엇을 사람이 직접 가져오는가.
+**Imports (outside to here).** What does a person bring in directly?
 - CHANGEME
 
-**착지점.** 반입물이 어디로 가는가. 하나여야 한다.
-- (예) `_private/work/` — 세션 내 열람·recall 허용, 커밋·인용·외부 전송 금지
+**Landing point.** Where do imports go? There must be one place.
+- Example: `_private/work/`, readable and searchable within a session but never committed, quoted, or sent externally
 - CHANGEME
 
-**절대 나가면 안 되는 것 (여기 → 밖).** 어느 원격·클라우드·아티팩트로도.
+**What must never leave (here to outside).** This applies to every remote, cloud, and artifact.
 - CHANGEME
 
-**반출 경로.** 나가도 되는 것은 어떻게 나가는가 (사람 손? 복붙? 특정 채널?).
+**Export path.** How may permitted material leave, such as by a person, copy and paste, or a named channel?
 - CHANGEME
 
-## 3. 원격 정책
+## 3. Remote policy
 
-`system/memory-config.json`의 `instance.remote_allowlist`가 기계적 집행부다.
-`python3 tools/doctor.py`의 밸브 검사가 매번 확인한다.
+`instance.remote_allowlist` in `system/memory-config.json` is the mechanical enforcement point.
+The valve check in `python3 tools/doctor.py` verifies it each time.
 
-- 이 인스턴스의 허용 원격: CHANGEME (없으면 "없음 — 원격을 두지 않는다")
-- 백업은 어떻게 하는가: CHANGEME
-  *(원격이 없으면 이 리포는 백업되지 않는다. 그 백업을 따로 마련해야 한다.)*
+- Allowed remotes for this instance: CHANGEME (if none, write "none; do not configure a remote")
+- Backup method: CHANGEME
+  *(Without a remote, this repository is not backed up. Arrange a separate backup.)*
 
-## 4. 이 머신 특유의 제약
+## 4. Constraints specific to this machine
 
-- (예) 회사 정책상 금지된 것: 화면 녹화, 미팅 녹음, 외부 API 호출
-- (예) 설치 못 하는 것
+- Example: company policy forbids screen recording, meeting recording, or external API calls
+- Example: software that cannot be installed
 - CHANGEME
 
-## 5. 트랙
+## 5. Tracks
 
-`system/memory-config.json`의 `tracks`가 정본이다. 여기엔 왜 그 트랙인지만 한 줄씩.
+The `tracks` array in `system/memory-config.json` is authoritative. Record only one line explaining why each
+track exists.
 
 - CHANGEME

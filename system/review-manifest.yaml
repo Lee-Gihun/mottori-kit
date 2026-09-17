@@ -3,6 +3,19 @@
   "generated_by": "tools/manifest_build.py",
   "files": [
     {
+      "path": ".claude/commands/dossier.ko.md",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude"
+      ],
+      "depends_on": [
+        "tools/now.py"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": ".claude/commands/dossier.md",
       "kind": "tool",
       "owner": "kit",
@@ -12,6 +25,19 @@
       ],
       "depends_on": [
         "tools/now.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": ".claude/commands/garden.ko.md",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude"
+      ],
+      "depends_on": [
+        "tools/wf_gardener.js"
       ],
       "reviewed_at": null
     },
@@ -29,6 +55,19 @@
       "reviewed_at": null
     },
     {
+      "path": ".claude/commands/now.ko.md",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude"
+      ],
+      "depends_on": [
+        "tools/now.py"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": ".claude/commands/now.md",
       "kind": "tool",
       "owner": "kit",
@@ -38,6 +77,21 @@
       ],
       "depends_on": [
         "tools/now.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": ".claude/commands/paper-to-kit.ko.md",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude"
+      ],
+      "depends_on": [
+        "system/evidence-schema.md",
+        "system/skills/paper-to-kit.md",
+        "tools/skill_adapters.py"
       ],
       "reviewed_at": null
     },
@@ -53,6 +107,19 @@
         "system/evidence-schema.md",
         "system/skills/paper-to-kit.md",
         "tools/skill_adapters.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": ".claude/commands/recall.ko.md",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude"
+      ],
+      "depends_on": [
+        "tools/recall.py"
       ],
       "reviewed_at": null
     },
@@ -107,23 +174,26 @@
         "tool"
       ],
       "depends_on": [
+        "AGENTS.ko.md",
         "AGENTS.md",
+        "CHANGELOG.ko.md",
         "CHANGELOG.md",
+        "CHECKLIST.ko.md",
         "CHECKLIST.md",
         "CLAUDE.md",
         "LICENSE",
+        "README.ko.md",
         "README.md",
+        "SETUP.ko.md",
         "SETUP.md",
         "setup.sh",
         "state/.gitkeep",
-        "system/debate/README.md",
-        "system/kit-decisions.md",
-        "system/rituals.md"
+        "system/debate/README.md"
       ],
       "reviewed_at": null
     },
     {
-      "path": "AGENTS.md",
+      "path": "AGENTS.ko.md",
       "kind": "rule",
       "owner": "kit",
       "consumers": [
@@ -133,6 +203,7 @@
       ],
       "depends_on": [
         ".gitignore",
+        "AGENTS.md",
         "CLAUDE.md",
         "README.md",
         "SETUP.md",
@@ -149,6 +220,92 @@
         "tools/now.py",
         "tools/rec.py",
         "tools/recall.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "AGENTS.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "AGENTS.ko.md",
+        "CLAUDE.md",
+        "README.md",
+        "SETUP.md",
+        "system/PRD-info-architecture.md",
+        "system/PRD-session-memory.md",
+        "system/WORKING-WITH-AI.md",
+        "system/debate/README.md",
+        "system/deep-pass.md",
+        "system/kit-decisions.md",
+        "system/lenses/README.md",
+        "system/rituals.md",
+        "templates/instance-rules.md",
+        "tools/doctor.py",
+        "tools/now.py",
+        "tools/rec.py",
+        "tools/recall.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "CHANGELOG.ko.md",
+      "kind": "evidence",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "LICENSE",
+        "SETUP.md",
+        "setup.sh",
+        "system/enforcement-matrix.yaml",
+        "system/kit-decisions.md",
+        "system/language-pending.txt",
+        "system/review-manifest.yaml",
+        "system/reviews/content-audit.tsv",
+        "system/rituals.md",
+        "system/skills/paper-to-kit.md",
+        "system/test-matrix.yaml",
+        "tools/context_budget.py",
+        "tools/doctor.py",
+        "tools/enforce.py",
+        "tools/evidencecheck.py",
+        "tools/gate.py",
+        "tools/i18n.py",
+        "tools/install_hooks.sh",
+        "tools/receipts.py",
+        "tools/skill_adapters.py",
+        "tools/sync_engine.sh",
+        "tools/test_bypass_pins.py",
+        "tools/test_egress.py",
+        "tools/test_enforce.py",
+        "tools/test_evidencecheck.py",
+        "tools/test_fresh_install.sh",
+        "tools/test_fresh_worker.py",
+        "tools/test_i18n.py",
+        "tools/test_install_checks.py",
+        "tools/test_language.py",
+        "tools/test_manifests.py",
+        "tools/test_matrix_check.py",
+        "tools/test_memlib_journal.py",
+        "tools/test_mutation.py",
+        "tools/test_portability.py",
+        "tools/test_receipts.py",
+        "tools/test_skill_parity.py",
+        "tools/test_state_runtime.py",
+        "tools/worker_batch.py"
       ],
       "reviewed_at": null
     },
@@ -170,6 +327,7 @@
         "setup.sh",
         "system/enforcement-matrix.yaml",
         "system/kit-decisions.md",
+        "system/language-pending.txt",
         "system/review-manifest.yaml",
         "system/reviews/content-audit.tsv",
         "system/rituals.md",
@@ -180,6 +338,7 @@
         "tools/enforce.py",
         "tools/evidencecheck.py",
         "tools/gate.py",
+        "tools/i18n.py",
         "tools/install_hooks.sh",
         "tools/receipts.py",
         "tools/skill_adapters.py",
@@ -192,6 +351,7 @@
         "tools/test_fresh_worker.py",
         "tools/test_i18n.py",
         "tools/test_install_checks.py",
+        "tools/test_language.py",
         "tools/test_manifests.py",
         "tools/test_matrix_check.py",
         "tools/test_memlib_journal.py",
@@ -201,6 +361,32 @@
         "tools/test_skill_parity.py",
         "tools/test_state_runtime.py",
         "tools/worker_batch.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "CHECKLIST.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".claude/settings.json",
+        ".gitignore",
+        "AGENTS.md",
+        "setup.sh",
+        "tools/ask_codex.sh",
+        "tools/diarize.py",
+        "tools/doctor.py",
+        "tools/gate.py",
+        "tools/install_hooks.sh",
+        "tools/linkcheck.py",
+        "tools/now.py",
+        "tools/recall.py",
+        "tools/transcribe.py"
       ],
       "reviewed_at": null
     },
@@ -217,6 +403,7 @@
         ".claude/settings.json",
         ".gitignore",
         "AGENTS.md",
+        "CHECKLIST.ko.md",
         "setup.sh",
         "tools/ask_codex.sh",
         "tools/diarize.py",
@@ -254,7 +441,7 @@
       "reviewed_at": null
     },
     {
-      "path": "README.md",
+      "path": "README.ko.md",
       "kind": "evidence",
       "owner": "kit",
       "consumers": [
@@ -276,7 +463,30 @@
       "reviewed_at": null
     },
     {
-      "path": "SETUP.md",
+      "path": "README.md",
+      "kind": "evidence",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "CHECKLIST.md",
+        "README.ko.md",
+        "SETUP.md",
+        "setup.sh",
+        "tools/doctor.py",
+        "tools/install_hooks.sh",
+        "tools/recall.py",
+        "tools/skill_adapters.py",
+        "tools/test_fresh_install.sh"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "SETUP.ko.md",
       "kind": "rule",
       "owner": "kit",
       "consumers": [
@@ -291,6 +501,41 @@
         "CHANGELOG.md",
         "CHECKLIST.md",
         "CLAUDE.md",
+        "SETUP.md",
+        "setup.sh",
+        "system/PRD-session-memory.md",
+        "system/rituals.md",
+        "tools/ask_codex.sh",
+        "tools/doctor.py",
+        "tools/fresh_worker.py",
+        "tools/gate.py",
+        "tools/install_hooks.sh",
+        "tools/linkcheck.py",
+        "tools/now.py",
+        "tools/rec.py",
+        "tools/test_fresh_install.sh",
+        "tools/test_portability.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "SETUP.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".claude/settings.json",
+        ".gitignore",
+        "AGENTS.ko.md",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CHECKLIST.md",
+        "CLAUDE.md",
+        "SETUP.ko.md",
         "setup.sh",
         "system/PRD-session-memory.md",
         "system/rituals.md",
@@ -319,10 +564,8 @@
         ".gitignore",
         "AGENTS.md",
         "SETUP.md",
-        "templates/decisions.md",
         "templates/instance-rules.md",
         "templates/memory-config.json",
-        "templates/rituals.local.md",
         "tools/doctor.py",
         "tools/gate.py",
         "tools/i18n.py",
@@ -340,6 +583,30 @@
         "tool"
       ],
       "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/PRD-info-architecture.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".claude/settings.json",
+        ".gitignore",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "system/PRD-info-architecture.md",
+        "tools/coherence.py",
+        "tools/fresh_worker.py",
+        "tools/gate.py",
+        "tools/hook_canary.py",
+        "tools/now.py",
+        "tools/rec.py"
+      ],
       "reviewed_at": null
     },
     {
@@ -366,6 +633,31 @@
       "reviewed_at": null
     },
     {
+      "path": "system/PRD-session-memory.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".claude/commands/dossier.md",
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "tools/fresh_worker.py",
+        "tools/memlib.py",
+        "tools/now.py",
+        "tools/rec.py",
+        "tools/recall.py",
+        "tools/receipts.py",
+        "tools/wf_gardener.js"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": "system/PRD-session-memory.md",
       "kind": "rule",
       "owner": "kit",
@@ -387,6 +679,20 @@
         "tools/recall.py",
         "tools/receipts.py",
         "tools/wf_gardener.js"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/WORKING-WITH-AI.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        "tools/fresh_worker.py"
       ],
       "reviewed_at": null
     },
@@ -421,6 +727,23 @@
       "reviewed_at": null
     },
     {
+      "path": "system/deep-pass.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        "README.md",
+        "system/debate/README.md",
+        "system/lenses/silence.md",
+        "system/person-ledger.md"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": "system/deep-pass.md",
       "kind": "rule",
       "owner": "kit",
@@ -434,6 +757,24 @@
         "system/debate/README.md",
         "system/lenses/silence.md",
         "system/person-ledger.md"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/enforcement-matrix.ko.md",
+      "kind": "evidence",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/evidencecheck.py",
+        "tools/gate.py",
+        "tools/precommit-hook.sh",
+        "tools/test_evidencecheck.py"
       ],
       "reviewed_at": null
     },
@@ -496,6 +837,26 @@
       "reviewed_at": null
     },
     {
+      "path": "system/evidence-schema.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        "CHANGELOG.md",
+        "system/enforcement-matrix.md",
+        "system/kit-decisions.md",
+        "tools/evidencecheck.py",
+        "tools/gate.py",
+        "tools/test_evidencecheck.py"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": "system/evidence-schema.md",
       "kind": "rule",
       "owner": "kit",
@@ -512,6 +873,30 @@
         "tools/evidencecheck.py",
         "tools/gate.py",
         "tools/test_evidencecheck.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/kit-decisions.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CLAUDE.md",
+        "setup.sh",
+        "system/kit-decisions.md",
+        "system/rituals.md",
+        "tools/memlib.py",
+        "tools/sync_engine.sh",
+        "tools/test_fresh_install.sh",
+        "tools/test_fresh_worker.py"
       ],
       "reviewed_at": null
     },
@@ -539,6 +924,97 @@
       "reviewed_at": null
     },
     {
+      "path": "system/language-pending.txt",
+      "kind": "evidence",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        "README.md",
+        "setup.sh",
+        "system/PRD-info-architecture.md",
+        "system/PRD-session-memory.md",
+        "system/WORKING-WITH-AI.md",
+        "system/debate/README.md",
+        "system/deep-pass.md",
+        "system/enforcement-matrix.yaml",
+        "system/kit-decisions.md",
+        "system/lenses/README.md",
+        "system/lenses/ergodic.md",
+        "system/lenses/feedback-loop.md",
+        "system/lenses/fence.md",
+        "system/lenses/feynman.md",
+        "system/lenses/incentive.md",
+        "system/lenses/inversion.md",
+        "system/lenses/isomorphism.md",
+        "system/lenses/jensen.md",
+        "system/lenses/ledger.md",
+        "system/lenses/limits.md",
+        "system/lenses/marginal.md",
+        "system/lenses/mirror.md",
+        "system/lenses/silence.md",
+        "system/person-ledger.md",
+        "system/reviews/architecture.md",
+        "system/reviews/content-audit.tsv",
+        "system/rituals.md",
+        "templates/memory-config.json",
+        "tools/ask_codex.sh",
+        "tools/build_memory_map.py",
+        "tools/codex_root_thread.py",
+        "tools/coherence.py",
+        "tools/diarize.py",
+        "tools/doctor.py",
+        "tools/enforce.py",
+        "tools/eval_recall.py",
+        "tools/evidencecheck.py",
+        "tools/fresh_worker.py",
+        "tools/gate.py",
+        "tools/hook_canary.py",
+        "tools/hookdiag.py",
+        "tools/install_hooks.sh",
+        "tools/linkcheck.py",
+        "tools/memlib.py",
+        "tools/now.py",
+        "tools/portrait.py",
+        "tools/precommit-hook.sh",
+        "tools/rec.py",
+        "tools/recall.py",
+        "tools/receipts.py",
+        "tools/test_bypass_pins.py",
+        "tools/test_coherence.py",
+        "tools/test_enforce.py",
+        "tools/test_fresh_install.sh",
+        "tools/test_hook_runtime.py",
+        "tools/test_i18n.py",
+        "tools/test_install_checks.py",
+        "tools/test_memcheck.py",
+        "tools/test_setup_migration.py",
+        "tools/test_state_runtime.py",
+        "tools/transcribe.py",
+        "tools/wf_gardener.js"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/README.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        "AGENTS.md",
+        "system/rituals.md"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": "system/lenses/README.md",
       "kind": "rule",
       "owner": "kit",
@@ -554,7 +1030,31 @@
       "reviewed_at": null
     },
     {
+      "path": "system/lenses/ergodic.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
       "path": "system/lenses/ergodic.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/feedback-loop.ko.md",
       "kind": "rule",
       "owner": "kit",
       "consumers": [
@@ -578,7 +1078,31 @@
       "reviewed_at": null
     },
     {
+      "path": "system/lenses/fence.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
       "path": "system/lenses/fence.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/feynman.ko.md",
       "kind": "rule",
       "owner": "kit",
       "consumers": [
@@ -602,7 +1126,31 @@
       "reviewed_at": null
     },
     {
+      "path": "system/lenses/incentive.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
       "path": "system/lenses/incentive.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/inversion.ko.md",
       "kind": "rule",
       "owner": "kit",
       "consumers": [
@@ -626,7 +1174,31 @@
       "reviewed_at": null
     },
     {
+      "path": "system/lenses/isomorphism.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
       "path": "system/lenses/isomorphism.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/jensen.ko.md",
       "kind": "rule",
       "owner": "kit",
       "consumers": [
@@ -650,7 +1222,31 @@
       "reviewed_at": null
     },
     {
+      "path": "system/lenses/ledger.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
       "path": "system/lenses/ledger.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/limits.ko.md",
       "kind": "rule",
       "owner": "kit",
       "consumers": [
@@ -674,7 +1270,31 @@
       "reviewed_at": null
     },
     {
+      "path": "system/lenses/marginal.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
       "path": "system/lenses/marginal.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/lenses/mirror.ko.md",
       "kind": "rule",
       "owner": "kit",
       "consumers": [
@@ -698,7 +1318,31 @@
       "reviewed_at": null
     },
     {
+      "path": "system/lenses/silence.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
       "path": "system/lenses/silence.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/person-ledger.ko.md",
       "kind": "rule",
       "owner": "kit",
       "consumers": [
@@ -730,6 +1374,167 @@
         "claude",
         "codex",
         "tool"
+      ],
+      "depends_on": [
+        ".claude/commands/dossier.ko.md",
+        ".claude/commands/dossier.md",
+        ".claude/commands/garden.ko.md",
+        ".claude/commands/garden.md",
+        ".claude/commands/now.ko.md",
+        ".claude/commands/now.md",
+        ".claude/commands/paper-to-kit.ko.md",
+        ".claude/commands/paper-to-kit.md",
+        ".claude/commands/recall.ko.md",
+        ".claude/commands/recall.md",
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        ".gitignore",
+        "AGENTS.ko.md",
+        "AGENTS.md",
+        "CHANGELOG.ko.md",
+        "CHANGELOG.md",
+        "CHECKLIST.ko.md",
+        "CHECKLIST.md",
+        "CLAUDE.md",
+        "LICENSE",
+        "README.ko.md",
+        "README.md",
+        "SETUP.ko.md",
+        "SETUP.md",
+        "setup.sh",
+        "state/.gitkeep",
+        "system/PRD-info-architecture.ko.md",
+        "system/PRD-info-architecture.md",
+        "system/PRD-session-memory.ko.md",
+        "system/PRD-session-memory.md",
+        "system/WORKING-WITH-AI.ko.md",
+        "system/WORKING-WITH-AI.md",
+        "system/debate/README.md",
+        "system/deep-pass.ko.md",
+        "system/deep-pass.md",
+        "system/enforcement-matrix.ko.md",
+        "system/enforcement-matrix.md",
+        "system/enforcement-matrix.yaml",
+        "system/evidence-schema.ko.md",
+        "system/evidence-schema.md",
+        "system/kit-decisions.ko.md",
+        "system/kit-decisions.md",
+        "system/language-pending.txt",
+        "system/lenses/README.ko.md",
+        "system/lenses/README.md",
+        "system/lenses/ergodic.ko.md",
+        "system/lenses/ergodic.md",
+        "system/lenses/feedback-loop.ko.md",
+        "system/lenses/feedback-loop.md",
+        "system/lenses/fence.ko.md",
+        "system/lenses/fence.md",
+        "system/lenses/feynman.ko.md",
+        "system/lenses/feynman.md",
+        "system/lenses/incentive.ko.md",
+        "system/lenses/incentive.md",
+        "system/lenses/inversion.ko.md",
+        "system/lenses/inversion.md",
+        "system/lenses/isomorphism.ko.md",
+        "system/lenses/isomorphism.md",
+        "system/lenses/jensen.ko.md",
+        "system/lenses/jensen.md",
+        "system/lenses/ledger.ko.md",
+        "system/lenses/ledger.md",
+        "system/lenses/limits.ko.md",
+        "system/lenses/limits.md",
+        "system/lenses/marginal.ko.md",
+        "system/lenses/marginal.md",
+        "system/lenses/mirror.ko.md",
+        "system/lenses/mirror.md",
+        "system/lenses/silence.ko.md",
+        "system/lenses/silence.md",
+        "system/person-ledger.ko.md",
+        "system/person-ledger.md",
+        "system/reviews/architecture.ko.md",
+        "system/reviews/architecture.md",
+        "system/reviews/content-audit.tsv",
+        "system/rituals.ko.md",
+        "system/rituals.md",
+        "system/skills/paper-to-kit.ko.md",
+        "system/skills/paper-to-kit.md",
+        "system/test-matrix.yaml",
+        "templates/decisions.ko.md",
+        "templates/decisions.md",
+        "templates/instance-rules.ko.md",
+        "templates/instance-rules.md",
+        "templates/memory-config.json",
+        "templates/rituals.local.ko.md",
+        "templates/rituals.local.md",
+        "tools/ask_codex.sh",
+        "tools/build_memory_map.py",
+        "tools/codex_root_thread.py",
+        "tools/coherence.py",
+        "tools/context_budget.py",
+        "tools/diarize.py",
+        "tools/doctor.py",
+        "tools/enforce.py",
+        "tools/eval_recall.py",
+        "tools/evidencecheck.py",
+        "tools/fresh_worker.py",
+        "tools/gate.py",
+        "tools/hook_canary.py",
+        "tools/hookdiag.py",
+        "tools/i18n.py",
+        "tools/install_hooks.sh",
+        "tools/linkcheck.py",
+        "tools/manifest_build.py",
+        "tools/memlib.py",
+        "tools/now.py",
+        "tools/portrait.py",
+        "tools/precommit-hook.sh",
+        "tools/rec.py",
+        "tools/recall.py",
+        "tools/receipts.py",
+        "tools/skill_adapters.py",
+        "tools/sync_engine.sh",
+        "tools/test_bypass_pins.py",
+        "tools/test_coherence.py",
+        "tools/test_context_budget.py",
+        "tools/test_doctor_json.py",
+        "tools/test_egress.py",
+        "tools/test_enforce.py",
+        "tools/test_evidencecheck.py",
+        "tools/test_fresh_install.sh",
+        "tools/test_fresh_worker.py",
+        "tools/test_hook_runtime.py",
+        "tools/test_hookdiag.py",
+        "tools/test_i18n.py",
+        "tools/test_install_checks.py",
+        "tools/test_install_hooks.py",
+        "tools/test_language.py",
+        "tools/test_manifests.py",
+        "tools/test_matrix_check.py",
+        "tools/test_memcheck.py",
+        "tools/test_memlib_journal.py",
+        "tools/test_mutation.py",
+        "tools/test_portability.py",
+        "tools/test_rec.py",
+        "tools/test_recall.py",
+        "tools/test_receipts.py",
+        "tools/test_setup_migration.py",
+        "tools/test_skill_parity.py",
+        "tools/test_state_runtime.py",
+        "tools/test_tool_entrypoints.py",
+        "tools/test_worker_batch.py",
+        "tools/transcribe.py",
+        "tools/wf_gardener.js",
+        "tools/worker_batch.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/reviews/architecture.ko.md",
+      "kind": "evidence",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
       ],
       "depends_on": [
         ".claude/commands/dossier.md",
@@ -773,11 +1578,10 @@
         "system/lenses/mirror.md",
         "system/lenses/silence.md",
         "system/person-ledger.md",
+        "system/review-manifest.yaml",
         "system/reviews/architecture.md",
-        "system/reviews/content-audit.tsv",
         "system/rituals.md",
         "system/skills/paper-to-kit.md",
-        "system/test-matrix.yaml",
         "templates/decisions.md",
         "templates/instance-rules.md",
         "templates/memory-config.json",
@@ -786,10 +1590,8 @@
         "tools/build_memory_map.py",
         "tools/codex_root_thread.py",
         "tools/coherence.py",
-        "tools/context_budget.py",
         "tools/diarize.py",
         "tools/doctor.py",
-        "tools/enforce.py",
         "tools/eval_recall.py",
         "tools/evidencecheck.py",
         "tools/fresh_worker.py",
@@ -809,12 +1611,8 @@
         "tools/receipts.py",
         "tools/skill_adapters.py",
         "tools/sync_engine.sh",
-        "tools/test_bypass_pins.py",
         "tools/test_coherence.py",
-        "tools/test_context_budget.py",
         "tools/test_doctor_json.py",
-        "tools/test_egress.py",
-        "tools/test_enforce.py",
         "tools/test_evidencecheck.py",
         "tools/test_fresh_install.sh",
         "tools/test_fresh_worker.py",
@@ -824,10 +1622,8 @@
         "tools/test_install_checks.py",
         "tools/test_install_hooks.py",
         "tools/test_manifests.py",
-        "tools/test_matrix_check.py",
         "tools/test_memcheck.py",
         "tools/test_memlib_journal.py",
-        "tools/test_mutation.py",
         "tools/test_portability.py",
         "tools/test_rec.py",
         "tools/test_recall.py",
@@ -835,11 +1631,8 @@
         "tools/test_setup_migration.py",
         "tools/test_skill_parity.py",
         "tools/test_state_runtime.py",
-        "tools/test_tool_entrypoints.py",
-        "tools/test_worker_batch.py",
         "tools/transcribe.py",
-        "tools/wf_gardener.js",
-        "tools/worker_batch.py"
+        "tools/wf_gardener.js"
       ],
       "reviewed_at": null
     },
@@ -1061,6 +1854,29 @@
       "reviewed_at": null
     },
     {
+      "path": "system/rituals.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [
+        "AGENTS.md",
+        "CLAUDE.md",
+        "README.md",
+        "system/PRD-session-memory.md",
+        "system/lenses/README.md",
+        "tools/doctor.py",
+        "tools/linkcheck.py",
+        "tools/now.py",
+        "tools/rec.py",
+        "tools/recall.py"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": "system/rituals.md",
       "kind": "rule",
       "owner": "kit",
@@ -1080,6 +1896,21 @@
         "tools/now.py",
         "tools/rec.py",
         "tools/recall.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/skills/paper-to-kit.ko.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        "system/evidence-schema.md"
       ],
       "reviewed_at": null
     },
@@ -1165,6 +1996,22 @@
       "reviewed_at": null
     },
     {
+      "path": "templates/decisions.ko.md",
+      "kind": "template",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        "system/kit-decisions.md",
+        "tools/memlib.py"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": "templates/decisions.md",
       "kind": "template",
       "owner": "kit",
@@ -1177,6 +2024,24 @@
       "depends_on": [
         "system/kit-decisions.md",
         "tools/memlib.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "templates/instance-rules.ko.md",
+      "kind": "template",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        ".gitignore",
+        "AGENTS.md",
+        "system/rituals.md",
+        "tools/doctor.py"
       ],
       "reviewed_at": null
     },
@@ -1211,6 +2076,21 @@
       "depends_on": [
         "setup.sh",
         "tools/memlib.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "templates/rituals.local.ko.md",
+      "kind": "template",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [
+        "system/rituals.md"
       ],
       "reviewed_at": null
     },
@@ -1486,6 +2366,7 @@
       ],
       "depends_on": [
         "system/enforcement-matrix.yaml",
+        "system/language-pending.txt",
         "system/review-manifest.yaml",
         "system/reviews/content-audit.tsv",
         "system/test-matrix.yaml",
@@ -1495,6 +2376,7 @@
         "tools/test_context_budget.py",
         "tools/test_egress.py",
         "tools/test_enforce.py",
+        "tools/test_language.py",
         "tools/test_manifests.py",
         "tools/test_matrix_check.py",
         "tools/test_mutation.py",
@@ -1727,6 +2609,7 @@
         "tools/install_hooks.sh",
         "tools/test_egress.py",
         "tools/test_enforce.py",
+        "tools/test_language.py",
         "tools/test_matrix_check.py"
       ],
       "reviewed_at": null
@@ -1843,6 +2726,57 @@
       "reviewed_at": null
     },
     {
+      "path": "tools/test_language.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "tool"
+      ],
+      "depends_on": [
+        ".claude/commands/dossier.md",
+        ".claude/commands/garden.md",
+        ".claude/commands/now.md",
+        ".claude/commands/paper-to-kit.md",
+        ".claude/commands/recall.md",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CHECKLIST.md",
+        "README.md",
+        "SETUP.md",
+        "system/PRD-info-architecture.md",
+        "system/PRD-session-memory.md",
+        "system/WORKING-WITH-AI.md",
+        "system/deep-pass.md",
+        "system/enforcement-matrix.md",
+        "system/evidence-schema.md",
+        "system/kit-decisions.md",
+        "system/language-pending.txt",
+        "system/lenses/README.md",
+        "system/lenses/ergodic.md",
+        "system/lenses/feedback-loop.md",
+        "system/lenses/fence.md",
+        "system/lenses/feynman.md",
+        "system/lenses/incentive.md",
+        "system/lenses/inversion.md",
+        "system/lenses/isomorphism.md",
+        "system/lenses/jensen.md",
+        "system/lenses/ledger.md",
+        "system/lenses/limits.md",
+        "system/lenses/marginal.md",
+        "system/lenses/mirror.md",
+        "system/lenses/silence.md",
+        "system/person-ledger.md",
+        "system/reviews/architecture.md",
+        "system/rituals.md",
+        "system/skills/paper-to-kit.md",
+        "templates/decisions.md",
+        "templates/instance-rules.md",
+        "templates/rituals.local.md",
+        "tools/i18n.py"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": "tools/test_manifests.py",
       "kind": "tool",
       "owner": "kit",
@@ -1854,6 +2788,7 @@
         ".claude/settings.json",
         ".codex/hooks.json",
         "system/enforcement-matrix.yaml",
+        "system/language-pending.txt",
         "system/review-manifest.yaml",
         "system/reviews/content-audit.tsv",
         "system/test-matrix.yaml",
@@ -1864,6 +2799,7 @@
         "tools/test_context_budget.py",
         "tools/test_egress.py",
         "tools/test_enforce.py",
+        "tools/test_language.py",
         "tools/test_matrix_check.py",
         "tools/test_mutation.py",
         "tools/test_tool_entrypoints.py",

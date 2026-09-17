@@ -1,16 +1,42 @@
 # CHANGELOG
 
-**이 파일의 형식은 "무엇이 추가됐다"가 아니라 "기존 인스턴스가 무엇을 해야 하는가"다.**
+**This file records what an existing instance must do, not merely what was added.**
 
-엔진은 `git pull`로 온다. 그러나 **인스턴스 소유 파일은 안 온다** — system/memory-config.json,
-system/instance-rules.md, system/decisions.md, system/rituals.local.md, `state/`, `_private/`.
-새 엔진이 그 파일들에 새 필드나 새 절을 기대하면 사람이 직접 넣어야 한다.
-그 "직접 넣어야 하는 것"이 여기 적힌다.
+The engine arrives through `git pull`, but **instance-owned files do not**: `system/memory-config.json`,
+`system/instance-rules.md`, `system/decisions.md`, `system/rituals.local.md`, `state/`, and `_private/`. When a new
+engine expects a new field or section in those files, a person must add it. This file records those manual steps.
 
-각 항목은 `[해야 함]`, `[알아둘 것]`, `[자동]` 중 하나를 단다.
-`[해야 함]`이 하나라도 있으면 pull 뒤에 `python3 tools/doctor.py`가 FAIL을 낸다.
+Every item is marked `[Action required]`, `[Note]`, or `[Automatic]`. If any `[Action required]` item is
+outstanding, `python3 tools/doctor.py` fails after the pull.
 
 ---
+
+## v0.8 · 2026-09-18 (English canonical migration)
+
+### `[Automatic]` The first canonical kit surfaces move to English with Korean locale files
+
+The four root operational documents and AGENTS, three instance templates, five slash commands, the paper-to-kit
+workflow, and the evidence schema and matrix move to English. Korean reader surfaces use the matching `.ko.md`
+file or the `ko` column in `tools/i18n.py`. `tools/test_language.py` rejects Hangul on the migrated surfaces and
+checks the heading shape and relative links of every delivered `.md` and `.ko.md` pair. Other canonical files
+remain migration work.
+
+Evidence: `test:tools/test_language.py::test_pair_fixture`.
+
+Existing instances do not rename their local files. Instance-owned rules remain at
+`system/instance-rules.md`, `system/decisions.md`, and `system/rituals.local.md`; the locale split applies to kit
+files only.
+
+### `[Automatic]` The language gate fails closed around an explicit migration backlog
+
+`tools/test_language.py` scans every engine text file. Hangul is allowed only in the `ko` column of the i18n
+table, `.ko.md` locale files, marked evidence quotations with an ASCII English rendering, test-fixture strings,
+and historical CHANGELOG sections. Canonical files that have not migrated yet must be listed one per line in
+`system/language-pending.txt`; an unlisted file with Hangul and a listed file with no Hangul both fail the gate.
+The command summary reports the pending-file count. Required locale pairs are enumerated and checked in both
+directions.
+
+Evidence: `test:tools/test_language.py::test_pending_contract_fixture`.
 
 ## v0.7 · 2026-09-18 (스웜 파도 2 B그룹 통합)
 
