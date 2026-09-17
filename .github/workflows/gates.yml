@@ -1,0 +1,49 @@
+name: gates
+
+# Remote gate. Local hooks can be replaced by the same OS user (enforcement-matrix REVIEW holes),
+# so the same checks run here on every push and pull request, on Linux and macOS, which no
+# local receipt so far has measured. Make this a required status check on `main`.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gates:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.9", "3.12"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: git identity for fixture clones
+        run: |
+          git config --global user.name ci
+          git config --global user.email ci@example.invalid
+      - name: regression suites
+        run: |
+          set -o pipefail
+          for t in tools/test_*.py; do
+            echo "== $t"
+            PYTHONDONTWRITEBYTECODE=1 python3 "$t" || exit 1
+          done
+      - name: fresh install (ko, en)
+        run: |
+          bash tools/test_fresh_install.sh
+          MOTTORI_LANG=en bash tools/test_fresh_install.sh
+      - name: static gates
+        run: |
+          python3 tools/linkcheck.py
+          python3 tools/evidencecheck.py --issues
+          python3 tools/manifest_build.py --check
+          python3 tools/test_language.py
+          git diff --check
