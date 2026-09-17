@@ -301,6 +301,7 @@
         "tools/gate.py",
         "tools/i18n.py",
         "tools/install_hooks.sh",
+        "tools/manifest_build.py",
         "tools/receipts.py",
         "tools/skill_adapters.py",
         "tools/sync_engine.sh",
