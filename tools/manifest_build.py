@@ -132,14 +132,18 @@ def build() -> dict:
             default_kind, default_consumers = "evidence", ["human", "tool"]
         elif path == "REPORT.md":
             default_kind, default_consumers = "evidence", ["human"]
+        elif path.startswith(".github/workflows/") and path.endswith((".yml", ".yaml")):
+            # remote gate definitions: run by CI, read by nobody else
+            default_kind, default_consumers = "tool", ["tool"]
         else:
             default_kind, default_consumers = None, []
         rows.append(
             {
                 "path": path,
-                "kind": old.get("kind", default_kind),
+                # 기존 행이 미분류(None/[])면 규칙의 기본값으로 채운다 (2026-09-18: 규칙을 뒤늦게 추가한 경로가 None에 갇혔다)
+                "kind": old.get("kind") or default_kind,
                 "owner": "kit",
-                "consumers": old.get("consumers", default_consumers),
+                "consumers": old.get("consumers") or default_consumers,
                 "depends_on": dependencies(path, paths),
                 "reviewed_at": None,
             }
@@ -156,10 +160,43 @@ def render(document: dict) -> str:
     return json.dumps(document, ensure_ascii=False, indent=2, sort_keys=False) + "\n"
 
 
+def issues_mode() -> int:
+    """Gate checker (tools/gate.py CHECKS). A tree without the manifest (an installed instance) is not
+    applicable; a stale manifest is a gated issue per path so a commit cannot land with a generated file
+    behind the index (2026-09-18: the CI workflow was committed while missing from the manifest)."""
+    if not MANIFEST.exists():
+        print("~manifest-absent\tnot applicable: no system/review-manifest.yaml in this tree")
+        print("#issues 0")
+        return 0
+    document = build()
+    wanted = render(document)
+    current = MANIFEST.read_text(encoding="utf-8")
+    ids = []
+    existing = load_existing()
+    wanted_paths = {row["path"] for row in document["files"]}
+    for path in sorted(wanted_paths - set(existing)):
+        ids.append((f"manifest-missing|{path}", f"tracked text path not in manifest: {path}"))
+    for path in sorted(set(existing) - wanted_paths):
+        ids.append((f"manifest-ghost|{path}", f"manifest lists a path that is not tracked: {path}"))
+    for row in document["files"]:
+        if row.get("kind") is None or not row.get("consumers"):
+            ids.append((f"manifest-unclassified|{row['path']}", f"kind/consumers unclassified: {row['path']}"))
+    if current != wanted and not ids:
+        ids.append(("manifest-stale|system/review-manifest.yaml", "manifest content differs from regeneration"))
+    for issue_id, text in ids:
+        print(f"{issue_id}\t{text}")
+    print(f"#issues {len(ids)}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="fail if regeneration changes the file")
+    parser.add_argument("--issues", action="store_true",
+                        help="gate protocol: one `id<TAB>text` line per problem, then `#issues N`; exit 0")
     args = parser.parse_args()
+    if args.issues:
+        return issues_mode()
     wanted = render(build())
     current = MANIFEST.read_text(encoding="utf-8") if MANIFEST.exists() else ""
     if args.check:
