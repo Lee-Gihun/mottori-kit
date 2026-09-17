@@ -68,8 +68,34 @@ def _is_ignored(rel):
     return _IGN_CACHE[rel]
 
 
+# setup.sh가 만드는 인스턴스 소유 파일. 엔진 문서(AGENTS·rituals·templates·CHECKLIST)가 이들을
+# 가리키는 것은 정상이고, setup 전의 상류 사본에는 아직 없다. 그 상태를 "깨진 참조"로 세면
+# 킷 자체의 linkcheck가 영원히 19건 FAIL이라 사람이 FAIL을 무시하게 된다 (2026-09-17 실측).
+# setup이 끝난 인스턴스에서는 파일이 실제로 있어야 하므로 이 면제는 setup 전에만 산다.
+SETUP_CREATED = frozenset((
+    "system/memory-config.json", "system/instance-rules.md", "system/rituals.local.md",
+    "system/decisions.md", "state/NOW.md", "_private/state/NOW.md", "state/.gate-baseline.json",
+))
+
+
+def _setup_done():
+    return os.path.exists(os.path.join(ROOT, "system", "memory-config.json"))
+
+
+def _pending_target(base, t2):
+    """setup 전 상태에서, 대상이 setup이 만들 파일 중 하나인가 (TREE 기준 상대경로로 비교)."""
+    if _setup_done():
+        return False
+    for c in (os.path.join(base, t2), os.path.join(TREE, t2)):
+        rel = os.path.normpath(os.path.relpath(os.path.abspath(c), TREE))
+        if rel in SETUP_CREATED:
+            return True
+    return False
+
+
 def check():
     broken, checked = [], 0
+    check.pending = []
     for rel in tracked_md():
         if not INCLUDE_ALL and rel.startswith(EXCLUDE_PREFIXES):
             continue
@@ -95,6 +121,9 @@ def check():
             # 엔트리인 경우가 있어 lexists도 본다.
             cands = [os.path.join(base, t2), os.path.join(TREE, t2)]
             if any(os.path.exists(c) or os.path.lexists(c) for c in cands):
+                continue
+            if _pending_target(base, t2):
+                check.pending.append((rel, t))
                 continue
             # **ROOT 폴백은 조건부다** (codex 라운드 4). 무조건 폴백하면 "worktree엔 있고
             # index엔 없는 대상"을 통째로 놓친다 — 그 커밋을 다른 클론에서 받으면 참조가 깨진다.
@@ -128,7 +157,10 @@ if __name__ == "__main__":
     print(f"[linkcheck] scope={scope}, refs={checked}")
     for rel, t in sorted(broken):
         print(f"BROKEN {rel} -> {t}")
-    print(f"[linkcheck] broken: {len(broken)}")
+    pending = getattr(check, "pending", [])
+    for rel, t in sorted(pending):
+        print(f"PENDING {rel} -> {t}  (setup.sh가 만든다 · setup 전 상류 사본)")
+    print(f"[linkcheck] broken: {len(broken)}" + (f" · pending(setup 전): {len(pending)}" if pending else ""))
     # **자기가 실제로 읽은 것의 해시를 남긴다** (codex 라운드 3 지적).
     # 이전엔 memlib이 git index 해시를 남겼는데, linkcheck는 worktree bytes를 읽고
     # untracked도 본다. 인증서의 입력과 검사기의 입력이 달랐다.
@@ -142,3 +174,6 @@ if __name__ == "__main__":
             _d.update(b"<missing>")
     M.log_run("linkcheck", f"broken={len(broken)}", scope=_d.hexdigest()[:12],
               ok=(len(broken) == 0))
+    # normal mode의 종료코드는 결과다. 이전엔 broken이 있어도 0이라 셸·CI·setup이 성공으로 소비했다
+    # (2026-09-17 독립 감사 J). `--issues` 모드는 위에서 "측정이 됐는가"만 뜻하며 그대로 0이다.
+    sys.exit(1 if broken else 0)

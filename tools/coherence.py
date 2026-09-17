@@ -37,10 +37,14 @@ def run(cmd):
 
 
 def check_links():
+    """(깨진 수 또는 None, 상세). None은 검사기 자체가 결과를 못 낸 것이다 — 0도 -1도 아니다
+    (2026-09-17 독립 리뷰: -1을 깨진 링크 수로 보고하면 crash와 정상 broken을 구분 못 한다)."""
     r = run(["python3", "tools/linkcheck.py"])
     m = re.search(r"broken: (\d+)", r.stdout)
-    n = int(m.group(1)) if m else -1
+    n = int(m.group(1)) if m else None
     detail = [l for l in r.stdout.splitlines() if l.startswith("BROKEN")]
+    if n is None:
+        detail = [f"linkcheck 측정 실패 (exit {r.returncode}): {(r.stderr or r.stdout).strip()[-160:]}"]
     return n, detail
 
 
@@ -101,7 +105,9 @@ def main():
     problems = []
 
     n_links, d_links = check_links()
-    if n_links != 0:
+    if n_links is None:
+        problems.append("linkcheck 측정 실패")
+    elif n_links != 0:
         problems.append(f"깨진 링크 {n_links}")
 
     n_led, d_led = check_ledger()
