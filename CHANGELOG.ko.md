@@ -14,6 +14,16 @@ system/instance-rules.md, system/decisions.md, system/rituals.local.md, `state/`
 
 ## v0.8 · 2026-09-18 (영어 정본화)
 
+### `[알아둘 것]` review manifest가 커밋 게이트 검사기가 됐다
+
+근거 표지: `test:tools/test_manifests.py::test_issues_mode_reports_stale_paths`.
+
+`tools/manifest_build.py --issues`가 index와 `system/review-manifest.yaml`의 차이(빠진 경로·유령 경로·미분류·낡은
+내용)를 게이트 이슈로 낸다. 기준선에 없는 새 검사기는 빈 기준선으로 취급되므로 pull 뒤 따로 할 일은 없고, 그 검사기가
+이슈를 내면 그 커밋에서 고친다. 2026-09-18 실측: CI workflow 파일을 `git add` 전에 manifest를 재생성해 커밋했고
+원격 게이트가 처음 돌자마자 실패했다. 생성 파일은 사람이 순서를 기억해서가 아니라 게이트가 잡는다. manifest가 없는
+트리(설치된 인스턴스)는 해당없음이다.
+
 ### `[자동]` 첫 킷 표면의 영어 정본과 한국어 로케일 파일
 
 루트 운영 문서 넷과 AGENTS, 인스턴스 템플릿 셋, 슬래시 명령 다섯, paper-to-kit

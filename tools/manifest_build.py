@@ -140,7 +140,8 @@ def build() -> dict:
         rows.append(
             {
                 "path": path,
-                # 기존 행이 미분류(None/[])면 규칙의 기본값으로 채운다 (2026-09-18: 규칙을 뒤늦게 추가한 경로가 None에 갇혔다)
+                # an existing unclassified row (None / []) takes the rule default (2026-09-18: a path whose rule
+                # was added later stayed stuck at None)
                 "kind": old.get("kind") or default_kind,
                 "owner": "kit",
                 "consumers": old.get("consumers") or default_consumers,
