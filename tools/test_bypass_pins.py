@@ -14,6 +14,8 @@ import subprocess
 import sys
 import tempfile
 
+from testlib import run_test
+
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -434,7 +436,7 @@ def main():
         expected_hole = bool(getattr(test, "EXPECT_HOLE", False))
         holes += int(expected_hole)
         try:
-            test()
+            run_test(test, __file__)
             reason = getattr(test, "EXPECT_HOLE_REASON", None)
             suffix = f" reason={reason}" if reason else ""
             print(f"PASS {test.__name__} EXPECT_HOLE={expected_hole}{suffix}")

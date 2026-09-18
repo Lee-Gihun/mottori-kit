@@ -167,7 +167,7 @@
     },
     {
       "path": ".github/workflows/gates.yml",
-      "kind": "tool",
+      "kind": "gate-definition",
       "owner": "kit",
       "consumers": [
         "tool"
@@ -177,6 +177,7 @@
         "tools/linkcheck.py",
         "tools/manifest_build.py",
         "tools/test_fresh_install.sh",
+        "tools/test_instance_shape.py",
         "tools/test_language.py"
       ],
       "reviewed_at": null
@@ -288,6 +289,7 @@
         "SETUP.md",
         "setup.sh",
         "system/enforcement-matrix.yaml",
+        "system/engine-inventory.txt",
         "system/kit-decisions.md",
         "system/language-pending.txt",
         "system/review-manifest.yaml",
@@ -316,6 +318,7 @@
         "tools/test_fresh_worker.py",
         "tools/test_i18n.py",
         "tools/test_install_checks.py",
+        "tools/test_instance_shape.py",
         "tools/test_language.py",
         "tools/test_manifests.py",
         "tools/test_matrix_check.py",
@@ -325,6 +328,7 @@
         "tools/test_receipts.py",
         "tools/test_skill_parity.py",
         "tools/test_state_runtime.py",
+        "tools/testlib.py",
         "tools/worker_batch.py"
       ],
       "reviewed_at": null
@@ -346,6 +350,7 @@
         "SETUP.md",
         "setup.sh",
         "system/enforcement-matrix.yaml",
+        "system/engine-inventory.txt",
         "system/kit-decisions.md",
         "system/language-pending.txt",
         "system/review-manifest.yaml",
@@ -374,6 +379,7 @@
         "tools/test_fresh_worker.py",
         "tools/test_i18n.py",
         "tools/test_install_checks.py",
+        "tools/test_instance_shape.py",
         "tools/test_language.py",
         "tools/test_manifests.py",
         "tools/test_matrix_check.py",
@@ -383,6 +389,7 @@
         "tools/test_receipts.py",
         "tools/test_skill_parity.py",
         "tools/test_state_runtime.py",
+        "tools/testlib.py",
         "tools/worker_batch.py"
       ],
       "reviewed_at": null
@@ -800,8 +807,11 @@
       "depends_on": [
         "tools/evidencecheck.py",
         "tools/gate.py",
+        "tools/manifest_build.py",
         "tools/precommit-hook.sh",
-        "tools/test_evidencecheck.py"
+        "tools/test_evidencecheck.py",
+        "tools/test_manifests.py",
+        "tools/testlib.py"
       ],
       "reviewed_at": null
     },
@@ -818,14 +828,17 @@
       "depends_on": [
         "tools/evidencecheck.py",
         "tools/gate.py",
+        "tools/manifest_build.py",
         "tools/precommit-hook.sh",
-        "tools/test_evidencecheck.py"
+        "tools/test_evidencecheck.py",
+        "tools/test_manifests.py",
+        "tools/testlib.py"
       ],
       "reviewed_at": null
     },
     {
       "path": "system/enforcement-matrix.yaml",
-      "kind": "generated",
+      "kind": "gate-definition",
       "owner": "kit",
       "consumers": [
         "human",
@@ -843,9 +856,11 @@
         "system/PRD-session-memory.md",
         "system/kit-decisions.md",
         "system/language-pending.txt",
+        "system/review-manifest.yaml",
         "system/rituals.md",
         "tools/doctor.py",
         "tools/enforce.py",
+        "tools/evidencecheck.py",
         "tools/fresh_worker.py",
         "tools/gate.py",
         "tools/install_hooks.sh",
@@ -857,6 +872,7 @@
         "tools/test_doctor_json.py",
         "tools/test_egress.py",
         "tools/test_enforce.py",
+        "tools/test_evidencecheck.py",
         "tools/test_fresh_install.sh",
         "tools/test_fresh_worker.py",
         "tools/test_hook_runtime.py",
@@ -865,8 +881,20 @@
         "tools/test_manifests.py",
         "tools/test_receipts.py",
         "tools/test_setup_migration.py",
-        "tools/test_state_runtime.py"
+        "tools/test_state_runtime.py",
+        "tools/testlib.py"
       ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/engine-inventory.txt",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
       "reviewed_at": null
     },
     {
@@ -885,7 +913,8 @@
         "system/kit-decisions.md",
         "tools/evidencecheck.py",
         "tools/gate.py",
-        "tools/test_evidencecheck.py"
+        "tools/test_evidencecheck.py",
+        "tools/testlib.py"
       ],
       "reviewed_at": null
     },
@@ -905,7 +934,28 @@
         "system/kit-decisions.md",
         "tools/evidencecheck.py",
         "tools/gate.py",
-        "tools/test_evidencecheck.py"
+        "tools/test_evidencecheck.py",
+        "tools/testlib.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/gate-definition-approvals.md",
+      "kind": "evidence",
+      "owner": "kit",
+      "consumers": [
+        "tool",
+        "human"
+      ],
+      "depends_on": [
+        ".github/workflows/gates.yml",
+        "system/enforcement-matrix.yaml",
+        "system/review-manifest.yaml",
+        "system/test-matrix.yaml",
+        "tools/evidencecheck.py",
+        "tools/gate.py",
+        "tools/manifest_build.py",
+        "tools/test_language.py"
       ],
       "reviewed_at": null
     },
@@ -919,17 +969,22 @@
         "codex"
       ],
       "depends_on": [
+        ".github/workflows/gates.yml",
         ".gitignore",
         "AGENTS.md",
         "CHANGELOG.md",
         "CLAUDE.md",
         "setup.sh",
+        "system/gate-definition-approvals.md",
         "system/kit-decisions.md",
+        "system/review-manifest.yaml",
         "system/rituals.md",
+        "tools/manifest_build.py",
         "tools/memlib.py",
         "tools/sync_engine.sh",
         "tools/test_fresh_install.sh",
-        "tools/test_fresh_worker.py"
+        "tools/test_fresh_worker.py",
+        "tools/test_manifests.py"
       ],
       "reviewed_at": null
     },
@@ -943,22 +998,27 @@
         "codex"
       ],
       "depends_on": [
+        ".github/workflows/gates.yml",
         ".gitignore",
         "AGENTS.md",
         "CHANGELOG.md",
         "CLAUDE.md",
         "setup.sh",
+        "system/gate-definition-approvals.md",
+        "system/review-manifest.yaml",
         "system/rituals.md",
+        "tools/manifest_build.py",
         "tools/memlib.py",
         "tools/sync_engine.sh",
         "tools/test_fresh_install.sh",
-        "tools/test_fresh_worker.py"
+        "tools/test_fresh_worker.py",
+        "tools/test_manifests.py"
       ],
       "reviewed_at": null
     },
     {
       "path": "system/language-pending.txt",
-      "kind": "evidence",
+      "kind": "gate-definition",
       "owner": "kit",
       "consumers": [
         "human",
@@ -1387,7 +1447,7 @@
     },
     {
       "path": "system/review-manifest.yaml",
-      "kind": "generated",
+      "kind": "gate-definition",
       "owner": "kit",
       "consumers": [
         "human",
@@ -1436,8 +1496,10 @@
         "system/enforcement-matrix.ko.md",
         "system/enforcement-matrix.md",
         "system/enforcement-matrix.yaml",
+        "system/engine-inventory.txt",
         "system/evidence-schema.ko.md",
         "system/evidence-schema.md",
+        "system/gate-definition-approvals.md",
         "system/kit-decisions.ko.md",
         "system/kit-decisions.md",
         "system/language-pending.txt",
@@ -1529,6 +1591,7 @@
         "tools/test_i18n.py",
         "tools/test_install_checks.py",
         "tools/test_install_hooks.py",
+        "tools/test_instance_shape.py",
         "tools/test_language.py",
         "tools/test_manifests.py",
         "tools/test_matrix_check.py",
@@ -1544,6 +1607,7 @@
         "tools/test_state_runtime.py",
         "tools/test_tool_entrypoints.py",
         "tools/test_worker_batch.py",
+        "tools/testlib.py",
         "tools/transcribe.py",
         "tools/wf_gardener.js",
         "tools/worker_batch.py"
@@ -1954,7 +2018,7 @@
     },
     {
       "path": "system/test-matrix.yaml",
-      "kind": "rule",
+      "kind": "gate-definition",
       "owner": "kit",
       "consumers": [
         "human",
@@ -2002,6 +2066,7 @@
         "tools/test_i18n.py",
         "tools/test_install_checks.py",
         "tools/test_install_hooks.py",
+        "tools/test_instance_shape.py",
         "tools/test_language.py",
         "tools/test_manifests.py",
         "tools/test_memlib_journal.py",
@@ -2014,6 +2079,7 @@
         "tools/test_state_runtime.py",
         "tools/test_tool_entrypoints.py",
         "tools/test_worker_batch.py",
+        "tools/testlib.py",
         "tools/transcribe.py",
         "tools/wf_gardener.js",
         "tools/worker_batch.py"
@@ -2229,19 +2295,23 @@
         "AGENTS.md",
         "CLAUDE.md",
         "setup.sh",
+        "system/engine-inventory.txt",
         "system/person-ledger.md",
+        "system/review-manifest.yaml",
+        "templates/memory-config.json",
         "tools/coherence.py",
         "tools/linkcheck.py",
         "tools/now.py",
         "tools/portrait.py",
         "tools/rec.py",
-        "tools/recall.py"
+        "tools/recall.py",
+        "tools/test_instance_shape.py"
       ],
       "reviewed_at": null
     },
     {
       "path": "tools/enforce.py",
-      "kind": "tool",
+      "kind": "gate-definition",
       "owner": "kit",
       "consumers": [
         "human",
@@ -2266,7 +2336,7 @@
     },
     {
       "path": "tools/evidencecheck.py",
-      "kind": "tool",
+      "kind": "gate-definition",
       "owner": "kit",
       "consumers": [
         "human",
@@ -2294,14 +2364,18 @@
     },
     {
       "path": "tools/gate.py",
-      "kind": "tool",
+      "kind": "gate-definition",
       "owner": "kit",
       "consumers": [
         "human",
         "tool"
       ],
       "depends_on": [
-        "tools/install_hooks.sh"
+        "CHANGELOG.md",
+        "system/enforcement-matrix.md",
+        "system/kit-decisions.md",
+        "tools/install_hooks.sh",
+        "tools/test_evidencecheck.py"
       ],
       "reviewed_at": null
     },
@@ -2433,20 +2507,24 @@
     },
     {
       "path": "tools/manifest_build.py",
-      "kind": "tool",
+      "kind": "gate-definition",
       "owner": "kit",
       "consumers": [
         "human",
         "tool"
       ],
       "depends_on": [
+        ".github/workflows/gates.yml",
         "system/enforcement-matrix.yaml",
+        "system/engine-inventory.txt",
+        "system/gate-definition-approvals.md",
         "system/language-pending.txt",
         "system/review-manifest.yaml",
         "system/reviews/content-audit.tsv",
         "system/test-matrix.yaml",
         "tools/context_budget.py",
         "tools/enforce.py",
+        "tools/evidencecheck.py",
         "tools/gate.py",
         "tools/i18n_stamp.py",
         "tools/test_bypass_pins.py",
@@ -2454,12 +2532,14 @@
         "tools/test_devtree_gate.py",
         "tools/test_egress.py",
         "tools/test_enforce.py",
+        "tools/test_instance_shape.py",
         "tools/test_language.py",
         "tools/test_manifests.py",
         "tools/test_matrix_check.py",
         "tools/test_mutation.py",
         "tools/test_tool_entrypoints.py",
         "tools/test_worker_batch.py",
+        "tools/testlib.py",
         "tools/worker_batch.py"
       ],
       "reviewed_at": null
@@ -2690,6 +2770,7 @@
       "depends_on": [
         "CHANGELOG.md",
         "system/enforcement-matrix.md",
+        "system/engine-inventory.txt",
         "system/evidence-schema.md",
         "system/kit-decisions.md",
         "system/test-matrix.yaml",
@@ -2698,11 +2779,15 @@
         "tools/gate.py",
         "tools/i18n.py",
         "tools/install_hooks.sh",
+        "tools/manifest_build.py",
         "tools/test_devtree_gate.py",
         "tools/test_egress.py",
         "tools/test_enforce.py",
+        "tools/test_instance_shape.py",
         "tools/test_language.py",
-        "tools/test_matrix_check.py"
+        "tools/test_manifests.py",
+        "tools/test_matrix_check.py",
+        "tools/testlib.py"
       ],
       "reviewed_at": null
     },
@@ -2798,6 +2883,10 @@
         ".gitignore",
         "README.md",
         "SETUP.md",
+        "setup.sh",
+        "system/engine-inventory.txt",
+        "system/review-manifest.yaml",
+        "templates/memory-config.json",
         "tools/linkcheck.py",
         "tools/now.py",
         "tools/test_fresh_install.sh"
@@ -2818,8 +2907,34 @@
       "reviewed_at": null
     },
     {
-      "path": "tools/test_language.py",
+      "path": "tools/test_instance_shape.py",
       "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "tool"
+      ],
+      "depends_on": [
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        ".gitignore",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "setup.sh",
+        "templates/memory-config.json",
+        "tools/doctor.py",
+        "tools/enforce.py",
+        "tools/gate.py",
+        "tools/install_hooks.sh",
+        "tools/now.py",
+        "tools/test_coherence.py",
+        "tools/test_i18n.py",
+        "tools/test_tool_entrypoints.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_language.py",
+      "kind": "gate-definition",
       "owner": "kit",
       "consumers": [
         "tool"
@@ -2845,13 +2960,19 @@
       "depends_on": [
         ".claude/settings.json",
         ".codex/hooks.json",
+        ".github/workflows/gates.yml",
+        "CHANGELOG.md",
         "system/enforcement-matrix.yaml",
+        "system/engine-inventory.txt",
+        "system/gate-definition-approvals.md",
         "system/language-pending.txt",
         "system/review-manifest.yaml",
         "system/reviews/content-audit.tsv",
         "system/test-matrix.yaml",
         "tools/context_budget.py",
         "tools/enforce.py",
+        "tools/evidencecheck.py",
+        "tools/gate.py",
         "tools/i18n_stamp.py",
         "tools/manifest_build.py",
         "tools/test_bypass_pins.py",
@@ -2859,11 +2980,13 @@
         "tools/test_devtree_gate.py",
         "tools/test_egress.py",
         "tools/test_enforce.py",
+        "tools/test_instance_shape.py",
         "tools/test_language.py",
         "tools/test_matrix_check.py",
         "tools/test_mutation.py",
         "tools/test_tool_entrypoints.py",
         "tools/test_worker_batch.py",
+        "tools/testlib.py",
         "tools/worker_batch.py"
       ],
       "reviewed_at": null
@@ -3074,6 +3197,16 @@
       "depends_on": [
         "AGENTS.md"
       ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/testlib.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "tool"
+      ],
+      "depends_on": [],
       "reviewed_at": null
     },
     {

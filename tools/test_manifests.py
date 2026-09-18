@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+
+from testlib import run_test
 
 
 ROOT = Path(__file__).resolve().parent.parent
 REVIEW = ROOT / "system" / "review-manifest.yaml"
 MATRIX = ROOT / "system" / "enforcement-matrix.yaml"
 DELIVERY_PATHS = {
+    ".github/workflows/gates.yml",
+    "system/engine-inventory.txt",
     "system/enforcement-matrix.yaml",
     "system/language-pending.txt",
     "system/reviews/content-audit.tsv",
@@ -27,14 +34,17 @@ DELIVERY_PATHS = {
     "tools/test_devtree_gate.py",
     "tools/test_egress.py",
     "tools/test_enforce.py",
+    "tools/test_instance_shape.py",
     "tools/test_language.py",
     "tools/test_manifests.py",
     "tools/test_matrix_check.py",
     "tools/test_mutation.py",
+    "tools/testlib.py",
     "tools/test_tool_entrypoints.py",
     "tools/test_worker_batch.py",
     "tools/worker_batch.py",
 }
+APPROVAL_FILE = Path("system/gate-definition-approvals.md")
 
 
 def locale_paths() -> set[str]:
@@ -46,7 +56,7 @@ def locale_paths() -> set[str]:
         "system/decisions.ko.md", "system/instance-rules.ko.md", "system/rituals.local.ko.md"
     }
     return {path for path in paths if path not in instance_locales and not path.startswith("system/debate/_")}
-KINDS = {"rule", "evidence", "tool", "hook", "template", "generated"}
+KINDS = {"rule", "evidence", "tool", "hook", "template", "generated", "gate-definition"}
 OWNERS = {"kit", "instance"}
 CONSUMERS = {"human", "claude", "codex", "tool"}
 BOUNDARIES = {"hook", "gate", "precommit", "test", "doctor", "none"}
@@ -137,6 +147,132 @@ def test_review(document: dict, problems: Problems) -> None:
     for path, row in by_path.items():
         for dep in row.get("depends_on", []):
             problems.add(dep in actual, f"{path} dependency is not manifested: {dep}")
+    expected_gate_definitions = {
+        "system/enforcement-matrix.yaml", "system/language-pending.txt",
+        "system/review-manifest.yaml", "system/test-matrix.yaml",
+        ".github/workflows/gates.yml", "tools/enforce.py", "tools/evidencecheck.py",
+        "tools/gate.py", "tools/manifest_build.py", "tools/test_language.py",
+    }
+    actual_gate_definitions = {
+        path for path, row in by_path.items() if row.get("kind") == "gate-definition"
+    }
+    problems.add(actual_gate_definitions == expected_gate_definitions,
+                 "gate-definition classification differs")
+
+
+def test_gate_definition_change_requires_dispatcher_approval() -> None:
+    with tempfile.TemporaryDirectory(prefix="manifest-approval-") as tmp:
+        root = Path(tmp)
+        (root / "tools").mkdir()
+        (root / "system").mkdir()
+        shutil.copy2(ROOT / "tools" / "manifest_build.py", root / "tools" / "manifest_build.py")
+        for rel in (
+            "tools/evidencecheck.py", "tools/enforce.py", "tools/test_language.py",
+            "system/enforcement-matrix.yaml", "system/language-pending.txt",
+            "system/test-matrix.yaml",
+        ):
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"fixture {rel}\n", encoding="utf-8")
+        (root / "CHANGELOG.md").write_text(
+            "# CHANGELOG\n\nSee `tools/evidencecheck.py`.\n", encoding="utf-8"
+        )
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+             "commit", "-qm", "fixture sources"], cwd=root, check=True,
+        )
+        generated = subprocess.run(
+            [sys.executable, "tools/manifest_build.py"], cwd=root,
+            capture_output=True, text=True,
+        )
+        assert generated.returncode == 0, generated.stdout + generated.stderr
+        converged = subprocess.run(
+            [sys.executable, "tools/manifest_build.py"], cwd=root,
+            capture_output=True, text=True,
+        )
+        assert converged.returncode == 0, converged.stdout + converged.stderr
+        subprocess.run(["git", "add", "system/review-manifest.yaml"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+             "commit", "-qm", "manifest baseline"], cwd=root, check=True,
+        )
+        target = root / "tools" / "evidencecheck.py"
+        target.write_text(
+            target.read_text(encoding="utf-8") + "changed gate definition\n", encoding="utf-8"
+        )
+
+        subprocess.run(["git", "add", "tools/evidencecheck.py"], cwd=root, check=True)
+        target.write_text(target.read_text(encoding="utf-8").replace(
+            "changed gate definition\n", "worktree differs from staged gate definition\n"
+        ), encoding="utf-8")
+        staged_env = dict(os.environ, MOTTORI_APPROVAL_MODE="staged",
+                          MOTTORI_APPROVAL_REPO=str(root))
+        missing = subprocess.run(
+            [sys.executable, "tools/manifest_build.py", "--issues"], cwd=root,
+            capture_output=True, text=True, env=staged_env,
+        )
+        assert missing.returncode == 0
+        assert "gate-definition-approval|" in missing.stdout, missing.stdout
+
+        changelog = root / "CHANGELOG.md"
+        changelog.write_text(
+            "# CHANGELOG\n\nSee `tools/evidencecheck.py`.\n\n### `[Note]` fixture\n\n"
+            "gate-definition-approval: decision:KIT-DR-012 files=tools/evidencecheck.py sha256=bad\n",
+            encoding="utf-8",
+        )
+        self_approved = subprocess.run(
+            [sys.executable, "tools/manifest_build.py", "--issues"], cwd=root,
+            capture_output=True, text=True, env=staged_env,
+        )
+        assert "gate-definition-approval|" in self_approved.stdout, self_approved.stdout
+
+        diff = subprocess.run(
+            ["git", "diff", "--cached", "--binary", "HEAD", "--", "tools/evidencecheck.py"],
+            cwd=root, check=True, capture_output=True,
+        ).stdout
+        digest = hashlib.sha256(diff).hexdigest()
+        approval = root / APPROVAL_FILE
+        approval.parent.mkdir(parents=True, exist_ok=True)
+        approval.write_text(
+            "# WAVEE dispatcher decisions\n\n"
+            "gate-definition-approval: decision:KIT-DR-012 "
+            f"files=tools/evidencecheck.py sha256={digest}\n",
+            encoding="utf-8",
+        )
+        approved = subprocess.run(
+            [sys.executable, "tools/manifest_build.py", "--issues"], cwd=root,
+            capture_output=True, text=True, env=staged_env,
+        )
+        assert "gate-definition-approval|" not in approved.stdout, approved.stdout
+
+        subprocess.run(["git", "checkout", "--", "tools/evidencecheck.py"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+             "commit", "-qm", "changed gate definition"], cwd=root, check=True,
+        )
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD^"], cwd=root, check=True,
+            capture_output=True, text=True,
+        ).stdout.strip()
+        ci_env = dict(os.environ, MOTTORI_APPROVAL_MODE="commit",
+                      MOTTORI_APPROVAL_BASE=base, MOTTORI_APPROVAL_REPO=str(root))
+        approval.unlink()
+        ci_missing = subprocess.run(
+            [sys.executable, "tools/manifest_build.py", "--issues"], cwd=root,
+            capture_output=True, text=True, env=ci_env,
+        )
+        assert "gate-definition-approval|" in ci_missing.stdout, ci_missing.stdout
+
+        subprocess.run(["git", "rm", "-q", "system/review-manifest.yaml"], cwd=root, check=True)
+        deleted = subprocess.run(
+            [sys.executable, "tools/manifest_build.py", "--issues"], cwd=root,
+            capture_output=True, text=True,
+            env=dict(os.environ, MOTTORI_APPROVAL_MODE="staged", MOTTORI_APPROVAL_REPO=str(root)),
+        )
+        assert "~manifest-absent\t" in deleted.stdout, deleted.stdout
+        assert "gate-definition-approval|" in deleted.stdout, deleted.stdout
 
 
 def doctor_source_keys() -> set[str]:
@@ -235,23 +371,52 @@ def test_issues_mode_reports_stale_paths(problems: Problems) -> None:
     import shutil
     import tempfile
     builder = ROOT / "tools" / "manifest_build.py"
-    run = subprocess.run([sys.executable, str(builder), "--issues"], cwd=ROOT, capture_output=True, text=True)
-    problems.add(run.returncode == 0 and run.stdout.rstrip().endswith("#issues 0"),
-                 f"issues mode on the current tree must report 0: {run.stdout[-200:]}")
+    head_probe = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True
+    )
+    if head_probe.returncode == 0:
+        current_env = dict(os.environ, MOTTORI_APPROVAL_MODE="commit",
+                           MOTTORI_APPROVAL_BASE=head_probe.stdout.strip(),
+                           MOTTORI_APPROVAL_REPO=str(ROOT))
+        run = subprocess.run([sys.executable, str(builder), "--issues"], cwd=ROOT,
+                             capture_output=True, text=True, env=current_env)
+        problems.add(run.returncode == 0 and run.stdout.rstrip().endswith("#issues 0"),
+                     f"issues mode on the current tree must report 0: {run.stdout[-200:]}")
     with tempfile.TemporaryDirectory(prefix="manifest-issues-") as tmp:
         clone = Path(tmp) / "kit"
-        subprocess.run(["git", "clone", "-q", str(ROOT), str(clone)], check=True, capture_output=True)
+        clone.mkdir()
+        for rel in sorted(expected_paths()):
+            source = ROOT / rel
+            if not source.is_file() and not source.is_symlink():
+                continue
+            target = clone / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if source.is_symlink():
+                target.symlink_to(os.readlink(source))
+            else:
+                shutil.copy2(source, target)
+        subprocess.run(["git", "init", "-q"], cwd=clone, check=True, capture_output=True)
+        subprocess.run(["git", "add", "-A"], cwd=clone, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+             "commit", "-qm", "manifest fixture"], cwd=clone, check=True, capture_output=True,
+        )
+        clone_head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=clone, check=True, capture_output=True, text=True
+        ).stdout.strip()
+        clone_env = dict(os.environ, MOTTORI_APPROVAL_MODE="commit",
+                         MOTTORI_APPROVAL_BASE=clone_head, MOTTORI_APPROVAL_REPO=str(clone))
         manifest = clone / "system" / "review-manifest.yaml"
         document = json.loads(manifest.read_text(encoding="utf-8"))
         dropped = document["files"].pop(0)["path"]
         manifest.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         stale = subprocess.run([sys.executable, str(clone / "tools" / "manifest_build.py"), "--issues"],
-                               cwd=clone, capture_output=True, text=True)
+                               cwd=clone, capture_output=True, text=True, env=clone_env)
         problems.add(f"manifest-missing|{dropped}\t" in stale.stdout and stale.stdout.rstrip().endswith("#issues 1"),
                      f"issues mode must report the dropped path as missing: {stale.stdout[-300:]}")
         manifest.unlink()
         absent = subprocess.run([sys.executable, str(clone / "tools" / "manifest_build.py"), "--issues"],
-                                cwd=clone, capture_output=True, text=True)
+                                cwd=clone, capture_output=True, text=True, env=clone_env)
         problems.add(absent.stdout.rstrip().endswith("#issues 0") and "not applicable" in absent.stdout,
                      f"a tree without the manifest is not applicable: {absent.stdout[-200:]}")
 
@@ -260,9 +425,10 @@ def main() -> int:
     problems = Problems()
     review = load_yaml_subset(REVIEW, problems)
     matrix = load_yaml_subset(MATRIX, problems)
-    test_review(review, problems)
-    test_matrix(matrix, problems)
-    test_issues_mode_reports_stale_paths(problems)
+    run_test(test_review, __file__, review, problems)
+    run_test(test_matrix, __file__, matrix, problems)
+    run_test(test_gate_definition_change_requires_dispatcher_approval, __file__)
+    run_test(test_issues_mode_reports_stale_paths, __file__, problems)
     if problems.items:
         for item in problems.items:
             print("FAIL", item)

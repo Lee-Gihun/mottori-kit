@@ -9,6 +9,8 @@ import subprocess
 import sys
 import tempfile
 
+from testlib import run_test
+
 
 HERE = Path(__file__).resolve().parent
 FRESH_WORKER = HERE / "fresh_worker.py"
@@ -144,5 +146,5 @@ TESTS = [
 
 if __name__ == "__main__":
     for test in TESTS:
-        test()
+        run_test(test, __file__)
         print("PASS", test.__name__)

@@ -8,6 +8,8 @@ import subprocess
 import sys
 import tempfile
 
+from testlib import run_test
+
 
 HERE = Path(__file__).resolve().parent
 CONTEXT_BUDGET = HERE / "context_budget.py"
@@ -118,5 +120,5 @@ TESTS = [test_sources_utf8_top_tools_and_budget_warning,
 
 if __name__ == "__main__":
     for test in TESTS:
-        test()
+        run_test(test, __file__)
         print("PASS", test.__name__)

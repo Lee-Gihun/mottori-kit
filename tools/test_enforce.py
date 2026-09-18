@@ -13,6 +13,8 @@ import subprocess
 import sys
 import tempfile
 
+from testlib import run_test
+
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -628,7 +630,7 @@ def main() -> int:
     failed: list[str] = []
     for test in TESTS:
         try:
-            test()
+            run_test(test, __file__)
             print("PASS", test.__name__)
         except Exception as error:  # noqa: BLE001
             failed.append(test.__name__)

@@ -20,6 +20,8 @@ import subprocess
 import sys
 import tempfile
 
+from testlib import run_test
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 PY = sys.executable
@@ -310,6 +312,34 @@ def test_doctor_precommit_accepts_localized_status_tokens():
         doctor.sh = original
 
 
+def test_doctor_kit_shape_markers_fail_closed_individually():
+    import doctor
+    with tempfile.TemporaryDirectory(prefix="doctor-kit-shape-") as temporary:
+        for marker in ("setup.sh", "templates/memory-config.json",
+                       "system/engine-inventory.txt", "system/review-manifest.yaml"):
+            root = os.path.join(temporary, marker.replace("/", "-"))
+            write(root, marker, "fixture\n")
+            ok(f"kit shape marker survives partial deletion: {marker}", doctor._is_kit_tree(root))
+        empty = os.path.join(temporary, "installed")
+        os.makedirs(empty)
+        ok("installed shape has no kit marker", not doctor._is_kit_tree(empty))
+
+
+def test_doctor_keeps_release_regressions_out_of_interactive_run():
+    import doctor
+    original_mode, original_sh = doctor.RELEASE_MODE, doctor.sh
+    try:
+        doctor.RELEASE_MODE = False
+        doctor.sh = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("interactive doctor executed a release suite")
+        )
+        status, detail = doctor.c_regression()
+        ok("interactive doctor skips release regression suites",
+           status == doctor.SKIP and "release/CI" in detail, repr((status, detail)))
+    finally:
+        doctor.RELEASE_MODE, doctor.sh = original_mode, original_sh
+
+
 def test_doctor_work_context_rejects_tracked_private_symlink():
     root = make_repo(with_config=True)
     try:
@@ -415,12 +445,14 @@ if __name__ == "__main__":
                test_doctor_codex_armed_and_git_version,
                test_doctor_remote_allowlist_is_host_and_path_bounded,
                test_doctor_precommit_accepts_localized_status_tokens,
+               test_doctor_kit_shape_markers_fail_closed_individually,
+               test_doctor_keeps_release_regressions_out_of_interactive_run,
                test_doctor_work_context_rejects_tracked_private_symlink,
                test_gate_check_blocks_when_measure_raises,
                test_gate_verdict_checker_key_growth_and_shrink,
                test_now_renders_unspecified_personal_pointer):
         try:
-            fn()
+            run_test(fn, __file__)
         except Exception as e:  # noqa: BLE001
             FAILED.append(fn.__name__)
             print(f"✗ {fn.__name__}: {type(e).__name__}: {e}")

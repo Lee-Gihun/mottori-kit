@@ -3,14 +3,24 @@
 
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
+
+from testlib import run_test
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CHECKER = ROOT / "tools" / "evidencecheck.py"
+RUN_ID = "evidencecheck-fixture"
+
+
+def _run_line(test_id, run_id=RUN_ID, timestamp_ns=None):
+    timestamp_ns = timestamp_ns if timestamp_ns is not None else time.time_ns()
+    return f"RAN {run_id} {timestamp_ns} {test_id}\n"
 
 
 def _write(path, text):
@@ -39,15 +49,127 @@ def _fixture():
 | fixture | ENFORCED | `test:tools/test_sample.py::test_ok` |
 """)
     _write(root / "tools" / "test_sample.py", "def test_ok():\n    pass\n")
+    _write(root / "test-runs.log", _run_line("tools/test_sample.py::test_ok"))
     return tmp, root
 
 
 def _run(root, *args):
+    env = dict(os.environ, MOTTORI_TEST_LOG=str(root / "test-runs.log"),
+               MOTTORI_TEST_RUN_ID=RUN_ID)
     return subprocess.run(
         [sys.executable, str(CHECKER), "--tree", str(root), *args],
         capture_output=True,
         text=True,
+        env=env,
     )
+
+
+def test_defined_but_not_run_is_issue():
+    tmp, root = _fixture()
+    try:
+        (root / "test-runs.log").write_text("", encoding="utf-8")
+        issues = _run(root, "--issues")
+        assert "not-run|system/enforcement-matrix.md|test:tools/test_sample.py::test_ok\t" in issues.stdout
+        assert issues.stdout.splitlines()[-1] == "#issues 1", issues.stdout
+        assert _run(root).returncode == 1
+    finally:
+        tmp.cleanup()
+
+
+def test_run_log_allows_test_marker():
+    tmp, root = _fixture()
+    try:
+        result = _run(root)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "실행 증거 없음" not in result.stdout
+    finally:
+        tmp.cleanup()
+
+
+def test_missing_run_log_fails_closed():
+    tmp, root = _fixture()
+    try:
+        (root / "test-runs.log").unlink()
+        issues = _run(root, "--issues")
+        assert "missing-test-log|system/enforcement-matrix.md|test:tools/test_sample.py::test_ok\t" in issues.stdout
+        assert "실행 증거 없음" in issues.stdout
+        assert issues.stdout.splitlines()[-1] == "#issues 1", issues.stdout
+    finally:
+        tmp.cleanup()
+
+
+def test_stale_run_log_fails_closed():
+    tmp, root = _fixture()
+    try:
+        stale = time.time_ns() - (25 * 60 * 60 * 1_000_000_000)
+        (root / "test-runs.log").write_text(
+            _run_line("tools/test_sample.py::test_ok", timestamp_ns=stale), encoding="utf-8"
+        )
+        issues = _run(root, "--issues")
+        assert "missing-test-log|system/enforcement-matrix.md|test:tools/test_sample.py::test_ok\t" in issues.stdout
+        assert issues.stdout.splitlines()[-1] == "#issues 1", issues.stdout
+    finally:
+        tmp.cleanup()
+
+
+def test_fresh_append_does_not_validate_stale_row():
+    tmp, root = _fixture()
+    try:
+        _write(root / "tools" / "test_sample.py", """\
+def test_ok():
+    pass
+
+def test_new():
+    pass
+""")
+        stale = time.time_ns() - (25 * 60 * 60 * 1_000_000_000)
+        (root / "test-runs.log").write_text(
+            _run_line("tools/test_sample.py::test_ok", run_id="previous-run", timestamp_ns=stale)
+            + _run_line("tools/test_sample.py::test_new"),
+            encoding="utf-8",
+        )
+        issues = _run(root, "--issues")
+        assert "not-run|system/enforcement-matrix.md|test:tools/test_sample.py::test_ok\t" in issues.stdout
+        assert issues.stdout.splitlines()[-1] == "#issues 1", issues.stdout
+    finally:
+        tmp.cleanup()
+
+
+def test_TESTS_omission_mutation_is_caught():
+    tmp, root = _fixture()
+    try:
+        shutil.copy2(ROOT / "tools" / "testlib.py", root / "tools" / "testlib.py")
+        _write(root / "tools" / "test_sample.py", """\
+from testlib import run_test
+
+def test_ok():
+    pass
+
+def test_other():
+    pass
+
+TESTS = [test_other]
+
+if __name__ == "__main__":
+    for test in TESTS:
+        run_test(test, __file__)
+""")
+        (root / "test-runs.log").write_text("", encoding="utf-8")
+        ran = subprocess.run(
+            [sys.executable, "tools/test_sample.py"], cwd=root,
+            capture_output=True, text=True,
+            env=dict(os.environ, MOTTORI_TEST_LOG=str(root / "test-runs.log"),
+                     MOTTORI_TEST_RUN_ID=RUN_ID),
+        )
+        assert ran.returncode == 0, ran.stdout + ran.stderr
+        recorded = (root / "test-runs.log").read_text(encoding="utf-8")
+        assert re.fullmatch(
+            rf"RAN {RUN_ID} [0-9]{{16,20}} tools/test_sample.py::test_other\n", recorded
+        ), recorded
+        issues = _run(root, "--issues")
+        assert "not-run|system/enforcement-matrix.md|test:tools/test_sample.py::test_ok\t" in issues.stdout
+    finally:
+        tmp.cleanup()
 
 
 def test_malformed_marker_fails():
@@ -193,6 +315,7 @@ def test_gate_consumes_evidencecheck_issues_end_to_end():
             ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True
         ).stdout.decode().split("\0")
         new_engine_files = {
+            "system/engine-inventory.txt",
             "system/enforcement-matrix.md",
             "system/evidence-schema.md",
             "system/test-matrix.yaml",
@@ -203,8 +326,10 @@ def test_gate_consumes_evidencecheck_issues_end_to_end():
             "tools/test_enforce.py",
             "tools/test_evidencecheck.py",
             "tools/test_devtree_gate.py",
+            "tools/test_instance_shape.py",
             "tools/test_language.py",
             "tools/test_matrix_check.py",
+            "tools/testlib.py",
         }
         for rel in sorted(set(path for path in listed if path) | new_engine_files):
             source = ROOT / rel
@@ -219,6 +344,10 @@ def test_gate_consumes_evidencecheck_issues_end_to_end():
         for command in (["git", "init", "-q"], ["git", "add", "-A"]):
             step = subprocess.run(command, cwd=repo, capture_output=True, text=True, env=env)
             assert step.returncode == 0, step.stdout + step.stderr
+        if os.environ.get("MOTTORI_TEST_EVIDENCE_ACTIVE") != "1":
+            env["MOTTORI_TEST_LOG"] = str(repo / ".git" / "evidence-e2e-runs.log")
+            env["MOTTORI_TEST_RUN_ID"] = f"evidence-e2e-{os.getpid()}-{time.time_ns()}"
+            env.pop("MOTTORI_TEST_EVIDENCE_ACTIVE", None)
         baseline = subprocess.run(
             [sys.executable, "tools/gate.py", "baseline"],
             cwd=repo,
@@ -226,8 +355,22 @@ def test_gate_consumes_evidencecheck_issues_end_to_end():
             text=True,
             env=env,
         )
-        assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+        if baseline.returncode != 0:
+            diagnostic = subprocess.run(
+                [sys.executable, "tools/evidencecheck.py", "--issues"], cwd=repo,
+                capture_output=True, text=True, env=env,
+            )
+            manifest_diagnostic = subprocess.run(
+                [sys.executable, "tools/manifest_build.py", "--issues"], cwd=repo,
+                capture_output=True, text=True, env=env,
+            )
+            raise AssertionError(
+                baseline.stdout + baseline.stderr + "\n"
+                + diagnostic.stdout + diagnostic.stderr + "\n"
+                + manifest_diagnostic.stdout + manifest_diagnostic.stderr
+            )
         assert "evidencecheck 0건" in baseline.stdout, baseline.stdout
+        env["MOTTORI_TEST_EVIDENCE_ACTIVE"] = "1"
         status = subprocess.run(
             [sys.executable, "tools/gate.py", "status"],
             cwd=repo,
@@ -249,7 +392,14 @@ def test_gate_consumes_evidencecheck_issues_end_to_end():
             text=True,
             env=env,
         )
-        assert hook.returncode == 0, hook.stdout + hook.stderr
+        if hook.returncode != 0:
+            manifest_test = subprocess.run(
+                [sys.executable, "tools/test_manifests.py"], cwd=repo,
+                capture_output=True, text=True, env=env,
+            )
+            raise AssertionError(
+                hook.stdout + hook.stderr + "\n" + manifest_test.stdout + manifest_test.stderr
+            )
     finally:
         tmp.cleanup()
 
@@ -283,6 +433,12 @@ def test_tree_with_partial_targets_reports_missing_files():
 
 
 TESTS = [
+    test_defined_but_not_run_is_issue,
+    test_run_log_allows_test_marker,
+    test_missing_run_log_fails_closed,
+    test_stale_run_log_fails_closed,
+    test_fresh_append_does_not_validate_stale_row,
+    test_TESTS_omission_mutation_is_caught,
     test_tree_without_any_target_is_not_applicable,
     test_tree_with_partial_targets_reports_missing_files,
     test_malformed_marker_fails,
@@ -300,7 +456,7 @@ if __name__ == "__main__":
     failed = []
     for test in TESTS:
         try:
-            test()
+            run_test(test, __file__)
             print("PASS", test.__name__)
         except Exception as exc:  # noqa: BLE001
             failed.append(test.__name__)

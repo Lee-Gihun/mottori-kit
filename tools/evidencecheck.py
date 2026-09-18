@@ -6,10 +6,16 @@ import ast
 import os
 import re
 import sys
+import time
 
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TARGETS = ("system/kit-decisions.md", "CHANGELOG.md", "system/enforcement-matrix.md")
+TEST_LOG_ENV = "MOTTORI_TEST_LOG"
+TEST_RUN_ID_ENV = "MOTTORI_TEST_RUN_ID"
+TEST_LOG_MAX_AGE_SECONDS = 24 * 60 * 60
+TEST_LOG_FUTURE_SKEW_SECONDS = 5 * 60
+RUN_ID = re.compile(r"[A-Za-z0-9._+-]{1,128}")
 MARKER_START = re.compile(r"(?<![A-Za-z0-9_-])(paper|experiment|run|decision|test):")
 PAYLOAD = {
     "paper": re.compile(
@@ -27,6 +33,7 @@ def _args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tree", default=ROOT, help="검사할 트리 (기본: 도구가 속한 루트)")
     parser.add_argument("--local-root", help="run과 인스턴스 DR을 찾을 로컬 루트")
+    parser.add_argument("--test-log", help="RAN 실행 증거 로그 (기본: 환경변수 또는 .git 로그)")
     parser.add_argument("--issues", action="store_true", help="게이트용 안정 이슈 집합")
     return parser.parse_args()
 
@@ -69,6 +76,43 @@ def _test_exists(marker, tree):
         isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name
         for node in ast.walk(module)
     )
+
+
+def _test_log_path(local_root, explicit=None):
+    raw = explicit or os.environ.get(TEST_LOG_ENV)
+    if raw:
+        return raw if os.path.isabs(raw) else os.path.abspath(raw)
+    return os.path.join(local_root, ".git", "mottori-test-runs.log")
+
+
+def _load_test_runs(path, expected_run_id):
+    """Return fresh RAN IDs for one run or (None, None) when evidence is unavailable."""
+    if not RUN_ID.fullmatch(expected_run_id or ""):
+        return None, None
+    try:
+        text = open(path, encoding="utf-8").read()
+    except (OSError, UnicodeError):
+        return None, None
+    now_ns = time.time_ns()
+    oldest_ns = now_ns - TEST_LOG_MAX_AGE_SECONDS * 1_000_000_000
+    newest_ns = now_ns + TEST_LOG_FUTURE_SKEW_SECONDS * 1_000_000_000
+    ran = set()
+    saw_current_run = False
+    for line in text.splitlines():
+        match = re.fullmatch(
+            r"RAN ([A-Za-z0-9._+-]{1,128}) ([0-9]{16,20}) "
+            r"(tools/test_[A-Za-z0-9_]+\.py::[A-Za-z_][A-Za-z0-9_]*)",
+            line,
+        )
+        if not match or match.group(1) != expected_run_id:
+            continue
+        saw_current_run = True
+        timestamp_ns = int(match.group(2))
+        if oldest_ns <= timestamp_ns <= newest_ns:
+            ran.add(match.group(3))
+    if ran or (not text and not saw_current_run):
+        return ran, now_ns
+    return None, None
 
 
 def _local_exists(namespace, payload, tree, local_root):
@@ -161,8 +205,12 @@ def applicable(tree):
     return any(os.path.isfile(os.path.join(tree, rel)) for rel in TARGETS)
 
 
-def check(tree, local_root=None):
+def check(tree, local_root=None, test_log=None):
     local_root = os.path.abspath(local_root or tree)
+    test_log_path = _test_log_path(local_root, test_log)
+    test_runs, _test_log_time = _load_test_runs(
+        test_log_path, os.environ.get(TEST_RUN_ID_ENV, "")
+    )
     issues = {}
     reviews = {}
     marker_count = 0
@@ -188,6 +236,15 @@ def check(tree, local_root=None):
             if exists is False:
                 issue_id = f"missing-local|{rel}|{marker}"
                 issues[issue_id] = f"로컬 ID 없음 {rel}:{line} {marker}"
+            elif namespace == "test":
+                if test_runs is None:
+                    issue_id = f"missing-test-log|{rel}|{marker}"
+                    issues[issue_id] = (
+                        f"실행 증거 없음 {rel}:{line} {marker} log={test_log_path}"
+                    )
+                elif payload not in test_runs:
+                    issue_id = f"not-run|{rel}|{marker}"
+                    issues[issue_id] = f"실행 증거 없음 {rel}:{line} {marker}"
             elif exists is None:
                 review_id = f"~review|{rel}|{marker}"
                 reviews[review_id] = f"REVIEW 외부 존재 미판정 {rel}:{line} {marker}"
@@ -198,7 +255,7 @@ def check(tree, local_root=None):
 def main():
     args = _args()
     tree = os.path.abspath(args.tree)
-    issues, reviews, marker_count = check(tree, args.local_root)
+    issues, reviews, marker_count = check(tree, args.local_root, args.test_log)
     if args.issues:
         for issue_id, display in issues:
             print(f"{issue_id}\t{display}")
