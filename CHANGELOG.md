@@ -50,6 +50,17 @@ counts, so a worker clone or the fresh-install fixture sees the same inventory a
 file outside those locations fails `tools/test_manifests.py` first with the rule instead of the fresh-install
 gate later with a ghost path (`test:tools/test_manifests.py::test_new_files_are_within_delivery_prefixes`).
 
+### `[Note]` The gate reuses fresh test evidence of the same run instead of re-running every suite
+
+Evidence: `test:tools/test_evidencecheck.py::test_refresh_reuses_fresh_evidence_for_the_same_run`.
+
+`tools/gate.py` re-executes the suites cited by test markers only when the inherited run log lacks a fresh
+record of the same run ID for some cited test. Before this rule every gate run inside a fixture re-ran all
+cited suites, and the suites that exercise the gate in fixtures do so about twenty times, so CI's regression
+step went from 2.5 to 32 minutes and one cell hit the 40-minute limit (ad032ec, 2026-09-18). A fixture that
+needs a real execution keeps using its own empty log or another run ID, as the evidencecheck suite does.
+Nothing to do after the pull.
+
 ### `[Note]` The CI workflow file is valid again and its job-level contexts are pinned
 
 Evidence: `test:tools/test_manifests.py::test_workflow_job_env_uses_only_job_level_contexts`.

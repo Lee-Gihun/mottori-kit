@@ -1,4 +1,4 @@
-<!-- source: CHANGELOG.md sha256:2f3222319d716cc5cfa1395a976f4e79e5169c1812b4fe7c0c51bc9103bf7e64 source-of-truth: en -->
+<!-- source: CHANGELOG.md sha256:c2ce0217a87cf935fe26b4340d57648d719810f1c331261463357a420ed9a963 source-of-truth: en -->
 # CHANGELOG
 
 **이 파일의 형식은 "무엇이 추가됐다"가 아니라 "기존 인스턴스가 무엇을 해야 하는가"다.**
@@ -47,6 +47,16 @@ KIT-DR-013은 게이트 정의가 작성되는 킷 트리를 다스린다. 설�
 파일은 전부 센다. 그래서 워커 클론이나 신규 설치 픽스처가 커밋된 트리와 같은 목록을 보고, 그 밖의 위치에 생긴 새 파일은
 신규 설치 게이트가 나중에 유령 경로로 실패하는 대신 `tools/test_manifests.py`가 규칙과 함께 먼저 실패한다
 (`test:tools/test_manifests.py::test_new_files_are_within_delivery_prefixes`).
+
+### `[알아둘 것]` 게이트가 같은 실행의 신선한 테스트 증거를 재사용하고 스위트를 다시 돌리지 않는다
+
+근거 표지: `test:tools/test_evidencecheck.py::test_refresh_reuses_fresh_evidence_for_the_same_run`.
+
+`tools/gate.py`는 test 표지가 인용한 스위트를, 물려받은 실행 로그에 같은 실행 ID의 신선한 기록이 없는 테스트가
+있을 때만 다시 실행한다. 이 규칙 전에는 픽스처 안에서 게이트가 돌 때마다 인용된 스위트 전부를 다시 돌렸고, 픽스처에서
+게이트를 부르는 스위트가 스무 번쯤 그렇게 하므로 CI의 회귀 단계가 2.5분에서 32분이 됐고 한 셀은 40분 제한에 걸렸다
+(ad032ec, 2026-09-18). 실제 실행이 필요한 픽스처는 지금처럼 자기만의 빈 로그나 다른 실행 ID를 쓴다(evidencecheck
+스위트가 그렇게 한다). pull 뒤에 할 일은 없다.
 
 ### `[알아둘 것]` CI 워크플로 파일이 다시 유효해졌고 job 수준 컨텍스트가 핀으로 고정됐다
 

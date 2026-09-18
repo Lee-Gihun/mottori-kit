@@ -80,6 +80,9 @@ TEST_RUN_ID_ENV = "MOTTORI_TEST_RUN_ID"
 TEST_MARKER = re.compile(
     r"test:(tools/test_[A-Za-z0-9_]+\.py)::[A-Za-z_][A-Za-z0-9_]*"
 )
+TEST_ID_MARKER = re.compile(
+    r"test:(tools/test_[A-Za-z0-9_]+\.py::[A-Za-z_][A-Za-z0-9_]*)"
+)
 EVIDENCE_TARGETS = (
     "system/kit-decisions.md", "CHANGELOG.md", "system/enforcement-matrix.md",
 )
@@ -200,19 +203,45 @@ def _ensure_git_tree(tree):
     return True
 
 
-def _refresh_test_evidence(tree):
-    """Run every suite cited by a test marker and create a fresh RAN log."""
-    if not _ensure_git_tree(tree):
-        return os.environ.get(TEST_LOG_ENV), False
-    if os.environ.get(TEST_EVIDENCE_ACTIVE) == "1":
-        return os.environ.get(TEST_LOG_ENV), True
-    suites = set()
+def _cited_test_ids(tree):
+    """Return (suite paths, test IDs) cited by test markers in the tree's evidence targets."""
+    suites, ids = set(), set()
     for rel in EVIDENCE_TARGETS:
         try:
             text = open(os.path.join(tree, rel), encoding="utf-8").read()
         except OSError:
             continue
         suites.update(match.group(1) for match in TEST_MARKER.finditer(text))
+        ids.update(match.group(1) for match in TEST_ID_MARKER.finditer(text))
+    return suites, ids
+
+
+def _log_covers(log_path, run_id, ids):
+    """True when the inherited log already holds a fresh RAN record of this run for every cited ID."""
+    import evidencecheck as EC
+    ran, _now = EC._load_test_runs(log_path, run_id)
+    return ran is not None and ids <= ran
+
+
+def _refresh_test_evidence(tree):
+    """Create a fresh RAN log for every suite cited by a test marker.
+
+    Evidence is reused, not recomputed: when the caller inherited a log and a run ID and that log
+    already holds a fresh record of the same run for every cited test, nothing is re-executed. Before
+    this rule every gate run inside a fixture re-ran all cited suites (14 of them), and suites that
+    exercise the gate in fixtures do so about twenty times; CI's regression step went from 2.5 to
+    32 minutes and one cell hit the 40-minute limit (2026-09-18, ad032ec). Fixtures that need a real
+    execution use their own empty log or another run ID, as the evidencecheck suite does."""
+    if not _ensure_git_tree(tree):
+        return os.environ.get(TEST_LOG_ENV), False
+    if os.environ.get(TEST_EVIDENCE_ACTIVE) == "1":
+        return os.environ.get(TEST_LOG_ENV), True
+    suites, cited_ids = _cited_test_ids(tree)
+    inherited_log = os.environ.get(TEST_LOG_ENV)
+    inherited_run = os.environ.get(TEST_RUN_ID_ENV, "")
+    if (inherited_log and re.fullmatch(r"[A-Za-z0-9._+-]{1,128}", inherited_run)
+            and _log_covers(inherited_log, inherited_run, cited_ids)):
+        return inherited_log, True
     # evidencecheck's own end-to-end gate fixture must run after every other
     # cited suite has written its records, otherwise its nested gate sees a
     # legitimately incomplete in-progress log.
