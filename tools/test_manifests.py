@@ -20,6 +20,7 @@ DELIVERY_PATHS = {
     "system/test-matrix.yaml",
     "tools/context_budget.py",
     "tools/enforce.py",
+    "tools/i18n_stamp.py",
     "tools/manifest_build.py",
     "tools/test_bypass_pins.py",
     "tools/test_context_budget.py",

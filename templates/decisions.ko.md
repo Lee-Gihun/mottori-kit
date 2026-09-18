@@ -1,3 +1,4 @@
+<!-- source: decisions.md sha256:5a924329159622421f1e6595235d9c50f9a8b3a6d0b4a185253fea0f614f0228 source-of-truth: en -->
 # 결정 기록 (DR)
 
 **이 워크스페이스의 결정만 담는다.** 킷 자체의 설계 결정은 `system/kit-decisions.md`에 있고

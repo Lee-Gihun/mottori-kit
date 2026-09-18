@@ -1,3 +1,4 @@
+<!-- source: garden.md sha256:798c7ad03b85437a1a1c4c2d1ae4447f68c7e60497988e5a32ef62203f5b46a8 source-of-truth: en -->
 # 정원사
 
 정원사 패스를 실행해줘: `tools/wf_gardener.js` 워크플로를 돌리고 (report-only),

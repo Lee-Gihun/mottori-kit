@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed on Hangul outside approved categories or the migration backlog.
+"""Fail closed on Hangul, locale drift, and ``tools/i18n_stamp.py`` failures.
 
 The five approved categories are i18n ``ko`` values, ``.ko.md`` files, marked
 evidence quotations with an ASCII English rendering, test-fixture strings, and
@@ -10,9 +10,13 @@ pending entries fail. Required locale pairs are enumerated in both directions.
 from __future__ import annotations
 
 import ast
+import contextlib
+import io
 import re
 import tempfile
 from pathlib import Path
+
+import i18n_stamp
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,46 +30,7 @@ INSTANCE_PATHS = {
     "system/rituals.local.md",
 }
 PENDING_PATH = "system/language-pending.txt"
-REQUIRED_LOCALE_PAIRS = {
-    ".claude/commands/dossier.md",
-    ".claude/commands/garden.md",
-    ".claude/commands/now.md",
-    ".claude/commands/paper-to-kit.md",
-    ".claude/commands/recall.md",
-    "AGENTS.md",
-    "CHANGELOG.md",
-    "CHECKLIST.md",
-    "README.md",
-    "SETUP.md",
-    "system/PRD-info-architecture.md",
-    "system/PRD-session-memory.md",
-    "system/WORKING-WITH-AI.md",
-    "system/deep-pass.md",
-    "system/enforcement-matrix.md",
-    "system/evidence-schema.md",
-    "system/kit-decisions.md",
-    "system/lenses/README.md",
-    "system/lenses/ergodic.md",
-    "system/lenses/feedback-loop.md",
-    "system/lenses/fence.md",
-    "system/lenses/feynman.md",
-    "system/lenses/incentive.md",
-    "system/lenses/inversion.md",
-    "system/lenses/isomorphism.md",
-    "system/lenses/jensen.md",
-    "system/lenses/ledger.md",
-    "system/lenses/limits.md",
-    "system/lenses/marginal.md",
-    "system/lenses/mirror.md",
-    "system/lenses/silence.md",
-    "system/person-ledger.md",
-    "system/reviews/architecture.md",
-    "system/rituals.md",
-    "system/skills/paper-to-kit.md",
-    "templates/decisions.md",
-    "templates/instance-rules.md",
-    "templates/rituals.local.md",
-}
+REQUIRED_LOCALE_PAIRS = i18n_stamp.REQUIRED_LOCALE_PAIRS
 
 
 def engine_paths(root: Path) -> list[Path]:
@@ -253,23 +218,126 @@ def locale_pair_issues(root: Path = ROOT, required_pairs: set[str] | None = None
             issues.append(f"{rel}: locale heading hierarchy differs from canonical file")
         if markdown_links(ko_text) != markdown_links(en_text):
             issues.append(f"{rel}: locale relative Markdown links differ from canonical file")
+    issues.extend(
+        item.message
+        for item in i18n_stamp.check(root, required).stale
+        if item.source is not None and (root / item.source).is_file() and (root / item.target).is_file()
+    )
     return issues
 
 
 def test_pair_fixture() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
+        write_pending(root)
         required = {"guide.md"}
         (root / "guide.md").write_text("# Guide\n\n[Setup](SETUP.md)\n", encoding="utf-8")
         (root / "guide.ko.md").write_text("# Guide locale\n\n[Setup](SETUP.md)\n", encoding="utf-8")
+        i18n_stamp.bind(root / "guide.ko.md", root)
         assert locale_pair_issues(root, required) == []
         (root / "guide.ko.md").write_text("## Guide locale\n\n[Other](OTHER.md)\n", encoding="utf-8")
+        i18n_stamp.bind(root / "guide.ko.md", root)
         assert len(locale_pair_issues(root, required)) == 2
         (root / "guide.ko.md").unlink()
         assert locale_pair_issues(root, required) == ["guide.md: required locale file missing: guide.ko.md"]
         (root / "guide.ko.md").write_text("# Guide locale\n", encoding="utf-8")
         (root / "guide.md").unlink()
         assert locale_pair_issues(root, required) == ["guide.md: required canonical file missing"]
+
+
+def test_stamp_bind_and_source_drift_fixture() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        write_pending(root)
+        source = root / "guide.md"
+        target = root / "guide.ko.md"
+        source.write_text("# Guide\n", encoding="utf-8")
+        target.write_text("# Guide locale\n", encoding="utf-8")
+        i18n_stamp.bind(target, root)
+        assert i18n_stamp.check(root, {"guide.md"}).stale == ()
+        assert re.fullmatch(
+            r"<!-- source: guide\.md sha256:[0-9a-f]{64} source-of-truth: en -->",
+            target.read_text(encoding="utf-8").splitlines()[0],
+        )
+        source.write_text("# Changed guide\n", encoding="utf-8")
+        report = i18n_stamp.check(root, {"guide.md"})
+        assert len(report.stale) == 1
+        assert "source hash changed" in report.stale[0].message
+        pending = "\n".join(sorted(REQUIRED_LOCALE_PAIRS - {"guide.md"})) + "\n"
+        write_pending(root, pending)
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert i18n_stamp.main(["--root", str(root), "check"]) == 1
+
+
+def test_stamp_pending_fixture() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        write_pending(root, "legacy.md\n")
+        (root / "legacy.md").write_text("# 아직 번역 전\n", encoding="utf-8")
+        report = i18n_stamp.check(root, {"legacy.md"}, {"legacy.md": "pending"})
+        assert report.stale == ()
+        assert report.pending == ("legacy.md",)
+
+
+def test_stamp_completed_pair_cannot_be_downgraded_by_pending_fixture() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        write_pending(root)
+        source = root / "guide.md"
+        target = root / "guide.ko.md"
+        source.write_text("# Guide\n", encoding="utf-8")
+        target.write_text("# Guide locale\n", encoding="utf-8")
+        i18n_stamp.bind(target, root)
+        target.write_text("# Guide locale\n", encoding="utf-8")
+        write_pending(root, "guide.md\n")
+        report = i18n_stamp.check(root, {"guide.md"})
+        assert len(report.stale) == 1
+        assert report.stale[0].message == (
+            "guide.ko.md: completed pair cannot be pending without an explicit inventory transition"
+        )
+
+
+def test_stamp_missing_required_pair_fixture() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        write_pending(root)
+        (root / "guide.md").write_text("# Guide\n", encoding="utf-8")
+        report = i18n_stamp.check(root, {"guide.md"})
+        assert len(report.stale) == 1
+        assert report.stale[0].message == "guide.ko.md: translated file missing"
+
+
+def test_stamp_korean_source_fixture() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        write_pending(root)
+        lens_dir = root / "system" / "lenses"
+        lens_dir.mkdir(parents=True)
+        source = lens_dir / "feynman.ko.md"
+        target = lens_dir / "feynman.md"
+        source.write_text("# 원천\n", encoding="utf-8")
+        target.write_text("# Source\n", encoding="utf-8")
+        i18n_stamp.bind(target, root)
+        assert i18n_stamp.check(root, {"system/lenses/feynman.md"}).stale == ()
+        assert "source: feynman.ko.md" in target.read_text(encoding="utf-8").splitlines()[0]
+        assert "source-of-truth: ko" in target.read_text(encoding="utf-8").splitlines()[0]
+
+
+def test_stamp_newline_and_trailing_space_normalization_fixture() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        write_pending(root)
+        source = root / "guide.md"
+        target = root / "guide.ko.md"
+        source.write_bytes(b"# Guide\r\n\r\nBody\r\n")
+        target.write_text("# Guide locale\n\nBody\n", encoding="utf-8")
+        i18n_stamp.bind(target, root)
+        source.write_bytes(b"# Guide\n\nBody\n")
+        assert i18n_stamp.check(root, {"guide.md"}).stale == ()
+        source.write_bytes(b"# Guide  \n\nBody\n")
+        report = i18n_stamp.check(root, {"guide.md"})
+        assert len(report.stale) == 1
+        assert "source hash changed" in report.stale[0].message
 
 
 def write_pending(root: Path, entries: str = "") -> None:
@@ -317,6 +385,12 @@ def test_pending_contract_fixture() -> None:
 
 def main() -> int:
     test_pair_fixture()
+    test_stamp_bind_and_source_drift_fixture()
+    test_stamp_pending_fixture()
+    test_stamp_completed_pair_cannot_be_downgraded_by_pending_fixture()
+    test_stamp_missing_required_pair_fixture()
+    test_stamp_korean_source_fixture()
+    test_stamp_newline_and_trailing_space_normalization_fixture()
     test_fixture_allowlist()
     test_evidence_rendering_fixture()
     test_pending_contract_fixture()

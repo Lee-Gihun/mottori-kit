@@ -1,3 +1,4 @@
+<!-- source: enforcement-matrix.md sha256:19ad7f920d2cbe0312acb6651dcc6577a08136a6f4fc9dc37d235a01e383b9e0 source-of-truth: en -->
 # 근거 계약 집행 매트릭스
 
 이 표는 근거 계약에서 코드가 판정하는 범위와 사람이 검토하는 범위를 분리한다.
