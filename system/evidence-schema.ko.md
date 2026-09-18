@@ -1,3 +1,4 @@
+<!-- source: evidence-schema.md sha256:27732bcc96db7bfc6ad16c9444c30ab7fddf65b026f5482ee5490db7936dee5f source-of-truth: en -->
 # 근거 표지 스키마
 
 근거 표지는 결정이나 변경의 근거를 기계가 찾을 수 있게 하는 포인터다. 검사기는 모든 표지의

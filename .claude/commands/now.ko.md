@@ -1,3 +1,4 @@
+<!-- source: now.md sha256:3f9b04ad44b60da1b8f0b6f7056a0ebb41ef233aee6c6e58019fa5accf46635b source-of-truth: en -->
 # NOW
 
 state/NOW.md와, 존재하면 _private/state/NOW.md를 함께 읽고 현재 상태를 요약해 보여줘.

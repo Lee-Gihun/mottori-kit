@@ -1,3 +1,4 @@
+<!-- source: dossier.md sha256:819e2e8452cc469ab867267c8c8507ab28e676b19631782d528ec67b2970e856 source-of-truth: en -->
 # 서류철
 
 복귀 의식: "$ARGUMENTS" 스레드의 서류철을 읽어줘.

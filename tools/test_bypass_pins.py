@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Characterization pins for H1's 29 gate/hook/worker bypass attacks.
+"""Characterization pins for H1 and G2 gate/hook/worker bypass attacks.
 
 These tests preserve the integrated behavior after W2-7 and W2-19. ``EXPECT_HOLE=True``
 is attached to attacks that remain REVIEW or are waiting on a named dependency.
@@ -383,8 +383,7 @@ def test_g2_n1_pending_addition_currently_skips_language_check():
         assert matching == []
 
 
-@dependency_hole("dependency: W2-17 must require a translation stamp or paired canonical change")
-def test_g2_n2_locale_only_meaning_change_currently_passes_pair_check():
+def test_g2_n2_locale_only_meaning_change_is_blocked_by_stamp():
     if not (ROOT / "tools" / "test_language.py").is_file():
         print("- not applicable here: kit-only suite test_language absent (installed instance)")
         return
@@ -393,7 +392,9 @@ def test_g2_n2_locale_only_meaning_change_currently_passes_pair_check():
         root = Path(tmp)
         _write(root, "README.md", "# Canonical\n\nSame structure.\n")
         _write(root, "README.ko.md", "# Locale\n\n영어 정본에는 없는 의미 변경이다.\n")
-        assert test_language.locale_pair_issues(root, {"README.md"}) == []
+        assert test_language.locale_pair_issues(root, {"README.md"}) == [
+            "README.ko.md: missing translation stamp"
+        ]
 
 
 def test_g2_n3_gitignore_change_cannot_allow_new_instance_path():

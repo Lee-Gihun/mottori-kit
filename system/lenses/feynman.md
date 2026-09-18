@@ -1,3 +1,4 @@
+<!-- source: feynman.ko.md sha256:cf3f89c92ca85e0b1e1a4f7578bcf2efa4577a7b912e493b3cd0fe5387c2fb10 source-of-truth: ko -->
 Korean: `feynman.ko.md`
 
 # Feynman lens

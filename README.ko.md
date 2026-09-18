@@ -1,3 +1,4 @@
+<!-- source: README.md sha256:279db7856a7e911926759fca3d61ccde55b7744b04eec95bb6d401aa44c3a746 source-of-truth: en -->
 # mottori-kit
 
 무한 세션에서 상태와 깊이를 잃지 않기 위한 **에이전트 워크스페이스 엔진**.

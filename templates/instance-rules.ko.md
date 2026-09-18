@@ -1,3 +1,4 @@
+<!-- source: instance-rules.md sha256:1b407e9b264fe52fc1220ba26aca61a4f492e8f4d529dc10c2752e1497eff0d8 source-of-truth: en -->
 # 인스턴스 규약 — CHANGEME
 
 *이 파일은 git에 안 올라간다 (`.gitignore`). 이 머신에서만 참인 것을 여기 쓴다.*

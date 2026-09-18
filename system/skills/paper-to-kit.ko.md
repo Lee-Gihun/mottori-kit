@@ -1,3 +1,4 @@
+<!-- source: paper-to-kit.md sha256:008b83b3d352bb828f1e3baecd601d930a0b2f249dda812cecb23d06c60d8372 source-of-truth: en -->
 # paper-to-kit workflow
 
 ---

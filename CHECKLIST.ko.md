@@ -1,3 +1,4 @@
+<!-- source: CHECKLIST.md sha256:f3fcfa9f3799622cab5973ef2cd57f16d8af599078a2c949cb0699e93dab5576 source-of-truth: en -->
 # CHECKLIST — 설치 후 확인할 것
 
 `bash setup.sh`와 `python3 tools/doctor.py`가 끝난 뒤의 목록이다.

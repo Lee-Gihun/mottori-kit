@@ -13,6 +13,19 @@ outstanding, `python3 tools/doctor.py` fails after the pull.
 
 ## v0.8 · 2026-09-18 (English canonical migration)
 
+### `[Note]` Translation stamps make semantic drift visible
+
+Evidence: `test:tools/test_language.py::test_stamp_bind_and_source_drift_fixture`,
+`test:tools/test_language.py::test_stamp_pending_fixture`,
+`test:tools/test_language.py::test_stamp_korean_source_fixture`, and
+`test:tools/test_language.py::test_stamp_newline_and_trailing_space_normalization_fixture`.
+
+`python3 tools/i18n_stamp.py check` verifies that each completed translation starts with the normalized SHA-256
+of its declared source and reports migration backlog entries separately as pending. English is the source for
+kit-owned surfaces; Korean is the source for the two PRDs, WORKING-WITH-AI, deep-pass, person-ledger, and the
+lenses. After translating a changed source, run `python3 tools/i18n_stamp.py bind <translated-file>` to record
+the new source hash. `tools/test_language.py` runs the same check as part of the locale-pair gate.
+
 ### `[Note]` The review manifest is now a commit-gate checker
 
 Evidence: `test:tools/test_manifests.py::test_issues_mode_reports_stale_paths`.
