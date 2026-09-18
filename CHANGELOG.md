@@ -13,6 +13,53 @@ outstanding, `python3 tools/doctor.py` fails after the pull.
 
 ## v0.8 · 2026-09-18 (English canonical migration)
 
+### `[Note]` Transcription listens harder on noisy audio and reports what it could not hear
+
+Evidence: `test:tools/test_transcribe_filter.py::test_repeated_lines_become_one_noise_span`,
+`test:tools/test_transcribe_filter.py::test_low_confidence_and_watermark_segments_are_dropped`,
+`test:tools/test_transcribe_filter.py::test_clean_transcript_is_untouched`, and
+`test:tools/test_transcribe_filter.py::test_prompt_file_overrides_generic_default`.
+
+`tools/transcribe.py` now denoises before decoding (`afftdn` plus `speechnorm` instead of `dynaudnorm`), decodes
+with strict thresholds and a vocabulary prompt, and drops hallucination-shaped segments: repeated sentences, low
+confidence, high compression, and subtitle-credit watermarks. Dropped time of eight seconds or more is written to
+`<stem>-noise-spans.txt` and counted in the QA file, so a span the machine could not hear is handed to a person
+instead of being invented. Measured on a restaurant recording, the same span went from a hallucination loop to
+readable sentences; a speaker far from the microphone under heavier noise still cannot be recovered, and source
+separation (demucs) did not help there. The engine ships only generic prompts. Names and domain terms belong to
+the instance in `_private/transcribe-prompts.json` (`{"ko": "...", "en": "..."}`), which never enters the kit.
+`setup.sh` now seeds that file from `templates/transcribe-prompts.json`; an existing instance copies the template
+by hand and edits it, and the tool works without the file. Seed data under `templates/*.json` may carry Hangul only
+on `"ko"` lines, the same contract as the `ko` column of `tools/i18n.py`
+(`test:tools/test_language.py::test_template_json_ko_fixture`). Existing transcripts are not rewritten; rerun the
+tool on a recording whose transcript shows repeated lines or invented credits.
+
+### `[Note]` Gate-definition approval is not applicable in an installed instance
+
+Evidence: `test:tools/test_manifests.py::test_gate_definition_approval_is_not_applicable_in_installed_instance`.
+
+KIT-DR-013 governs the kit tree, where gate definitions are authored. An installed instance (one with
+`system/memory-config.json`) receives them through engine sync, and the origin kit's ledger already approved
+that diff, so `tools/manifest_build.py --issues` now reports `~gate-definition-approval` as not applicable
+there. The first implementation demanded an approval line in every instance and blocked every engine sync
+(2026-09-18 port measurement). New regression suites under `tools/test_` are also classified by default
+(`tool`, read by people and run by gates), so a new suite no longer leaves the review manifest unclassified.
+The manifest also stopped keeping a hand-written list of files that count before Git indexes them: every
+untracked, not ignored file under `tools/`, `system/`, `templates/`, `.github/workflows/`, and `.claude/commands/`
+counts, so a worker clone or the fresh-install fixture sees the same inventory as the committed tree, and a new
+file outside those locations fails `tools/test_manifests.py` first with the rule instead of the fresh-install
+gate later with a ghost path (`test:tools/test_manifests.py::test_new_files_are_within_delivery_prefixes`).
+
+### `[Note]` The CI workflow file is valid again and its job-level contexts are pinned
+
+Evidence: `test:tools/test_manifests.py::test_workflow_job_env_uses_only_job_level_contexts`.
+
+v0.8 (5/n) put `${{ runner.temp }}` in the job-level `env` of `.github/workflows/gates.yml`. GitHub rejects
+that context there, so the workflow file was invalid and no job ran on a725859: the remote gate was silent,
+not green. The log path now uses `github.workspace`, and `tools/test_manifests.py` rejects any job-level `env`
+expression outside the contexts GitHub allows there (github, needs, strategy, matrix, vars, secrets, inputs),
+so the local gate measures the rule before a push. Nothing to do after the pull.
+
 ### `[Note]` Translation stamps make semantic drift visible
 
 Evidence: `test:tools/test_language.py::test_stamp_bind_and_source_drift_fixture`,

@@ -11,8 +11,11 @@ on:
 
 jobs:
   gates:
+    # Job-level env may reference only github, needs, strategy, matrix, vars, secrets, and inputs.
+    # `runner.temp` here made the whole workflow file invalid and no job ran (a725859, 2026-09-18);
+    # tools/test_manifests.py pins that rule so the local gate catches it before a push.
     env:
-      MOTTORI_TEST_LOG: ${{ runner.temp }}/mottori-test-runs.log
+      MOTTORI_TEST_LOG: ${{ github.workspace }}/.git/mottori-test-runs.log
       MOTTORI_TEST_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.os }}-${{ matrix.python }}
     strategy:
       fail-fast: false

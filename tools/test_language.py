@@ -130,9 +130,21 @@ def historical_changelog_lines(path: Path) -> set[int]:
     return set() if len(versions) < 2 else set(range(versions[1], len(lines) + 1))
 
 
+def json_ko_lines(path: Path) -> set[int]:
+    """Instance seed data under ``templates/``: Hangul is allowed only on lines carrying a ``"ko"`` value,
+    the same contract as the ``ko`` column of ``tools/i18n.py``."""
+    allowed: set[int] = set()
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if re.match(r'\s*"ko"\s*:', line):
+            allowed.add(number)
+    return allowed
+
+
 def allowed_lines(path: Path, rel: str) -> set[int] | None:
     if rel.endswith(".ko.md"):
         return None
+    if rel.startswith("templates/") and rel.endswith(".json"):
+        return json_ko_lines(path)
     if path.name.startswith("test_") or "/test_" in rel:
         if path.suffix == ".py":
             return python_string_lines(path)
@@ -385,7 +397,20 @@ def test_pending_contract_fixture() -> None:
         ]
 
 
+def test_template_json_ko_fixture() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        write_pending(root, "")
+        (root / "templates").mkdir()
+        target = root / "templates" / "seed.json"
+        target.write_text('{\n  "ko": "한국어 값",\n  "en": "English value"\n}\n', encoding="utf-8")
+        assert language_issues(root) == []
+        target.write_text('{\n  "ko": "한국어 값",\n  "en": "한글 in the wrong key"\n}\n', encoding="utf-8")
+        assert language_issues(root) == ["templates/seed.json:3: Hangul outside an allowed surface"]
+
+
 def main() -> int:
+    run_test(test_template_json_ko_fixture, __file__)
     run_test(test_pair_fixture, __file__)
     run_test(test_stamp_bind_and_source_drift_fixture, __file__)
     run_test(test_stamp_pending_fixture, __file__)

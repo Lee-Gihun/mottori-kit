@@ -178,7 +178,8 @@
         "tools/manifest_build.py",
         "tools/test_fresh_install.sh",
         "tools/test_instance_shape.py",
-        "tools/test_language.py"
+        "tools/test_language.py",
+        "tools/test_manifests.py"
       ],
       "reviewed_at": null
     },
@@ -281,6 +282,7 @@
         "codex"
       ],
       "depends_on": [
+        ".github/workflows/gates.yml",
         ".gitignore",
         "AGENTS.md",
         "CHANGELOG.md",
@@ -297,6 +299,7 @@
         "system/rituals.md",
         "system/skills/paper-to-kit.md",
         "system/test-matrix.yaml",
+        "templates/transcribe-prompts.json",
         "tools/context_budget.py",
         "tools/doctor.py",
         "tools/enforce.py",
@@ -328,7 +331,9 @@
         "tools/test_receipts.py",
         "tools/test_skill_parity.py",
         "tools/test_state_runtime.py",
+        "tools/test_transcribe_filter.py",
         "tools/testlib.py",
+        "tools/transcribe.py",
         "tools/worker_batch.py"
       ],
       "reviewed_at": null
@@ -343,6 +348,7 @@
         "codex"
       ],
       "depends_on": [
+        ".github/workflows/gates.yml",
         ".gitignore",
         "AGENTS.md",
         "CLAUDE.md",
@@ -358,6 +364,7 @@
         "system/rituals.md",
         "system/skills/paper-to-kit.md",
         "system/test-matrix.yaml",
+        "templates/transcribe-prompts.json",
         "tools/context_budget.py",
         "tools/doctor.py",
         "tools/enforce.py",
@@ -389,7 +396,9 @@
         "tools/test_receipts.py",
         "tools/test_skill_parity.py",
         "tools/test_state_runtime.py",
+        "tools/test_transcribe_filter.py",
         "tools/testlib.py",
+        "tools/transcribe.py",
         "tools/worker_batch.py"
       ],
       "reviewed_at": null
@@ -600,6 +609,7 @@
         "SETUP.md",
         "templates/instance-rules.md",
         "templates/memory-config.json",
+        "templates/transcribe-prompts.json",
         "tools/doctor.py",
         "tools/gate.py",
         "tools/i18n.py",
@@ -1548,6 +1558,7 @@
         "templates/memory-config.json",
         "templates/rituals.local.ko.md",
         "templates/rituals.local.md",
+        "templates/transcribe-prompts.json",
         "tools/ask_codex.sh",
         "tools/build_memory_map.py",
         "tools/codex_root_thread.py",
@@ -1606,6 +1617,7 @@
         "tools/test_skill_parity.py",
         "tools/test_state_runtime.py",
         "tools/test_tool_entrypoints.py",
+        "tools/test_transcribe_filter.py",
         "tools/test_worker_batch.py",
         "tools/testlib.py",
         "tools/transcribe.py",
@@ -2078,6 +2090,7 @@
         "tools/test_skill_parity.py",
         "tools/test_state_runtime.py",
         "tools/test_tool_entrypoints.py",
+        "tools/test_transcribe_filter.py",
         "tools/test_worker_batch.py",
         "tools/testlib.py",
         "tools/transcribe.py",
@@ -2198,6 +2211,19 @@
       "depends_on": [
         "system/rituals.md"
       ],
+      "reviewed_at": null
+    },
+    {
+      "path": "templates/transcribe-prompts.json",
+      "kind": "template",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "tool"
+      ],
+      "depends_on": [],
       "reviewed_at": null
     },
     {
@@ -2515,32 +2541,21 @@
       ],
       "depends_on": [
         ".github/workflows/gates.yml",
+        "setup.sh",
         "system/enforcement-matrix.yaml",
         "system/engine-inventory.txt",
         "system/gate-definition-approvals.md",
         "system/language-pending.txt",
         "system/review-manifest.yaml",
-        "system/reviews/content-audit.tsv",
         "system/test-matrix.yaml",
-        "tools/context_budget.py",
         "tools/enforce.py",
         "tools/evidencecheck.py",
         "tools/gate.py",
         "tools/i18n_stamp.py",
-        "tools/test_bypass_pins.py",
-        "tools/test_context_budget.py",
         "tools/test_devtree_gate.py",
-        "tools/test_egress.py",
-        "tools/test_enforce.py",
         "tools/test_instance_shape.py",
         "tools/test_language.py",
-        "tools/test_manifests.py",
-        "tools/test_matrix_check.py",
-        "tools/test_mutation.py",
-        "tools/test_tool_entrypoints.py",
-        "tools/test_worker_batch.py",
-        "tools/testlib.py",
-        "tools/worker_batch.py"
+        "tools/testlib.py"
       ],
       "reviewed_at": null
     },
@@ -2963,31 +2978,15 @@
         ".github/workflows/gates.yml",
         "CHANGELOG.md",
         "system/enforcement-matrix.yaml",
-        "system/engine-inventory.txt",
         "system/gate-definition-approvals.md",
         "system/language-pending.txt",
         "system/review-manifest.yaml",
-        "system/reviews/content-audit.tsv",
         "system/test-matrix.yaml",
-        "tools/context_budget.py",
         "tools/enforce.py",
         "tools/evidencecheck.py",
         "tools/gate.py",
-        "tools/i18n_stamp.py",
         "tools/manifest_build.py",
-        "tools/test_bypass_pins.py",
-        "tools/test_context_budget.py",
-        "tools/test_devtree_gate.py",
-        "tools/test_egress.py",
-        "tools/test_enforce.py",
-        "tools/test_instance_shape.py",
-        "tools/test_language.py",
-        "tools/test_matrix_check.py",
-        "tools/test_mutation.py",
-        "tools/test_tool_entrypoints.py",
-        "tools/test_worker_batch.py",
-        "tools/testlib.py",
-        "tools/worker_batch.py"
+        "tools/test_language.py"
       ],
       "reviewed_at": null
     },
@@ -3183,6 +3182,19 @@
         "tools/sync_engine.sh",
         "tools/transcribe.py",
         "tools/wf_gardener.js"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/test_transcribe_filter.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/transcribe.py"
       ],
       "reviewed_at": null
     },

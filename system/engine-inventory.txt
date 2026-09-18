@@ -33,6 +33,7 @@ test_bypass_pins.py
 test_context_budget.py
 test_egress.py
 test_enforce.py
+test_transcribe_filter.py
 test_tool_entrypoints.py
 test_worker_batch.py
 evidencecheck.py
