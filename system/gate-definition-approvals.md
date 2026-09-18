@@ -1,0 +1,6 @@
+# Gate-definition approvals (append-only)
+
+One line per approved gate-definition diff (KIT-DR-013). `tools/manifest_build.py --issues` accepts a diff only when a
+line matches its sorted file list and sha256 exactly. Lines are never edited or removed; a new diff gets a new line.
+
+gate-definition-approval: decision:KIT-DR-013 files=.github/workflows/gates.yml,system/enforcement-matrix.yaml,system/review-manifest.yaml,system/test-matrix.yaml,tools/evidencecheck.py,tools/gate.py,tools/manifest_build.py,tools/test_language.py sha256=3c4bd837ddf4d465a54999f9416f6199b4643f5d6d1458642ab1c48a16d598c8

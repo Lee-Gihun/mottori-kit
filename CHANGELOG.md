@@ -38,6 +38,17 @@ had been regenerated before `git add`, and the remote gate failed on its first r
 the gate, not by a person remembering the order of steps. A tree without the manifest (an installed instance) is
 not applicable.
 
+### `[Note]` Test evidence now proves execution and gate definitions require dispatcher approval
+
+Every Python regression suite writes a timestamped `RAN <run-id> <time> tools/test_x.py::name` row through `tools/testlib.py` when
+`MOTTORI_TEST_LOG` is set. Evidence checking now fails closed when a test marker names only a definition but
+has no recent execution record. Fresh-install, CI, and `tools/gate.py` create the log. Files classified as
+`gate-definition` in the review manifest require a dispatcher approval line bound to the changed path set and
+binary diff SHA before `tools/manifest_build.py --check` passes.
+
+Evidence: `test:tools/test_evidencecheck.py::test_TESTS_omission_mutation_is_caught`,
+`test:tools/test_manifests.py::test_gate_definition_change_requires_dispatcher_approval`.
+
 ### `[Automatic]` The first canonical kit surfaces move to English with Korean locale files
 
 The four root operational documents and AGENTS, three instance templates, five slash commands, the paper-to-kit
@@ -176,6 +187,15 @@ config와 state 입력이 둘 다 없는 상류 개발 트리에서 direct·port
 gated 0을 낸다. NOW 또는 journal은 있지만 config만 없는 반쪽 설치는 `config-absent`로 fail-close한다.
 `gate.py selfcheck`는 direct와 precommit의 checker-qualified gated ID 집합을 비교하고 다르면 WARN에 두
 집합을 모두 보여준다. 기존 인스턴스가 손으로 바꿀 파일은 없다.
+
+### `[Automatic]` The release gate now measures long-lived installed-instance shape
+
+Evidence: `experiment:w2-16-instance-shape-release-gate`.
+
+`tools/test_instance_shape.py` builds a synthetic instance with no setup.sh or templates, tracked public state
+and instance configuration, a historical Markdown symlink, and Korean user data. It runs the ENGINE regressions,
+doctor, gate, pre-commit, pre-push, and English doctor in that tree, then detects all seven revived tree-shape
+defects. `system/engine-inventory.txt` owns the ENGINE copy list.
 
 ### `[알아둘 것]` 공용 엔진 회귀는 설치된 인스턴스에서도 돈다
 

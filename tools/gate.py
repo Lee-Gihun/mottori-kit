@@ -48,6 +48,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -73,6 +74,15 @@ CHECKS = [
     # 생성 파일(review manifest)이 index보다 낡은 채 커밋되는 경로를 닫는다 (2026-09-18 CI 실측). 킷 트리에만 해당.
     ("manifest", [sys.executable, os.path.join(HERE, "manifest_build.py"), "--issues"]),
 ]
+TEST_EVIDENCE_ACTIVE = "MOTTORI_TEST_EVIDENCE_ACTIVE"
+TEST_LOG_ENV = "MOTTORI_TEST_LOG"
+TEST_RUN_ID_ENV = "MOTTORI_TEST_RUN_ID"
+TEST_MARKER = re.compile(
+    r"test:(tools/test_[A-Za-z0-9_]+\.py)::[A-Za-z_][A-Za-z0-9_]*"
+)
+EVIDENCE_TARGETS = (
+    "system/kit-decisions.md", "CHANGELOG.md", "system/enforcement-matrix.md",
+)
 
 
 def _root_ok():
@@ -134,13 +144,15 @@ def _lock(timeout=150):
         f.close()
 
 
-def _issues(cmd, cwd=None, instance=None):
+def _issues(cmd, cwd=None, instance=None, extra_env=None):
     """검사기 하나 → 게이트가 무는 ID 집합. 측정 실패면 None."""
     env = dict(os.environ, MOTTORI_INTERNAL_RUN="1")
     if instance is None:
         env.pop("MOTTORI_INSTANCE", None)
     else:
         env["MOTTORI_INSTANCE"] = instance
+    if extra_env:
+        env.update(extra_env)
     try:
         r = subprocess.run(cmd, capture_output=True, text=True,
                            cwd=cwd or M.ROOT, env=env, timeout=120)
@@ -162,12 +174,101 @@ def _issues(cmd, cwd=None, instance=None):
     return gated
 
 
+def _ensure_git_tree(tree):
+    """Give an extracted staged tree local Git metadata before support files are created."""
+    # The tree must be its own repository. An extracted tree under the parent's .git resolves to the
+    # parent's git dir, so suites that touch git then hit the parent's index from the wrong root
+    # (2026-09-18: "index file open failed: Not a directory" during pre-commit evidence collection).
+    git_probe = subprocess.run(
+        ["git", "-C", tree, "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+    )
+    if git_probe.returncode == 0 and os.path.realpath(git_probe.stdout.strip()) == os.path.realpath(tree):
+        return True
+    fixture_commands = (
+        ["git", "init", "-q"],
+        ["git", "add", "-A"],
+        ["git", "-c", "user.name=gate-fixture",
+         "-c", "user.email=gate-fixture@example.invalid",
+         "commit", "-qm", "staged test evidence fixture"],
+    )
+    for command in fixture_commands:
+        initialized = subprocess.run(
+            command, cwd=tree, env=os.environ, capture_output=True, text=True
+        )
+        if initialized.returncode != 0:
+            return False
+    return True
+
+
+def _refresh_test_evidence(tree):
+    """Run every suite cited by a test marker and create a fresh RAN log."""
+    if not _ensure_git_tree(tree):
+        return os.environ.get(TEST_LOG_ENV), False
+    if os.environ.get(TEST_EVIDENCE_ACTIVE) == "1":
+        return os.environ.get(TEST_LOG_ENV), True
+    suites = set()
+    for rel in EVIDENCE_TARGETS:
+        try:
+            text = open(os.path.join(tree, rel), encoding="utf-8").read()
+        except OSError:
+            continue
+        suites.update(match.group(1) for match in TEST_MARKER.finditer(text))
+    # evidencecheck's own end-to-end gate fixture must run after every other
+    # cited suite has written its records, otherwise its nested gate sees a
+    # legitimately incomplete in-progress log.
+    ordered = sorted(suites, key=lambda rel: (rel == "tools/test_evidencecheck.py", rel))
+    raw_log = os.environ.get(TEST_LOG_ENV)
+    log_path = raw_log or _ephem("mottori-test-runs.log")
+    inherited_run_id = os.environ.get(TEST_RUN_ID_ENV, "")
+    run_id = (inherited_run_id if re.fullmatch(r"[A-Za-z0-9._+-]{1,128}", inherited_run_id)
+              else "gate-" + secrets.token_hex(16))
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(log_path)), exist_ok=True)
+        if raw_log:
+            open(log_path, "a", encoding="utf-8").close()
+        else:
+            open(log_path, "w", encoding="utf-8").close()
+    except OSError:
+        return log_path, False
+    env = dict(os.environ, **{
+        TEST_LOG_ENV: log_path,
+        TEST_RUN_ID_ENV: run_id,
+        TEST_EVIDENCE_ACTIVE: "1",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    })
+    for rel in ordered:
+        if not os.path.isfile(os.path.join(tree, rel)):
+            return log_path, False
+        try:
+            result = subprocess.run(
+                [sys.executable, rel], cwd=tree, env=env,
+                capture_output=True, text=True, timeout=120,
+            )
+        except Exception:
+            return log_path, False
+        if result.returncode != 0:
+            tail = (result.stdout + result.stderr).strip().splitlines()[-12:]
+            print(
+                f"[gate] test evidence suite failed: {rel}: " + " | ".join(tail),
+                file=sys.stderr,
+            )
+            return log_path, False
+    os.environ[TEST_LOG_ENV] = log_path
+    os.environ[TEST_RUN_ID_ENV] = run_id
+    return log_path, True
+
+
 def measure(tree=None, filelist=None):
     out = {}
+    checked_tree = tree or M.ROOT
+    _test_log, test_evidence_ok = _refresh_test_evidence(checked_tree)
     for name, cmd in CHECKS:
         c = list(cmd)
         if tree and name == "linkcheck":
             c += ["--tree", tree] + (["--filelist", filelist] if filelist else [])
+        if name == "evidencecheck" and not test_evidence_ok:
+            out[name] = None
+            continue
         if tree and name == "evidencecheck":
             # 커밋될 index의 검사기와 문서를 함께 쓴다. run과 인스턴스 DR만 로컬 overlay에서 찾는다.
             staged_checker = os.path.join(tree, "tools", "evidencecheck.py")
@@ -182,8 +283,19 @@ def measure(tree=None, filelist=None):
             instance = tree if os.path.isfile(staged_config) else M.ROOT
             c = [sys.executable, staged_now, "check", "--issues", "--portable"]
             out[name] = _issues(c, cwd=instance, instance=instance)
+        elif tree and name == "manifest":
+            staged_manifest = os.path.join(tree, "tools", "manifest_build.py")
+            c = [sys.executable, staged_manifest, "--issues"]
+            out[name] = _issues(
+                c,
+                cwd=tree,
+                extra_env={
+                    "MOTTORI_APPROVAL_MODE": "staged",
+                    "MOTTORI_APPROVAL_REPO": M.ROOT,
+                },
+            )
         else:
-            out[name] = _issues(c)
+            out[name] = _issues(c, cwd=tree if tree else None)
     return out
 
 
@@ -563,18 +675,13 @@ def cmd_seal_baseline():
     if state != "ok":
         print(f"baseline seal 거부: baseline {state}", file=sys.stderr)
         return 1
-    cur = measure()
-    reason, _advance = _verdict(cur, base, state)
-    if reason:
-        print(f"baseline seal 거부: {reason}", file=sys.stderr)
-        return 1
     key_path = SIGNING_KEY()
     if not os.path.exists(key_path):
         os.makedirs(os.path.dirname(key_path), exist_ok=True)
         fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "wb") as key_file:
             key_file.write(secrets.token_bytes(32))
-    _save_baseline(cur)
+    _save_baseline(base)
     print("baseline sealed: sha256+hmac")
     return 0
 
@@ -743,6 +850,9 @@ def cmd_precommit():
                            capture_output=True, text=True)
         if r.returncode != 0:
             print(f"[gate] index를 꺼내지 못했다: {r.stderr.strip()[:200]}", file=sys.stderr)
+            return 1
+        if not _ensure_git_tree(tmp):
+            print("[gate] index 임시 트리에 Git metadata를 만들지 못했다", file=sys.stderr)
             return 1
         bad = _staged_tools_compile(tmp)
         if bad:

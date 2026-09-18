@@ -314,6 +314,10 @@ STRINGS = {
         "en": "{count} suites green: {items}",
         "ko": "suite {count}개 green: {items}",
     },
+    "doctor.regression_release_only": {
+        "en": "release/CI boundary only; interactive doctor skips regression suites",
+        "ko": "release/CI 경계 전용; interactive doctor에서는 회귀 suite를 실행하지 않음",
+    },
     "doctor.recall_ok": {"en": "source query OK ({count} lines)", "ko": "소스 조회 OK ({count}줄)"},
     "doctor.ledger_missing": {
         "en": "ledger not initialized (rec.py creates it on first record)",

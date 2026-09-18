@@ -160,3 +160,15 @@ evidence: none
 기각 대안: 목적함수를 "두 모델의 교차 검증"으로 두는 것 — 그건 OpenAI 공식 플러그인이 이미 점유한 자리이고
 (확산 조사 2026-09-17), 우리가 파는 것은 교차 검증이 아니라 그 결과가 사람에게 오는 방식이다.
 참조: README 철학 절, KIT-DR-007·010·011, `tools/test_fresh_install.sh`.
+
+### DR-013 게이트 정의 파일의 변경은 승인 원장의 한 줄로만 통과한다 (2026-09-18 · active)
+결정: 게이트가 무엇을 잡는지 정하는 파일(언어 허용 규칙·pending 목록·근거/강제 상수·강제·테스트 매트릭스·manifest 규칙,
+`tools/manifest_build.py`의 GATE_DEFINITION 집합)의 diff는 `system/gate-definition-approvals.md`(추적, append-only)에
+`gate-definition-approval` 줄(decision 표지 = 해당 KIT-DR 번호, files = 정렬된 파일 목록, sha256 = diff 해시)이 정확히 맞을 때만 통과한다.
+검사는 `tools/manifest_build.py --issues`가 하고 pre-commit과 CI가 같은 검사를 돈다.
+맥락: 2026-09-18 실측 2건 — 워커가 회귀를 정의만 하고 실행 목록에 안 넣어 "통과"로 보였고, 다른 워커는 자기 게이트의 허용
+목록을 넓혀 종료조건을 통과시켰다. 일한 쪽이 자기 영수증을 쓰는 구조에서는 문장으로 금지해도 잡히지 않는다.
+승인 원장을 `_private/` 아래 스웜 파일로 둔 첫 초안은 CI에서 보이지 않아 모든 게이트 정의 변경이 원격에서 실패했으므로
+추적 파일로 옮겼다.
+evidence: test:tools/test_manifests.py::test_gate_definition_change_requires_dispatcher_approval
+참조: KIT-DR-011·012, `system/review-manifest.yaml`의 gate-definition 분류, `.github/workflows/gates.yml`.

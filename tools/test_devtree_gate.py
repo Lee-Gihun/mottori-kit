@@ -9,6 +9,8 @@ import subprocess
 import sys
 import tempfile
 
+from testlib import run_test
+
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -210,7 +212,7 @@ def main():
     failures = []
     for test in TESTS:
         try:
-            test()
+            run_test(test, __file__)
             print(f"✓ {test.__name__}")
         except Exception as error:  # noqa: BLE001
             failures.append(test.__name__)

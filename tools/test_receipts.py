@@ -9,6 +9,8 @@ import subprocess
 import sys
 import tempfile
 
+from testlib import run_test
+
 
 HERE = Path(__file__).resolve().parent
 RECEIPTS = HERE / "receipts.py"
@@ -290,5 +292,5 @@ TESTS = [test_list_table_and_totals, test_list_json_since_and_runtime_filters,
 
 if __name__ == "__main__":
     for test in TESTS:
-        test()
+        run_test(test, __file__)
         print("PASS", test.__name__)

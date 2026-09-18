@@ -23,7 +23,10 @@ boundaries unambiguous.
 
 - `decision:KIT-DR-nnn` resolves to the `### DR-nnn` heading in `system/kit-decisions.md`.
 - `decision:DR-nnn` resolves to the heading in `system/decisions.md` at the local root.
-- `test:tools/test_x.py::name` requires both the file in the checked tree and the named Python function.
+- `test:tools/test_x.py::name` requires the file, the named Python function, and a matching
+  `RAN tools/test_x.py::name` line in the recent log selected by `MOTTORI_TEST_LOG`. A missing, older-than-24-hours,
+  or incomplete log is a blocking issue, not a review item. Every Python regression suite records through
+  `tools/testlib.py`; fresh-install, CI, and `tools/gate.py` create the log.
 - `run:<run id>` requires `_private/work/runs/<run id>/` at the local root.
 - `paper:` and `experiment:` may have sources outside this repository, so only syntax is checked. They are
   reported as `REVIEW external existence not checked`, which is not a blocking issue.

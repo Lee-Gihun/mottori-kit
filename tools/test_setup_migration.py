@@ -11,6 +11,8 @@ import subprocess
 import sys
 import tempfile
 
+from testlib import run_test
+
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -413,7 +415,7 @@ def run():
     failed = []
     for test in TESTS:
         try:
-            test()
+            run_test(test, __file__)
             print(f"✓ {test.__name__}")
         except Exception as e:  # noqa: BLE001
             failed.append(test.__name__)

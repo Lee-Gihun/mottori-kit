@@ -16,6 +16,8 @@ import re
 import tempfile
 from pathlib import Path
 
+from testlib import run_test
+
 import i18n_stamp
 
 
@@ -384,16 +386,16 @@ def test_pending_contract_fixture() -> None:
 
 
 def main() -> int:
-    test_pair_fixture()
-    test_stamp_bind_and_source_drift_fixture()
-    test_stamp_pending_fixture()
-    test_stamp_completed_pair_cannot_be_downgraded_by_pending_fixture()
-    test_stamp_missing_required_pair_fixture()
-    test_stamp_korean_source_fixture()
-    test_stamp_newline_and_trailing_space_normalization_fixture()
-    test_fixture_allowlist()
-    test_evidence_rendering_fixture()
-    test_pending_contract_fixture()
+    run_test(test_pair_fixture, __file__)
+    run_test(test_stamp_bind_and_source_drift_fixture, __file__)
+    run_test(test_stamp_pending_fixture, __file__)
+    run_test(test_stamp_completed_pair_cannot_be_downgraded_by_pending_fixture, __file__)
+    run_test(test_stamp_missing_required_pair_fixture, __file__)
+    run_test(test_stamp_korean_source_fixture, __file__)
+    run_test(test_stamp_newline_and_trailing_space_normalization_fixture, __file__)
+    run_test(test_fixture_allowlist, __file__)
+    run_test(test_evidence_rendering_fixture, __file__)
+    run_test(test_pending_contract_fixture, __file__)
     pending, _ = pending_paths(ROOT)
     issues = language_issues() + locale_pair_issues()
     for issue in issues:

@@ -12,6 +12,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+
+from testlib import run_test
 import threading
 import time
 from unittest import mock
@@ -1109,7 +1111,7 @@ def run():
     failures = []
     for test in TESTS:
         try:
-            test()
+            run_test(test, __file__)
             print(f"✓ {test.__name__}")
         except Exception as e:  # noqa: BLE001 - fixture runner must report all failures
             failures.append((test.__name__, f"{type(e).__name__}: {e}"))

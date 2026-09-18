@@ -7,6 +7,8 @@ import subprocess
 import sys
 import tempfile
 
+from testlib import run_test
+
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PY = sys.executable
@@ -116,7 +118,7 @@ def main():
     failed = []
     for test in TESTS:
         try:
-            test()
+            run_test(test, __file__)
             print(f"PASS {test.__name__}")
         except Exception as exc:  # noqa: BLE001
             failed.append(test.__name__)

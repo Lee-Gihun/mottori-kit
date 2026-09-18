@@ -8,6 +8,8 @@ import os
 import random
 import tempfile
 
+from testlib import run_test
+
 import memlib as M
 
 
@@ -361,10 +363,10 @@ def main():
         _run_journal_case(case)
     for case in configs:
         _run_config_case(case)
-    test_journal_body_exact_boundary()
+    run_test(test_journal_body_exact_boundary, __file__)
     _visibility_contract_on_fixture()
     print(f"PASS: journal {len(journals)} generated cases, config {len(configs)} cases, seed={SEED}")
 
 
 if __name__ == "__main__":
-    main()
+    run_test(main, __file__)

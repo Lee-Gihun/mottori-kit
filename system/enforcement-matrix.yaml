@@ -4200,6 +4200,32 @@
       "bypass_log": true,
       "residual": "첫 baseline은 이전 집합이 없어 암묵 채택한다. fresh worker 밖 dispatcher가 approve-adoption을 실행해야 하며 동일 OS 권한으로 .git과 baseline을 함께 바꾸는 공격은 막지 않는다.",
       "status": "ENFORCED"
+    },
+    {
+      "id": "w2-18-test-marker-execution",
+      "origin": "W2-18",
+      "source_key": "execution-evidence",
+      "sources": ["tools/testlib.py", "tools/evidencecheck.py", "tools/gate.py"],
+      "invariant": "모든 test 표지는 함수 정의와 최근 RAN 실행 기록을 함께 가져야 한다.",
+      "boundary": "gate",
+      "fail_close": "로그가 없거나 낡았거나 해당 RAN 행이 없으면 evidencecheck blocking issue다.",
+      "fixtures": {"positive": "tools/test_evidencecheck.py", "negative": "tools/test_evidencecheck.py"},
+      "bypass_log": true,
+      "residual": "RAN은 테스트 진입을 증명하며 assertion 통과는 suite 종료코드와 상위 게이트가 별도로 판정한다.",
+      "status": "ENFORCED"
+    },
+    {
+      "id": "w2-18-gate-definition-approval",
+      "origin": "W2-18",
+      "source_key": "dispatcher-approval",
+      "sources": ["tools/manifest_build.py --check", "system/review-manifest.yaml"],
+      "invariant": "gate-definition 범주 파일 diff는 경로 집합과 diff SHA에 결박된 디스패처 승인 줄을 가져야 한다.",
+      "boundary": "gate",
+      "fail_close": "승인 부재, 문법 오류, 경로 또는 SHA 불일치는 manifest check exit 1이다.",
+      "fixtures": {"positive": "tools/test_manifests.py", "negative": "tools/test_manifests.py"},
+      "bypass_log": true,
+      "residual": "로컬 파일 작성자의 실제 신원은 Git 서명이나 외부 protected branch가 없으면 검증할 수 없다.",
+      "status": "ENFORCED"
     }
   ]
 }

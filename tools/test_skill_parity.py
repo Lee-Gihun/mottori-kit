@@ -8,6 +8,8 @@ import subprocess
 import sys
 import tempfile
 
+from testlib import run_test
+
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TOOL = ROOT / "tools" / "skill_adapters.py"
@@ -109,7 +111,7 @@ if __name__ == "__main__":
     failed = []
     for test in TESTS:
         try:
-            test()
+            run_test(test, __file__)
             print("PASS", test.__name__)
         except Exception as error:  # noqa: BLE001
             failed.append(test.__name__)

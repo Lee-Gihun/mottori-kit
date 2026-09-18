@@ -11,6 +11,9 @@ on:
 
 jobs:
   gates:
+    env:
+      MOTTORI_TEST_LOG: ${{ runner.temp }}/mottori-test-runs.log
+      MOTTORI_TEST_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.os }}-${{ matrix.python }}
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +35,9 @@ jobs:
       - name: regression suites
         run: |
           set -o pipefail
+          : > "$MOTTORI_TEST_LOG"
           for t in tools/test_*.py; do
+            [ "$(basename "$t")" = "test_instance_shape.py" ] && continue
             echo "== $t"
             PYTHONDONTWRITEBYTECODE=1 python3 "$t" || exit 1
           done
@@ -40,10 +45,20 @@ jobs:
         run: |
           bash tools/test_fresh_install.sh
           MOTTORI_LANG=en bash tools/test_fresh_install.sh
+      - name: installed instance shape
+        run: python3 tools/test_instance_shape.py
       - name: static gates
         run: |
           python3 tools/linkcheck.py
           python3 tools/evidencecheck.py --issues
-          python3 tools/manifest_build.py --check
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            approval_base="${{ github.event.pull_request.base.sha }}"
+          else
+            approval_base="${{ github.event.before }}"
+          fi
+          if ! git cat-file -e "$approval_base^{commit}" 2>/dev/null; then
+            approval_base="$(git hash-object -t tree /dev/null)"
+          fi
+          MOTTORI_APPROVAL_MODE=commit MOTTORI_APPROVAL_BASE="$approval_base" python3 tools/manifest_build.py --check
           python3 tools/test_language.py
           git diff --check

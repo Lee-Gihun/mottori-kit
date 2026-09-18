@@ -9,6 +9,8 @@ import subprocess
 import sys
 import tempfile
 
+from testlib import run_test
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -177,14 +179,14 @@ def test_sessionstart_fallback_is_bilingual():
 
 if __name__ == "__main__":
     if "--full" in sys.argv:
-        test_english_surfaces()
+        run_test(test_english_surfaces, __file__)
     else:
         SKIPPED.append("EN fresh-install surfaces (run this suite with --full)")
         print("- EN fresh-install surfaces: deferred to --full")
-    test_korean_compatibility()
-    test_catalog_complete()
-    test_language_selection()
-    test_sessionstart_fallback_is_bilingual()
+    run_test(test_korean_compatibility, __file__)
+    run_test(test_catalog_complete, __file__)
+    run_test(test_language_selection, __file__)
+    run_test(test_sessionstart_fallback_is_bilingual, __file__)
     total = PASSED + len(FAILED)
     skipped = f" · not applicable {len(SKIPPED)}" if SKIPPED else ""
     print(f"i18n: {PASSED}/{total} passed{skipped}")
