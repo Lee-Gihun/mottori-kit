@@ -306,6 +306,43 @@ evidence: none
         tmp.cleanup()
 
 
+def test_refresh_reuses_fresh_evidence_for_the_same_run():
+    """The gate re-runs cited suites only when the inherited log lacks a fresh record of the same run ID
+    (2026-09-18: every fixture gate run re-executed all cited suites; CI's regression step went from
+    2.5 to 32 minutes and one cell hit the 40-minute limit)."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    import gate as G
+    tmp = tempfile.TemporaryDirectory(prefix="evidence-reuse-")
+    keys = ("MOTTORI_TEST_LOG", "MOTTORI_TEST_RUN_ID", "MOTTORI_TEST_EVIDENCE_ACTIVE")
+    saved = {key: os.environ.get(key) for key in keys}
+    try:
+        tree = pathlib.Path(tmp.name) / "tree"
+        sentinel = tree / "probe-ran.txt"
+        _write(tree / "tools" / "test_probe.py",
+               "import pathlib, sys\n"
+               "pathlib.Path(sys.argv[0]).resolve().parent.parent.joinpath('probe-ran.txt').write_text('ran')\n")
+        _write(tree / "CHANGELOG.md", "## v0\n\nEvidence: `test:tools/test_probe.py::test_probe`.\n")
+        log = pathlib.Path(tmp.name) / "runs.log"
+        log.write_text(_run_line("tools/test_probe.py::test_probe", run_id="reuse-1"), encoding="utf-8")
+        os.environ.pop("MOTTORI_TEST_EVIDENCE_ACTIVE", None)
+        os.environ["MOTTORI_TEST_LOG"] = str(log)
+        os.environ["MOTTORI_TEST_RUN_ID"] = "reuse-1"
+        path, ok = G._refresh_test_evidence(str(tree))
+        assert ok and path == str(log), (path, ok)
+        assert not sentinel.exists(), "a covered marker must not re-run its suite"
+        os.environ["MOTTORI_TEST_RUN_ID"] = "reuse-2"
+        path, ok = G._refresh_test_evidence(str(tree))
+        assert ok, (path, ok)
+        assert sentinel.exists(), "another run ID is not evidence: the suite must run"
+    finally:
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        tmp.cleanup()
+
+
 def test_gate_consumes_evidencecheck_issues_end_to_end():
     tmp = tempfile.TemporaryDirectory(prefix="evidence-gate-")
     try:
@@ -448,6 +485,7 @@ TESTS = [
     test_required_locations_without_markers_fail,
     test_changelog_evidence_none_is_explicit_pass,
     test_legacy_dr_evidence_none_is_explicit_pass,
+    test_refresh_reuses_fresh_evidence_for_the_same_run,
     test_gate_consumes_evidencecheck_issues_end_to_end,
 ]
 
