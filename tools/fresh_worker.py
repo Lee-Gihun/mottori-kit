@@ -1113,6 +1113,8 @@ def _batch_identity(batch_manifest, slot, source, body):
 
 def run(runtime, prompt_file, write_prefixes=(), strict_scope=False, strict_egress=False,
         worktree_mode=None, batch_manifest=None, slot=None):
+    if M.CONFIG_ERROR == "invalid":
+        raise InputError("memory config validation failed: " + (M.CONFIG_ERROR_DETAIL or "unknown"))
     if strict_scope and not write_prefixes:
         raise InputError("--strict-scope에는 하나 이상의 --write-prefix가 필요하다")
     source, body = read_prompt(prompt_file)

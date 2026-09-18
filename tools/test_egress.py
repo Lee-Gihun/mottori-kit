@@ -116,6 +116,44 @@ def test_parser_rejects_malformed_egress_prefixes():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_N5_allow_prefix_must_be_strictly_below_every_overlapping_deny():
+    cases = (
+        (("_private/",), ("_private/",)),
+        (("_private/share/secret/",), ("_private/share/",)),
+        (("_private/",), ("public/",)),
+        (("_private/", "_private/share/secret/"), ("_private/share/",)),
+    )
+    for deny, allow in cases:
+        root = Path(tempfile.mkdtemp(prefix="egress-overlap-"))
+        try:
+            _config(root, deny=deny, allow=allow)
+            loaded, policy = _read_memlib(root, "[M.CONFIG_LOAD_OK, M.EGRESS_MODEL_SEND]")
+            assert loaded is False
+            assert policy == {"deny_prefixes": ["_private/"], "allow_prefixes": []}
+            status, detail = _doctor_egress(root)
+            assert status == "FAIL" and "allow_prefixes" in detail
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+
+def test_N5_invalid_overlap_stops_fresh_worker_before_runtime():
+    root = Path(tempfile.mkdtemp(prefix="egress-overlap-worker-"))
+    try:
+        _config(root, deny=("_private/",), allow=("_private/",))
+        prompt = root / "prompt.md"
+        prompt.write_text("Public prompt.\n", encoding="utf-8")
+        marker = root / "runtime-started"
+        fake = root / "fake codex"
+        _script(fake, f"from pathlib import Path\nPath({str(marker)!r}).write_text('yes')\n")
+        result = _run(root, prompt, fake)
+        assert result.returncode == 2
+        assert "allow_prefixes" in result.stderr
+        assert not marker.exists()
+        assert not (root / "_private" / "work" / "runs").exists()
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_default_path_refuses_deny_ref_before_runtime_or_run_record():
     root = Path(tempfile.mkdtemp(prefix="egress-positive-"))
     try:
@@ -199,6 +237,8 @@ TESTS = [
     test_optional_config_uses_private_default_without_schema_bump,
     test_doctor_fails_an_explicit_empty_deny_list,
     test_parser_rejects_malformed_egress_prefixes,
+    test_N5_allow_prefix_must_be_strictly_below_every_overlapping_deny,
+    test_N5_invalid_overlap_stops_fresh_worker_before_runtime,
     test_default_path_refuses_deny_ref_before_runtime_or_run_record,
     test_strict_egress_refuses_before_runtime_or_run_record,
     test_public_reference_is_negative_and_allow_prefix_overrides_deny,

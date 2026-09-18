@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Characterization pins for H1's 29 gate/hook/worker bypass attacks.
 
-These tests preserve the integrated behavior after W2-7. ``EXPECT_HOLE=True``
-is attached only to the five attacks that remain REVIEW rather than blocked.
+These tests preserve the integrated behavior after W2-7 and W2-19. ``EXPECT_HOLE=True``
+is attached to attacks that remain REVIEW or are waiting on a named dependency.
 """
 import contextlib
 import io
@@ -23,6 +23,14 @@ sys.path.insert(0, str(HERE))
 def hole(function):
     function.EXPECT_HOLE = True
     return function
+
+
+def dependency_hole(reason):
+    def decorate(function):
+        function.EXPECT_HOLE = True
+        function.EXPECT_HOLE_REASON = reason
+        return function
+    return decorate
 
 
 def _repo():
@@ -360,8 +368,62 @@ def test_h1_s03_canary_currently_accepts_arbitrary_context_text():
     assert 'head += f"HOOK_CANARY:{canary}\\n"' in source
 
 
+@dependency_hole("dependency: W2-18 must seal additions to system/language-pending.txt")
+def test_g2_n1_pending_addition_currently_skips_language_check():
+    if not (ROOT / "tools" / "test_language.py").is_file():
+        print("- not applicable here: kit-only suite test_language absent (installed instance)")
+        return
+    import test_language
+    with tempfile.TemporaryDirectory(prefix="g2-n1-language-") as tmp:
+        root = Path(tmp)
+        _write(root, "system/language-pending.txt", ".github/workflows/gates.yml\n")
+        _write(root, ".github/workflows/gates.yml", "# 신규 한국어 우회\n")
+        matching = [issue for issue in test_language.language_issues(root)
+                    if ".github/workflows/gates.yml" in issue]
+        assert matching == []
+
+
+@dependency_hole("dependency: W2-17 must require a translation stamp or paired canonical change")
+def test_g2_n2_locale_only_meaning_change_currently_passes_pair_check():
+    if not (ROOT / "tools" / "test_language.py").is_file():
+        print("- not applicable here: kit-only suite test_language absent (installed instance)")
+        return
+    import test_language
+    with tempfile.TemporaryDirectory(prefix="g2-n2-language-") as tmp:
+        root = Path(tmp)
+        _write(root, "README.md", "# Canonical\n\nSame structure.\n")
+        _write(root, "README.ko.md", "# Locale\n\n영어 정본에는 없는 의미 변경이다.\n")
+        assert test_language.locale_pair_issues(root, {"README.md"}) == []
+
+
+def test_g2_n3_gitignore_change_cannot_allow_new_instance_path():
+    import test_enforce
+    test_enforce.test_N3_gitignore_exception_cannot_allow_new_instance_paths()
+
+
+def test_g2_n4_manual_review_manifest_edit_is_blocked():
+    if not (ROOT / "tools" / "test_manifests.py").is_file():
+        print("- not applicable here: kit-only suite test_manifests absent (installed instance)")
+        return
+    import test_manifests
+    problems = test_manifests.Problems()
+    test_manifests.test_issues_mode_reports_stale_paths(problems)
+    assert problems.items == [], problems.items
+
+
+def test_g2_n5_allow_prefix_cannot_empty_deny_policy():
+    import test_egress
+    test_egress.test_N5_allow_prefix_must_be_strictly_below_every_overlapping_deny()
+    test_egress.test_N5_invalid_overlap_stops_fresh_worker_before_runtime()
+
+
+def test_g2_n6_sealed_baseline_requires_recorded_adoption():
+    import test_enforce
+    test_enforce.test_N6_sealed_baseline_requires_explicit_adoption_and_records_it()
+
+
 TESTS = tuple(value for name, value in sorted(globals().items())
-              if name.startswith("test_h1_") and callable(value))
+              if name.startswith(("test_h1_", "test_g2_")) and callable(value))
 
 
 def main():
@@ -372,13 +434,15 @@ def main():
         holes += int(expected_hole)
         try:
             test()
-            print(f"PASS {test.__name__} EXPECT_HOLE={expected_hole}")
+            reason = getattr(test, "EXPECT_HOLE_REASON", None)
+            suffix = f" reason={reason}" if reason else ""
+            print(f"PASS {test.__name__} EXPECT_HOLE={expected_hole}{suffix}")
         except Exception as exc:  # noqa: BLE001
             failed.append(test.__name__)
             print(f"FAIL {test.__name__}: {type(exc).__name__}: {exc}")
     print(f"bypass pins: {len(TESTS) - len(failed)}/{len(TESTS)} passed, "
           f"EXPECT_HOLE {holes}, I1 kit-applicable alpha 0")
-    assert len(TESTS) == 29, len(TESTS)
+    assert len(TESTS) == 35, len(TESTS)
     return 1 if failed else 0
 
 
