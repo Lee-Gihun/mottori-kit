@@ -1,4 +1,4 @@
-<!-- source: CHANGELOG.md sha256:eb84977ec417f8a37bc17bdf039e98f1ec3600095984bdf0f63910eb10363394 source-of-truth: en -->
+<!-- source: CHANGELOG.md sha256:2f3222319d716cc5cfa1395a976f4e79e5169c1812b4fe7c0c51bc9103bf7e64 source-of-truth: en -->
 # CHANGELOG
 
 **이 파일의 형식은 "무엇이 추가됐다"가 아니라 "기존 인스턴스가 무엇을 해야 하는가"다.**
@@ -14,6 +14,49 @@ system/instance-rules.md, system/decisions.md, system/rituals.local.md, `state/`
 ---
 
 ## v0.8 · 2026-09-18 (영어 정본화)
+
+### `[알아둘 것]` 전사가 잡음 많은 녹음을 더 열심히 듣고, 못 들은 자리는 그대로 보고한다
+
+근거 표지: `test:tools/test_transcribe_filter.py::test_repeated_lines_become_one_noise_span`,
+`test:tools/test_transcribe_filter.py::test_low_confidence_and_watermark_segments_are_dropped`,
+`test:tools/test_transcribe_filter.py::test_clean_transcript_is_untouched`,
+`test:tools/test_transcribe_filter.py::test_prompt_file_overrides_generic_default`.
+
+`tools/transcribe.py`가 디코딩 전에 잡음을 제거하고(`dynaudnorm` 대신 `afftdn`+`speechnorm`), 엄격한 임계값과
+어휘 프롬프트로 디코딩한 뒤, 환각 모양 세그먼트(같은 문장 반복·낮은 확신·높은 압축률·자막 워터마크)를 떼어낸다.
+떼어낸 시간이 8초 이상이면 `<stem>-noise-spans.txt`에 적고 QA 파일에 건수를 남기므로, 기계가 못 들은 구간은
+지어내지 않고 사람에게 넘어간다. 식당 녹음 실측에서 같은 구간이 환각 루프에서 읽을 수 있는 문장이 됐다. 더 큰
+잡음 아래 마이크에서 먼 화자는 여전히 복구되지 않으며, 음성 분리(demucs)도 거기엔 도움이 안 됐다. 엔진에는 일반
+프롬프트만 들어 있다. 이름과 도메인 용어는 인스턴스의 `_private/transcribe-prompts.json`(`{"ko": "...", "en": "..."}`)
+에 두며 이 파일은 킷에 들어가지 않는다. 이제 `setup.sh`가 `templates/transcribe-prompts.json`에서 그 파일을 만든다.
+기존 인스턴스는 템플릿을 손으로 복사해 고치면 되고, 파일이 없어도 도구는 돈다. `templates/*.json`의 시드 데이터는
+`"ko"` 줄에만 한글을 둘 수 있으며, `tools/i18n.py`의 `ko` 열과 같은 계약이다
+(`test:tools/test_language.py::test_template_json_ko_fixture`). 기존 전사본은 다시 쓰지 않는다. 전사본에 반복
+문장이나 지어낸 자막 크레딧이 보이면 그 녹음만 다시 돌리면 된다.
+
+### `[알아둘 것]` 게이트 정의 승인 검사는 설치된 인스턴스에는 해당 없음
+
+근거 표지: `test:tools/test_manifests.py::test_gate_definition_approval_is_not_applicable_in_installed_instance`.
+
+KIT-DR-013은 게이트 정의가 작성되는 킷 트리를 다스린다. 설치된 인스턴스(`system/memory-config.json`이 있는 트리)는
+게이트 정의를 엔진 동기화로 받고 그 diff는 원천 킷의 원장이 이미 승인했으므로, 이제 `tools/manifest_build.py --issues`가
+거기서는 `~gate-definition-approval` 해당 없음으로 보고한다. 첫 구현은 모든 인스턴스에 승인 줄을 요구해 엔진 동기화를
+전부 막았다(2026-09-18 이식 실측). `tools/test_` 아래 새 회귀 스위트도 기본 분류(`tool`, 사람이 읽고 게이트가 실행)를
+받으므로 새 스위트가 리뷰 manifest를 미분류로 남기지 않는다. manifest는 "Git이 index에 올리기 전에도 세는 파일"의
+손 목록도 버렸다. `tools/`, `system/`, `templates/`, `.github/workflows/`, `.claude/commands/` 아래의 untracked·비무시
+파일은 전부 센다. 그래서 워커 클론이나 신규 설치 픽스처가 커밋된 트리와 같은 목록을 보고, 그 밖의 위치에 생긴 새 파일은
+신규 설치 게이트가 나중에 유령 경로로 실패하는 대신 `tools/test_manifests.py`가 규칙과 함께 먼저 실패한다
+(`test:tools/test_manifests.py::test_new_files_are_within_delivery_prefixes`).
+
+### `[알아둘 것]` CI 워크플로 파일이 다시 유효해졌고 job 수준 컨텍스트가 핀으로 고정됐다
+
+근거 표지: `test:tools/test_manifests.py::test_workflow_job_env_uses_only_job_level_contexts`.
+
+v0.8 (5/n)이 `.github/workflows/gates.yml`의 job 수준 `env`에 `${{ runner.temp }}`를 넣었다. GitHub은 그 자리에서 그
+컨텍스트를 거부하므로 워크플로 파일 전체가 무효가 됐고 a725859에서는 job이 하나도 돌지 않았다. 원격 게이트는 초록이
+아니라 침묵이었다. 로그 경로는 이제 `github.workspace`를 쓰고, `tools/test_manifests.py`가 job 수준 `env` 표현식 중
+GitHub이 거기서 허용하는 컨텍스트(github, needs, strategy, matrix, vars, secrets, inputs) 밖의 것을 거부하므로 로컬
+게이트가 푸시 전에 이 규칙을 잰다. pull 뒤에 할 일은 없다.
 
 ### `[알아둘 것]` 번역 스탬프가 의미 표류를 드러낸다
 

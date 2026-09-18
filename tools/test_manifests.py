@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -17,33 +18,9 @@ from testlib import run_test
 ROOT = Path(__file__).resolve().parent.parent
 REVIEW = ROOT / "system" / "review-manifest.yaml"
 MATRIX = ROOT / "system" / "enforcement-matrix.yaml"
-DELIVERY_PATHS = {
-    ".github/workflows/gates.yml",
-    "system/engine-inventory.txt",
-    "system/enforcement-matrix.yaml",
-    "system/language-pending.txt",
-    "system/reviews/content-audit.tsv",
-    "system/review-manifest.yaml",
-    "system/test-matrix.yaml",
-    "tools/context_budget.py",
-    "tools/enforce.py",
-    "tools/i18n_stamp.py",
-    "tools/manifest_build.py",
-    "tools/test_bypass_pins.py",
-    "tools/test_context_budget.py",
-    "tools/test_devtree_gate.py",
-    "tools/test_egress.py",
-    "tools/test_enforce.py",
-    "tools/test_instance_shape.py",
-    "tools/test_language.py",
-    "tools/test_manifests.py",
-    "tools/test_matrix_check.py",
-    "tools/test_mutation.py",
-    "tools/testlib.py",
-    "tools/test_tool_entrypoints.py",
-    "tools/test_worker_batch.py",
-    "tools/worker_batch.py",
-}
+# Kept in step with tools/manifest_build.py: an independent oracle for the builder's path inventory.
+DELIVERY_PREFIXES = ("tools/", "system/", "templates/", ".github/workflows/", ".claude/commands/")
+MANIFEST_REL = "system/review-manifest.yaml"
 APPROVAL_FILE = Path("system/gate-definition-approvals.md")
 
 
@@ -87,26 +64,49 @@ def expected_paths() -> set[str]:
         ["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True
     ).stdout
     paths = {item.decode("utf-8") for item in raw.split(b"\0") if item}
-    # In a non-resumable worker these files cannot be added to the index. The
-    # fresh-install gate stages them and therefore exercises the strict path.
-    paths.update(
-        path for path in DELIVERY_PATHS
-        if path == "system/review-manifest.yaml" or (ROOT / path).is_file()
-    )
+    # In a non-resumable worker new files cannot be added to the index, and the fresh-install fixture applies
+    # the dispatcher's patch without indexing it either: untracked files under the delivery prefixes count.
+    paths.add(MANIFEST_REL)
+    paths.update(untracked_paths())
     paths.update(locale_paths())
-    text = set()
-    for path in paths:
+    return {path for path in paths if (ROOT / path).is_file() and is_text(ROOT / path)}
+
+
+def untracked_paths() -> set[str]:
+    raw = subprocess.run(
+        ["git", "ls-files", "-z", "--others", "--exclude-standard"], cwd=ROOT, check=True, capture_output=True
+    ).stdout
+    return {item.decode("utf-8") for item in raw.split(b"\0") if item and item.decode("utf-8").startswith(DELIVERY_PREFIXES)}
+
+
+def is_text(path: Path) -> bool:
+    data = path.read_bytes()
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return b"\0" not in data
+
+
+def test_new_files_are_within_delivery_prefixes(problems: "Problems") -> None:
+    """A new kit file outside DELIVERY_PREFIXES is tracked here but untracked in a worker clone or the
+    fresh-install fixture, where the manifest would list it as a ghost twenty minutes into a commit
+    (2026-09-18). Fail here, first, with the rule. Only staged additions are judged: they are the files
+    about to be committed, while untracked files in a fixture or scratch tree are not kit files yet. A tree
+    without HEAD (a fixture's initial commit) stages every kit file, root documents included, and is skipped."""
+    if subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD"], cwd=ROOT, capture_output=True).returncode:
+        return
+    staged = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=A", "-z"], cwd=ROOT, check=True, capture_output=True
+    ).stdout
+    for path in sorted({item.decode("utf-8") for item in staged.split(b"\0") if item}):
         candidate = ROOT / path
-        if not candidate.is_file():
+        if not candidate.is_file() or not is_text(candidate):
             continue
-        data = candidate.read_bytes()
-        try:
-            data.decode("utf-8")
-        except UnicodeDecodeError:
-            continue
-        if b"\0" not in data:
-            text.add(path)
-    return text
+        inside = path.startswith(DELIVERY_PREFIXES) or path in locale_paths() or path == MANIFEST_REL
+        problems.add(inside, f"new file outside the delivery prefixes {DELIVERY_PREFIXES}: {path} "
+                             "(a worker clone or fresh-install fixture cannot see it before it is committed; "
+                             "extend DELIVERY_PREFIXES in tools/manifest_build.py and tools/test_manifests.py)")
 
 
 def test_review(document: dict, problems: Problems) -> None:
@@ -421,13 +421,97 @@ def test_issues_mode_reports_stale_paths(problems: Problems) -> None:
                      f"a tree without the manifest is not applicable: {absent.stdout[-200:]}")
 
 
+def test_gate_definition_approval_is_not_applicable_in_installed_instance() -> None:
+    """KIT-DR-013 scope: an installed instance receives gate definitions through engine sync, so the
+    approval check reports not applicable there; the same change in a tree without instance config is gated."""
+    with tempfile.TemporaryDirectory(prefix="manifest-instance-") as tmp:
+        root = Path(tmp)
+        (root / "tools").mkdir()
+        (root / "system").mkdir()
+        shutil.copy2(ROOT / "tools" / "manifest_build.py", root / "tools" / "manifest_build.py")
+        target = root / "tools" / "evidencecheck.py"
+        target.write_text("fixture\n", encoding="utf-8")
+        config = root / "system" / "memory-config.json"
+        config.write_text('{"instance": {"context": "personal"}}\n', encoding="utf-8")
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+             "commit", "-qm", "installed instance"], cwd=root, check=True,
+        )
+        target.write_text("fixture\nsynced engine change\n", encoding="utf-8")
+        env = dict(os.environ, MOTTORI_APPROVAL_MODE="worktree", MOTTORI_APPROVAL_REPO=str(root))
+        command = [sys.executable, "tools/manifest_build.py", "--issues"]
+        instance = subprocess.run(command, cwd=root, capture_output=True, text=True, env=env)
+        assert instance.returncode == 0, instance.stdout + instance.stderr
+        assert "~gate-definition-approval\t" in instance.stdout, instance.stdout
+        assert "gate-definition-approval|" not in instance.stdout, instance.stdout
+        assert instance.stdout.rstrip().endswith("#issues 0"), instance.stdout
+        config.unlink()
+        kit_tree = subprocess.run(command, cwd=root, capture_output=True, text=True, env=env)
+        assert "gate-definition-approval|" in kit_tree.stdout, kit_tree.stdout
+        assert "~gate-definition-approval\t" not in kit_tree.stdout, kit_tree.stdout
+
+
+JOB_ENV_CONTEXTS = {"github", "needs", "strategy", "matrix", "vars", "secrets", "inputs"}
+EXPRESSION_RE = re.compile(r"\$\{\{(.*?)\}\}")
+CONTEXT_NAME_RE = re.compile(r"(?<![\w.])([A-Za-z_][\w-]*)\.")
+
+
+def workflow_job_env_context_issues(text: str) -> list[str]:
+    """Job-level ``env`` may reference only the contexts GitHub allows there. ``runner.temp`` at that level
+    made the whole workflow file invalid, so a725859 ran no job and the remote gate was silent, not green
+    (2026-09-18). A silent remote gate is exactly what a local pin must measure."""
+    issues: list[str] = []
+    in_jobs = False
+    env_indent: int | None = None
+    for number, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if indent == 0:
+            in_jobs = stripped == "jobs:"
+            env_indent = None
+            continue
+        if not in_jobs:
+            continue
+        if env_indent is not None and indent <= env_indent:
+            env_indent = None
+        if env_indent is None:
+            if stripped == "env:" and indent == 4:
+                env_indent = indent
+            continue
+        for expression in EXPRESSION_RE.findall(line):
+            for name in CONTEXT_NAME_RE.findall(expression):
+                if name not in JOB_ENV_CONTEXTS:
+                    issues.append(f"line {number}: job-level env references the `{name}` context: {stripped}")
+    return issues
+
+
+def test_workflow_job_env_uses_only_job_level_contexts() -> None:
+    text = (ROOT / ".github" / "workflows" / "gates.yml").read_text(encoding="utf-8")
+    assert not workflow_job_env_context_issues(text), workflow_job_env_context_issues(text)
+    broken = text.replace("${{ github.workspace }}/.git/mottori-test-runs.log",
+                          "${{ runner.temp }}/mottori-test-runs.log")
+    assert broken != text, "fixture anchor missing from gates.yml"
+    assert any("`runner`" in issue for issue in workflow_job_env_context_issues(broken))
+    fixture = ("on: push\njobs:\n  a:\n    env:\n      X: ${{ steps.one.outputs.v }}\n"
+               "      Y: ${{ matrix.os }}\n    steps:\n      - run: echo ${{ runner.temp }}\n")
+    issues = workflow_job_env_context_issues(fixture)
+    assert len(issues) == 1 and "`steps`" in issues[0], issues
+
+
 def main() -> int:
     problems = Problems()
     review = load_yaml_subset(REVIEW, problems)
     matrix = load_yaml_subset(MATRIX, problems)
+    run_test(test_new_files_are_within_delivery_prefixes, __file__, problems)
     run_test(test_review, __file__, review, problems)
     run_test(test_matrix, __file__, matrix, problems)
     run_test(test_gate_definition_change_requires_dispatcher_approval, __file__)
+    run_test(test_gate_definition_approval_is_not_applicable_in_installed_instance, __file__)
+    run_test(test_workflow_job_env_uses_only_job_level_contexts, __file__)
     run_test(test_issues_mode_reports_stale_paths, __file__, problems)
     if problems.items:
         for item in problems.items:

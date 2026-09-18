@@ -76,6 +76,7 @@ def _is_ignored(rel):
 SETUP_CREATED = frozenset((
     "system/memory-config.json", "system/instance-rules.md", "system/rituals.local.md",
     "system/decisions.md", "state/NOW.md", "_private/state/NOW.md", "state/.gate-baseline.json",
+    "_private/transcribe-prompts.json",
 ))
 
 

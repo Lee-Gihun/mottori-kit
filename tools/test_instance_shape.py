@@ -19,8 +19,8 @@ from testlib import run_test
 
 ROOT = Path(__file__).resolve().parent.parent
 INVENTORY = ROOT / "system" / "engine-inventory.txt"
-ENGINE_COUNT = 51
-ENGINE_SHA256 = "c792d1ff7fa3178644dea1eaacfa27cb65a6f5674fe8168488a66866f267d190"
+ENGINE_COUNT = 52
+ENGINE_SHA256 = "9566ff28c826fc04647f0c786e3c0898574e8b3581acbe183dd06b61cc4b1520"
 HANGUL = re.compile(r"[\uac00-\ud7a3]")
 
 

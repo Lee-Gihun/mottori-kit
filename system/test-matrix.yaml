@@ -31,7 +31,7 @@
     {"path":"tools/receipts.py","risk":"normal","layers":{"U":"tools/test_receipts.py","S":"tools/test_receipts.py","N":"tools/test_receipts.py","M":null,"E2E":null}},
     {"path":"tools/skill_adapters.py","risk":"normal","layers":{"U":"tools/test_skill_parity.py","S":"tools/test_skill_parity.py","N":"tools/test_skill_parity.py","M":null,"E2E":null}},
     {"path":"tools/sync_engine.sh","risk":"wrapper","layers":{"U":null,"S":"tools/test_tool_entrypoints.py","N":"tools/test_tool_entrypoints.py","M":null,"E2E":null}},
-    {"path":"tools/transcribe.py","risk":"normal","layers":{"U":"tools/test_tool_entrypoints.py","S":"tools/test_tool_entrypoints.py","N":"tools/test_tool_entrypoints.py","M":null,"E2E":null}},
+    {"path":"tools/transcribe.py","risk":"normal","layers":{"U":"tools/test_transcribe_filter.py","S":"tools/test_tool_entrypoints.py","N":"tools/test_transcribe_filter.py","M":null,"E2E":null}},
     {"path":"tools/wf_gardener.js","risk":"wrapper","layers":{"U":null,"S":"tools/test_tool_entrypoints.py","N":"tools/test_tool_entrypoints.py","M":null,"E2E":null}},
     {"path":"tools/worker_batch.py","risk":"normal","layers":{"U":"tools/test_worker_batch.py","S":"tools/test_worker_batch.py","N":"tools/test_worker_batch.py","M":null,"E2E":null}}
   ]
