@@ -5,8 +5,9 @@ Path, owner, dependencies, and review timestamp are mechanical. ``kind`` and
 ``consumers`` are review decisions: a first run leaves them unclassified, and
 later runs preserve the values already present in the manifest.
 
-The delivery paths are included while they are untracked in a worker clone so
-the same manifest is valid before and after the patch is applied upstream.
+Untracked files under the kit's delivery prefixes are included while a worker
+clone or fixture has not indexed them, so the same manifest is valid before
+and after the patch is applied upstream.
 """
 from __future__ import annotations
 
@@ -23,33 +24,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "system" / "review-manifest.yaml"
 MANIFEST_REL = "system/review-manifest.yaml"
-DELIVERY_PATHS = {
-    ".github/workflows/gates.yml",
-    "system/engine-inventory.txt",
-    "system/enforcement-matrix.yaml",
-    "system/language-pending.txt",
-    "system/reviews/content-audit.tsv",
-    "system/review-manifest.yaml",
-    "system/test-matrix.yaml",
-    "tools/context_budget.py",
-    "tools/enforce.py",
-    "tools/i18n_stamp.py",
-    "tools/manifest_build.py",
-    "tools/test_bypass_pins.py",
-    "tools/test_context_budget.py",
-    "tools/test_devtree_gate.py",
-    "tools/test_egress.py",
-    "tools/test_enforce.py",
-    "tools/test_instance_shape.py",
-    "tools/test_language.py",
-    "tools/test_manifests.py",
-    "tools/test_matrix_check.py",
-    "tools/test_mutation.py",
-    "tools/testlib.py",
-    "tools/test_tool_entrypoints.py",
-    "tools/test_worker_batch.py",
-    "tools/worker_batch.py",
-}
+# Kit locations whose files count before Git indexes them. A worker clone carries its new files untracked
+# (a non-resumable worker cannot add to the index) and the fresh-install fixture applies the dispatcher's patch
+# the same way, so the manifest must be identical before and after `git add`. Until 2026-09-18 this was a
+# hand-kept list of file names; two new files missed it and the fresh-install gate failed twenty minutes into a
+# commit with a ghost-path message. A location rule has no list to forget. Worker artifacts (REPORT.md, .agents/)
+# live outside these prefixes and stay out.
+DELIVERY_PREFIXES = ("tools/", "system/", "templates/", ".github/workflows/", ".claude/commands/")
 GATE_DEFINITION_PATHS = {
     ".github/workflows/gates.yml",
     "system/enforcement-matrix.yaml",
@@ -89,12 +70,19 @@ def git_paths() -> set[str]:
     )
     paths = {raw.decode("utf-8") for raw in result.stdout.split(b"\0") if raw}
     # The output must manifest itself on the first build, before it exists.
-    paths.update(
-        path for path in DELIVERY_PATHS
-        if path == MANIFEST_REL or (ROOT / path).is_file()
-    )
+    paths.add(MANIFEST_REL)
+    paths.update(untracked_delivery_paths())
     paths.update(locale_paths())
     return paths
+
+
+def untracked_delivery_paths(root: Path = ROOT) -> set[str]:
+    """Untracked, not ignored files under DELIVERY_PREFIXES: what `git add -A` would add there."""
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--others", "--exclude-standard"], cwd=root, check=True, capture_output=True
+    )
+    names = (raw.decode("utf-8") for raw in result.stdout.split(b"\0") if raw)
+    return {name for name in names if name.startswith(DELIVERY_PREFIXES)}
 
 
 def is_text(path: Path) -> bool:
@@ -171,7 +159,27 @@ def _approval_lines(path: Path) -> tuple[list[str], list[str]]:
     return valid, malformed
 
 
+def _approval_repo() -> Path:
+    return Path(os.environ.get("MOTTORI_APPROVAL_REPO", ROOT)).resolve()
+
+
+def installed_instance(root: Path) -> bool:
+    """An installed instance carries ``system/memory-config.json``; the kit tree and worker clones do not."""
+    return (root / "system" / "memory-config.json").is_file()
+
+
+# KIT-DR-013 scope: the approval ledger governs the kit tree, where gate definitions are authored. An installed
+# instance receives them through engine sync, and the origin kit's ledger already approved that diff, so the
+# check is reported as not applicable there instead of blocking every engine sync (2026-09-18 port measurement).
+NOT_APPLICABLE_INSTANCE = (
+    "~gate-definition-approval\tnot applicable: installed instance "
+    "(gate definitions arrive through engine sync; the origin kit's ledger approved that diff)"
+)
+
+
 def gate_definition_approval_issues(root: Path = ROOT) -> list[str]:
+    if installed_instance(_approval_repo()):
+        return []
     changed = changed_gate_definitions(root)
     if not changed:
         return []
@@ -241,6 +249,13 @@ def build() -> dict:
         elif path.startswith(".github/workflows/") and path.endswith((".yml", ".yaml")):
             # remote gate definitions: run by CI, read by nobody else
             default_kind, default_consumers = "tool", ["tool"]
+        elif path.startswith("tools/test_") and path.endswith(".py"):
+            # Regression suites are mechanical: read by people, run by the gates. Classifying them by hand
+            # on every new suite was the recurring manual step behind stale-manifest blocks (2026-09-18).
+            default_kind, default_consumers = "tool", ["human", "tool"]
+        elif path.startswith("templates/"):
+            # Instance-owned seeds copied by setup.sh: the same classification the existing template rows carry.
+            default_kind, default_consumers = "template", ["human", "claude", "codex", "tool"]
         else:
             default_kind, default_consumers = None, []
         rows.append(
@@ -273,6 +288,8 @@ def issues_mode() -> int:
     behind the index (2026-09-18: the CI workflow was committed while missing from the manifest)."""
     if not MANIFEST.exists():
         print("~manifest-absent\tnot applicable: no system/review-manifest.yaml in this tree")
+        if installed_instance(_approval_repo()):
+            print(NOT_APPLICABLE_INSTANCE)
         try:
             approval_issues = gate_definition_approval_issues()
         except RuntimeError as error:
@@ -296,6 +313,8 @@ def issues_mode() -> int:
             ids.append((f"manifest-unclassified|{row['path']}", f"kind/consumers unclassified: {row['path']}"))
     if current != wanted and not ids:
         ids.append(("manifest-stale|system/review-manifest.yaml", "manifest content differs from regeneration"))
+    if installed_instance(_approval_repo()):
+        print(NOT_APPLICABLE_INSTANCE)
     try:
         approval_issues = gate_definition_approval_issues()
     except RuntimeError as error:

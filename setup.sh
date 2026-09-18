@@ -223,6 +223,11 @@ fi
 
 # --- 4. 상태 초기화 ---
 mkdir -p state _private/state
+# 전사 어휘 프롬프트는 인스턴스 소유(이름·회사명이 들어가므로 `_private/`). 템플릿은 일반 문구뿐이라 그대로 두면
+# 엔진 기본값과 같고, 사람이 자기 어휘로 고친다. 엔진 파일에 어휘를 박으면 내보내기 스캔이 잡는다 (2026-09-18 실측).
+if [ ! -f _private/transcribe-prompts.json ] && [ -f templates/transcribe-prompts.json ]; then
+  cp templates/transcribe-prompts.json _private/transcribe-prompts.json
+fi
 python3 tools/now.py log "[system/state] 인스턴스 세팅: $NAME ($CONTEXT) — 킷 클론 후 초기화" >/dev/null
 # local overlay도 첫날부터 실체로 둔다. render는 local 입력이 하나라도 있어야 overlay를 쓰는데,
 # AGENTS.md·rituals.md가 `_private/state/NOW.md`를 가리키므로 overlay가 없으면 첫 doctor가

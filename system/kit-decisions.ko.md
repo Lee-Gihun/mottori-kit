@@ -172,3 +172,7 @@ evidence: none
 추적 파일로 옮겼다.
 evidence: test:tools/test_manifests.py::test_gate_definition_change_requires_dispatcher_approval
 참조: KIT-DR-011·012, `system/review-manifest.yaml`의 gate-definition 분류, `.github/workflows/gates.yml`.
+범위 보완(2026-09-18 동기화 실측): 검사는 게이트 정의가 작성되는 킷 트리(`system/memory-config.json` 없음)에만 적용한다.
+설치된 인스턴스는 게이트 정의를 엔진 동기화로 받고 그 diff는 원천 킷의 원장이 이미 승인했으므로 `--issues`가
+`~gate-definition-approval` 해당 없음으로 보고한다. 첫 구현은 인스턴스에서도 승인 줄을 요구해 모든 엔진 동기화가 막혔다.
+evidence: test:tools/test_manifests.py::test_gate_definition_approval_is_not_applicable_in_installed_instance

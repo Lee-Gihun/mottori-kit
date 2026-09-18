@@ -2,8 +2,8 @@
 """녹음 파일 하나를 전사한다. 레시피 정본은 2026-07-26 재전사 노트.
 
 기본 동작:
-  1) 입력을 16k mono wav로 정규화 (highpass/lowpass/dynaudnorm)
-  2) mlx_whisper large-v3-turbo로 전사 (환각 억제 파라미터 고정)
+  1) 입력을 16k mono wav로 정규화 (highpass/afftdn/lowpass/speechnorm)
+  2) mlx_whisper large-v3-turbo로 전사 (환각 억제 파라미터 고정, 도메인 프롬프트는 `_private/transcribe-prompts.json`)
   3) 타임스탬프 텍스트 + srt + json 저장
   4) 5초 이상 세그먼트 공백을 스캔해 실제 무음인지 volumedetect로 판정
      (무음이 아니면 결손 후보 = 사람이 확인해야 하는 자리)
@@ -17,7 +17,25 @@
 """
 import argparse, json, os, re, stat, subprocess, sys, tempfile, time
 
-FILTER = "highpass=f=80,lowpass=f=7500,dynaudnorm=f=150:g=15"
+# "Listen carefully" recipe (2026-09-18; owner: do not compromise on noisy recordings). Measured on restaurant
+# noise: dynaudnorm alone produced hallucination loops and invented sentences, while spectral denoising (afftdn)
+# plus speech normalization (speechnorm) plus strict decoding thresholds recovered the same span as human speech.
+# Spans that still cannot be heard are not invented; they are reported in `-noise-spans.txt` for a person.
+FILTER = "highpass=f=100,afftdn=nf=-25,lowpass=f=7500,speechnorm=e=6.25:r=0.0001:l=1"
+# Decoder vocabulary hint per language. The engine ships only generic prompts; names and domain terms belong to
+# the instance in `_private/transcribe-prompts.json` ({"ko": "...", "en": "..."}), which never enters the kit
+# (2026-09-18: company names in this dict were caught by the instance's identifier scan on export).
+PROMPTS = {
+    "ko": "한국어 대화. 회의, 추천, 랭킹, 실험, 제품, 온보딩.",
+    "en": "Conversation about recommendations, ranking, experiments, product, onboarding.",
+}
+PROMPT_FILE = os.environ.get("MOTTORI_TRANSCRIBE_PROMPTS") or os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "_private", "transcribe-prompts.json")
+NOISE_SPAN_MIN_SEC = 8.0
+# Subtitle-credit phrases Whisper invents on silence or noise (subtitle credits from its training data).
+# Observed 2026-09-18: "한글자막 by ..." (Korean subtitles by), "다음 영상에서 만나요" (see you in the next video).
+WATERMARKS =("한글자막 by", "자막 by", "다음 영상에서 만나요", "시청해주셔서 감사합니다", "구독과 좋아요", "Thanks for watching",
+              "Subtitles by", "Subscribe to")
 MODEL = "mlx-community/whisper-large-v3-turbo"
 GAP_SEC = 5.0          # 이 이상 벌어지면 결손 후보로 검사
 SILENCE_DB = -45.0     # mean_volume이 이보다 작으면 실제 무음으로 판정
@@ -93,6 +111,24 @@ def _atomic_text(path, text):
                 pass
 
 
+def prompt_for(lang, prompt_file=None):
+    """Return the decoder prompt for ``lang``: the instance prompt file overrides the generic default per
+    language; a missing file is normal, an unreadable one is reported on stderr and ignored."""
+    prompts = dict(PROMPTS)
+    path = prompt_file or PROMPT_FILE
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except FileNotFoundError:
+        data = {}
+    except (OSError, ValueError) as error:
+        print(f"[transcribe] prompt file ignored ({type(error).__name__}): {path}", file=sys.stderr)
+        data = {}
+    if isinstance(data, dict):
+        prompts.update({key: value for key, value in data.items() if isinstance(value, str) and value.strip()})
+    return prompts.get(lang)
+
+
 def transcribe(wav, lang):
     import mlx_whisper
     return mlx_whisper.transcribe(
@@ -100,12 +136,40 @@ def transcribe(wav, lang):
         path_or_hf_repo=MODEL,
         language=lang,
         condition_on_previous_text=False,
-        temperature=(0.0, 0.2, 0.4, 0.6),
-        no_speech_threshold=0.9,
-        logprob_threshold=-3.0,
-        compression_ratio_threshold=4.0,
+        temperature=(0.0, 0.2, 0.4),
+        no_speech_threshold=0.6,
+        logprob_threshold=-1.0,
+        compression_ratio_threshold=2.4,
+        initial_prompt=prompt_for(lang),
         word_timestamps=False,
     )
+
+
+def filter_hallucinations(segs):
+    """Drop hallucination-shaped segments and return (noise spans, kept segments).
+    Criteria: no_speech_prob>0.6, avg_logprob<-1.2, compression_ratio>2.4, the same text three or more times,
+    identical to the previous segment, or a subtitle watermark. Dropped time is merged, and every run of at least
+    NOISE_SPAN_MIN_SEC is reported as a noise span: the place handed to a person instead of invented."""
+    import collections
+    count = collections.Counter(s.get("text", "").strip() for s in segs)
+    kept, dropped, prev = [], [], None
+    for s in segs:
+        text = s.get("text", "").strip()
+        bad = (not text or s.get("no_speech_prob", 0) > 0.6 or s.get("avg_logprob", 0) < -1.2
+               or s.get("compression_ratio", 0) > 2.4 or count[text] >= 3 or text == prev
+               or any(w in text for w in WATERMARKS))
+        if bad:
+            dropped.append((s["start"], s["end"]))
+            continue
+        prev = text
+        kept.append(s)
+    spans = []
+    for a, b in dropped:
+        if spans and a - spans[-1][1] < 2.0:
+            spans[-1][1] = max(spans[-1][1], b)
+        else:
+            spans.append([a, b])
+    return [(a, b) for a, b in spans if b - a >= NOISE_SPAN_MIN_SEC], kept
 
 
 def audio_duration(path):
@@ -257,6 +321,7 @@ def main():
         base + ".json",
         base + "-QA.md",
         base + ".spk.txt",
+        base + "-noise-spans.txt",
     ]
     for path in reserved:
         _reserved_output(path)
@@ -270,9 +335,13 @@ def main():
 
         print(f"[2/4] 전사 (mlx large-v3-turbo, lang={a.lang}) — 오디오 길이의 약 1/8 소요", flush=True)
         res = transcribe(wav, a.lang)
-        segs = res.get("segments") or []
-
-        print(f"[3/4] 저장 ({len(segs)} 세그먼트)", flush=True)
+        noise_spans, segs = filter_hallucinations(res.get("segments") or [])
+        if noise_spans:
+            _atomic_text(
+                base + "-noise-spans.txt",
+                "".join(f"{hhmmss(x)} - {hhmmss(y)} ({y - x:.0f}s) 잡음/판독불가\n" for x, y in noise_spans),
+            )
+        print(f"[3/4] 저장 ({len(segs)} 세그먼트, 잡음 구간 {len(noise_spans)}건)", flush=True)
         _atomic_text(
             base + "-timestamped.txt",
             "".join(f"[{hhmmss(s['start'])}] {s['text'].strip()}\n" for s in segs),
@@ -298,6 +367,9 @@ def main():
             f"세그먼트 {len(segs)} · 글자수 {sum(len(s['text']) for s in segs):,} · "
             f"길이 {hhmmss(segs[-1]['end']) if segs else '0'}\n\n",
         ]
+        if noise_spans:
+            qa.append(f"잡음/판독불가 구간(≥{NOISE_SPAN_MIN_SEC:.0f}초) {len(noise_spans)}건 → `{stem}-noise-spans.txt` "
+                      "(환각 모양 세그먼트를 떼어낸 자리, 사람이 들어야 하는 곳)\n\n")
         if not gaps:
             qa.append(f"{GAP_SEC}초 이상 공백 없음.\n")
         else:
