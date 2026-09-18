@@ -1,3 +1,4 @@
+<!-- source: rituals.local.md sha256:7ce4560ae983adbc7824e647d5016de6e9368e5441e81c256de79e3a3ed8670c source-of-truth: en -->
 # 이 인스턴스만의 의식
 
 *`system/rituals.md`(업스트림 소유)의 확장점이다. 이 파일은 git 밖이라 `git pull`이 안 덮는다.*

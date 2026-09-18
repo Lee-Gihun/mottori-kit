@@ -1,3 +1,4 @@
+<!-- source: CHANGELOG.md sha256:5a2d0218a35a93554a59bfdb95f3b0a862d556b2b4c08850ef49cce0b2e62185 source-of-truth: en -->
 # CHANGELOG
 
 **이 파일의 형식은 "무엇이 추가됐다"가 아니라 "기존 인스턴스가 무엇을 해야 하는가"다.**
@@ -13,6 +14,19 @@ system/instance-rules.md, system/decisions.md, system/rituals.local.md, `state/`
 ---
 
 ## v0.8 · 2026-09-18 (영어 정본화)
+
+### `[알아둘 것]` 번역 스탬프가 의미 표류를 드러낸다
+
+근거 표지: `test:tools/test_language.py::test_stamp_bind_and_source_drift_fixture`,
+`test:tools/test_language.py::test_stamp_pending_fixture`,
+`test:tools/test_language.py::test_stamp_korean_source_fixture`,
+`test:tools/test_language.py::test_stamp_newline_and_trailing_space_normalization_fixture`.
+
+`python3 tools/i18n_stamp.py check`는 번역을 마친 파일의 첫 줄에 정규화한 원천 SHA-256이 있는지 검사하고,
+이식 대기 목록은 stale과 분리해 pending으로 센다. 킷 소유 표면은 영어가 원천이고, PRD 2종,
+WORKING-WITH-AI, deep-pass, person-ledger, 사고렌즈는 한국어가 원천이다. 바뀐 원천을 번역한 뒤에는
+`python3 tools/i18n_stamp.py bind <번역-파일>`로 새 원천 해시를 기록한다. `tools/test_language.py`의
+locale-pair 게이트도 같은 검사를 실행한다.
 
 ### `[알아둘 것]` review manifest가 커밋 게이트 검사기가 됐다
 

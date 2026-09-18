@@ -1,3 +1,4 @@
+<!-- source: SETUP.md sha256:acd0027da4940d04a6616d02866679f4c7cadcdcdb08546daccf0b0b0256042c source-of-truth: en -->
 # SETUP — 이 디렉토리를 세팅하는 법
 
 **이 문서는 에이전트에게 주는 지시서다.** 새 머신에서 클론한 다음, Claude Code 또는 Codex를

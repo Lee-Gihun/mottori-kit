@@ -1,3 +1,4 @@
+<!-- source: AGENTS.md sha256:fca1db40a81a279422310960aa49094bc76cc4530ec2a72687ba8e21ba17cc02 source-of-truth: en -->
 # 세션 지침
 
 이 워크스페이스는 코드베이스가 아니라 **작업 저장소**다. 여러 트랙을 한 자리에서 굴리고,

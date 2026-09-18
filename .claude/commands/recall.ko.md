@@ -1,3 +1,4 @@
+<!-- source: recall.md sha256:d4ca940aa59bb1c9839001867c80d070e07f9bf0017a28c478059b2a311cf3b1 source-of-truth: en -->
 # 회상
 
 `python3 tools/recall.py find "$ARGUMENTS"` 로 과거 대화 원문을 회상해줘.

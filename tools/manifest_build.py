@@ -29,6 +29,7 @@ DELIVERY_PATHS = {
     "system/test-matrix.yaml",
     "tools/context_budget.py",
     "tools/enforce.py",
+    "tools/i18n_stamp.py",
     "tools/manifest_build.py",
     "tools/test_bypass_pins.py",
     "tools/test_context_budget.py",
@@ -126,7 +127,7 @@ def build() -> dict:
             canonical = existing.get(path[:-len(".ko.md")] + ".md", {})
             default_kind = canonical.get("kind", "evidence")
             default_consumers = canonical.get("consumers", ["human"])
-        elif path in ("tools/test_devtree_gate.py", "tools/test_language.py"):
+        elif path in ("tools/i18n_stamp.py", "tools/test_devtree_gate.py", "tools/test_language.py"):
             default_kind, default_consumers = "tool", ["tool"]
         elif path == "system/language-pending.txt":
             default_kind, default_consumers = "evidence", ["human", "tool"]
