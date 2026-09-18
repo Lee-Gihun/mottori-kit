@@ -2,6 +2,7 @@
 """Fail-close regression pins for H1 bypasses and S2 Git egress paths."""
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import io
 import json
@@ -164,6 +165,11 @@ def test_tracked_public_state_is_not_forbidden() -> None:
         (root / "state" / "NOW.md").write_text("# NOW\n", encoding="utf-8")
         (root / "system" / "decisions.md").write_text("# DR\n", encoding="utf-8")
         _git(root, "add", ".gitignore", "state/NOW.md", "system/decisions.md", "system/memory-config.json")
+        _git(root, "-c", "user.name=fixture", "-c", "user.email=f@example.invalid",
+             "commit", "-qm", "track public instance files")
+        (root / "state" / "NOW.md").write_text("# NOW\n\nupdated\n", encoding="utf-8")
+        (root / "system" / "decisions.md").write_text("# DR\n\nupdated\n", encoding="utf-8")
+        _git(root, "add", "state/NOW.md", "system/decisions.md")
         (root / "_private").mkdir()
         (root / "_private" / "x.md").write_text("secret\n", encoding="utf-8")
         _git(root, "add", "-f", "_private/x.md")
@@ -173,6 +179,191 @@ def test_tracked_public_state_is_not_forbidden() -> None:
         assert "forbidden-index-path:system/memory-config.json" not in issues, issues
         assert "forbidden-index-path:_private/x.md" in issues, issues
     finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_N3_gitignore_exception_cannot_allow_new_instance_paths() -> None:
+    """Changing .gitignore cannot make a path absent from HEAD safe to stage."""
+    root = _repo("personal")
+    try:
+        with (root / ".gitignore").open("a", encoding="utf-8") as ignore:
+            ignore.write("\n!/state/leak.bin\n!/system/decisions.md\n")
+        (root / "state").mkdir()
+        (root / "state" / "leak.bin").write_bytes(b"\x00\x01\x02\x03")
+        (root / "system" / "decisions.md").write_text("new instance file\n", encoding="utf-8")
+        _git(root, "add", ".gitignore", "system/decisions.md")
+        _git(root, "add", "-f", "state/leak.bin")
+        _, issues = _issues(root, "--index")
+        assert "forbidden-index-path:state/leak.bin" in issues, issues
+        assert "forbidden-index-path:system/decisions.md" in issues, issues
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_N6_sealed_baseline_requires_explicit_adoption_and_records_it() -> None:
+    """A sealed baseline accepts new IDs only from a control-plane approval artifact."""
+    sys.path.insert(0, str(HERE))
+    import gate
+    root = _repo()
+    baseline = root / "state" / ".gate-baseline.json"
+    baseline.parent.mkdir(exist_ok=True)
+    key = root / ".git" / "mottori-gate-key"
+    key.write_bytes(b"k" * 32)
+    original = {
+        "root": gate.M.ROOT,
+        "baseline": gate.BASELINE,
+        "key": gate.SIGNING_KEY,
+        "approval": gate.APPROVAL,
+        "root_ok": gate._root_ok,
+        "measure": gate.measure,
+        "pending": gate.PENDING,
+        "lock": gate.LOCK,
+    }
+    try:
+        gate.M.ROOT = str(root)
+        gate.BASELINE = str(baseline)
+        gate.SIGNING_KEY = lambda: str(key)
+        approval = root / ".git" / "mottori-gate-adoption-approval.json"
+        gate.APPROVAL = lambda: str(approval)
+        gate._root_ok = lambda: True
+        gate.PENDING = lambda: str(root / ".git" / "pending")
+        gate.LOCK = lambda: str(root / ".git" / "lock")
+        gate._save_baseline({"linkcheck": {"known"}})
+        gate.measure = lambda: {"linkcheck": {"known", "new-n6-a", "new-n6-b"}}
+
+        assert gate.cmd_baseline() != 0
+        saved, state = gate._load_baseline()
+        assert state == "ok" and saved == {"linkcheck": {"known"}}
+        previous_argv = sys.argv
+        try:
+            sys.argv = ["gate.py", "baseline", "--adopt", "linkcheck:new-n6-a"]
+            assert gate.main() == 2, "baseline must not accept adoption authority inline"
+        finally:
+            sys.argv = previous_argv
+
+        assert gate.cmd_approve_adoption(["linkcheck:new-n6-a"]) != 0
+        assert not approval.exists()
+        assert gate.cmd_approve_adoption(
+            ["linkcheck:new-n6-a", "linkcheck:new-n6-b"]
+        ) == 0
+        document = json.loads(approval.read_text(encoding="utf-8"))
+        assert document["baseline_sha256"] == gate._file_sha256(gate.BASELINE)
+        assert document["target_issues_sha256"] == gate._issues_sha256(gate.measure())
+        assert document["adoptions"] == [
+            {"checker": "linkcheck", "issue_id": "new-n6-a"},
+            {"checker": "linkcheck", "issue_id": "new-n6-b"},
+        ]
+
+        forged = approval.read_text(encoding="utf-8")
+        document["adoptions"][0]["issue_id"] = "forged"
+        approval.write_text(json.dumps(document), encoding="utf-8")
+        assert gate.cmd_baseline() != 0
+        approval.write_text(forged, encoding="utf-8")
+
+        assert gate.cmd_baseline() == 0
+        saved, state = gate._load_baseline()
+        assert state == "ok" and saved == {"linkcheck": {"known", "new-n6-a", "new-n6-b"}}
+        document = json.loads(baseline.read_text(encoding="utf-8"))
+        assert document["schema_version"] == 3
+        assert document["adoptions"][-1]["checker"] == "linkcheck"
+        assert [row["issue_id"] for row in document["adoptions"][-2:]] == ["new-n6-a", "new-n6-b"]
+        sealed = baseline.read_text(encoding="utf-8")
+        document["adoptions"][-1]["issue_id"] = "forged"
+        baseline.write_text(json.dumps(document), encoding="utf-8")
+        _saved, state = gate._load_baseline()
+        assert state == "corrupt"
+        baseline.write_text(sealed, encoding="utf-8")
+
+        gate.measure = lambda: {"linkcheck": {"known", "new-n6-a", "new-n6-b", "new-n6-c"}}
+        assert gate.cmd_baseline() != 0, "approval must be bound to the previous baseline and target set"
+
+        gate.measure = lambda: {"linkcheck": {"known"}}
+        assert gate.cmd_baseline() == 0
+        document = json.loads(baseline.read_text(encoding="utf-8"))
+        assert document["adoptions"][-1]["issue_id"] == "new-n6-b"
+    finally:
+        gate.M.ROOT = original["root"]
+        gate.BASELINE = original["baseline"]
+        gate.SIGNING_KEY = original["key"]
+        gate.APPROVAL = original["approval"]
+        gate._root_ok = original["root_ok"]
+        gate.measure = original["measure"]
+        gate.PENDING = original["pending"]
+        gate.LOCK = original["lock"]
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_N6_adoption_approval_lives_in_git_control_plane() -> None:
+    """The approval path is derived from the Git control plane, not the worktree."""
+    sys.path.insert(0, str(HERE))
+    import gate
+    root = _repo()
+    previous = gate.M.ROOT
+    try:
+        gate.M.ROOT = str(root)
+        assert Path(gate.APPROVAL()).parent == root / ".git"
+    finally:
+        gate.M.ROOT = previous
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_N6_baseline_refuses_when_control_plane_lock_is_unavailable() -> None:
+    sys.path.insert(0, str(HERE))
+    import gate
+    root = _repo()
+    baseline = root / "state" / ".gate-baseline.json"
+    baseline.parent.mkdir(exist_ok=True)
+    key = root / ".git" / "mottori-gate-key"
+    key.write_bytes(b"k" * 32)
+    original = (gate.M.ROOT, gate.BASELINE, gate.SIGNING_KEY, gate._root_ok,
+                gate.measure, gate.PENDING, gate._lock)
+
+    @contextlib.contextmanager
+    def unavailable_lock(timeout=150):
+        yield False
+
+    try:
+        gate.M.ROOT = str(root)
+        gate.BASELINE = str(baseline)
+        gate.SIGNING_KEY = lambda: str(key)
+        gate._root_ok = lambda: True
+        gate.PENDING = lambda: str(root / ".git" / "pending")
+        gate._save_baseline({"linkcheck": {"known", "removed"}})
+        gate.measure = lambda: {"linkcheck": {"known"}}
+        gate._lock = unavailable_lock
+        assert gate.cmd_baseline() != 0
+        saved, state = gate._load_baseline()
+        assert state == "ok" and saved == {"linkcheck": {"known", "removed"}}
+    finally:
+        (gate.M.ROOT, gate.BASELINE, gate.SIGNING_KEY, gate._root_ok,
+         gate.measure, gate.PENDING, gate._lock) = original
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_N6_first_sealed_baseline_is_the_only_implicit_adoption() -> None:
+    sys.path.insert(0, str(HERE))
+    import gate
+    root = _repo()
+    baseline = root / "state" / ".gate-baseline.json"
+    baseline.parent.mkdir(exist_ok=True)
+    key = root / ".git" / "mottori-gate-key"
+    key.write_bytes(b"k" * 32)
+    original = (gate.M.ROOT, gate.BASELINE, gate.SIGNING_KEY, gate._root_ok,
+                gate.measure, gate.PENDING, gate.LOCK)
+    try:
+        gate.M.ROOT = str(root)
+        gate.BASELINE = str(baseline)
+        gate.SIGNING_KEY = lambda: str(key)
+        gate._root_ok = lambda: True
+        gate.measure = lambda: {"linkcheck": {"first-install-issue"}}
+        gate.PENDING = lambda: str(root / ".git" / "pending")
+        gate.LOCK = lambda: str(root / ".git" / "lock")
+        assert gate.cmd_baseline() == 0
+        saved, state = gate._load_baseline()
+        assert state == "ok" and saved["linkcheck"] == {"first-install-issue"}
+    finally:
+        (gate.M.ROOT, gate.BASELINE, gate.SIGNING_KEY, gate._root_ok,
+         gate.measure, gate.PENDING, gate.LOCK) = original
         shutil.rmtree(root, ignore_errors=True)
 
 
@@ -423,6 +614,11 @@ TESTS = [
     test_sync_second_destination_copy_failure_rolls_back_first_copy,
     test_E1_rec_check_crash_is_doctor_fail,
     test_tracked_public_state_is_not_forbidden,
+    test_N3_gitignore_exception_cannot_allow_new_instance_paths,
+    test_N6_sealed_baseline_requires_explicit_adoption_and_records_it,
+    test_N6_adoption_approval_lives_in_git_control_plane,
+    test_N6_baseline_refuses_when_control_plane_lock_is_unavailable,
+    test_N6_first_sealed_baseline_is_the_only_implicit_adoption,
     test_tracked_markdown_symlink_in_head_is_not_reflagged,
     test_prepush_allows_presetup_kit_tree_and_blocks_unknown_context,
 ]

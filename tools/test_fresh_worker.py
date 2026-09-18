@@ -53,7 +53,11 @@ def _init_worktree_repo():
     _git_ok(root, "init", "-q")
     _git_ok(root, "add", ".")
     _git_ok(root, "-c", "user.name=t", "-c", "user.email=t@x", "commit", "-q", "-m", "init")
-    for name in ("memory-config.json", "instance-rules.md", "decisions.md", "rituals.local.md"):
+    (root / "system" / "memory-config.json").write_text(json.dumps({
+        "schema_version": 4,
+        "journal_visibility": {"legacy_cutoff": None, "legacy_public_tracks": []},
+    }), encoding="utf-8")
+    for name in ("instance-rules.md", "decisions.md", "rituals.local.md"):
         (root / "system" / name).write_text(f"instance {name}\n", encoding="utf-8")
     prompt = root / "prompt.md"
     prompt.write_text("work in isolation\n", encoding="utf-8")
@@ -510,7 +514,10 @@ args = sys.argv[1:]
 sys.stdin.read()
 root = pathlib.Path.cwd()
 assert os.environ["MOTTORI_INSTANCE"] == str(root)
-for name in ("memory-config.json", "instance-rules.md", "decisions.md", "rituals.local.md"):
+config = json.loads((root / "system" / "memory-config.json").read_text(encoding="utf-8"))
+assert config["schema_version"] == 4
+assert config["journal_visibility"] == {"legacy_cutoff": None, "legacy_public_tracks": []}
+for name in ("instance-rules.md", "decisions.md", "rituals.local.md"):
     assert (root / "system" / name).read_text(encoding="utf-8") == f"instance {name}\\n"
 assert [p.name for p in (root / "state").iterdir()] == [".gitkeep"]
 assert not (root / "_private").exists()
@@ -915,7 +922,7 @@ def test_scope_violation_outranks_runtime_failure():  # review R3
         assert "status: scope_violation" in r.stdout and "process_exit: 7" in r.stdout
         meta = json.loads((_run_dir(root, r.stdout) / "meta.json").read_text(encoding="utf-8"))
         assert meta["process_exit"] == 7 and meta["wrapper_exit"] == 4 and meta["status"] == "scope_violation"
-        # Without strict mode the scope violation remains a report and runtime failure stays primary.
+        # Without strict mode, the runtime failure stays primary while the scope report remains recorded.
         with _fake_env(FAKE_WRITES="w=outside2.txt", FAKE_EXIT="7"):
             r2 = _run_prefixed(root, "codex", prompt, fake, ["out"])
         assert r2.returncode == 7 and "status: failed" in r2.stdout

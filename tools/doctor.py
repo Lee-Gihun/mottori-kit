@@ -705,10 +705,17 @@ def c_portrait():
 def c_egress():
     """모델 전송 정책이 최소 한 개의 deny prefix로 닫혀 있는가."""
     import memlib as M
+    if M.CONFIG_ERROR == "invalid":
+        key = ("doctor.egress_invalid" if "allow_prefixes" in (M.CONFIG_ERROR_DETAIL or "")
+               else "doctor.egress_config_invalid")
+        return FAIL, t(key)
     deny = M.EGRESS_MODEL_SEND.get("deny_prefixes", [])
     allow = M.EGRESS_MODEL_SEND.get("allow_prefixes", [])
     if not deny:
         return FAIL, t("doctor.egress_empty")
+    relationship_errors = M.egress_prefix_relationship_errors(deny, allow)
+    if relationship_errors:
+        return FAIL, t("doctor.egress_overlap", detail="; ".join(relationship_errors))
     return PASS, t("doctor.egress_ok", deny=len(deny), allow=len(allow))
 
 def _remote_host(url):
