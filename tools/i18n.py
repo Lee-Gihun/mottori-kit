@@ -336,6 +336,18 @@ STRINGS = {
         "en": "egress.model_send.deny_prefixes is empty; model sends are not classified",
         "ko": "egress.model_send.deny_prefixes가 비었다. 모델 전송 등급이 열려 있다",
     },
+    "doctor.egress_invalid": {
+        "en": "egress.model_send allow_prefixes validation failed",
+        "ko": "egress.model_send allow_prefixes 검증에 실패했다",
+    },
+    "doctor.egress_config_invalid": {
+        "en": "memory config validation failed; model-send policy is unavailable",
+        "ko": "memory config 검증에 실패해 모델 전송 정책을 판정할 수 없다",
+    },
+    "doctor.egress_overlap": {
+        "en": "egress.model_send allow_prefixes must strictly narrow deny_prefixes: {detail}",
+        "ko": "egress.model_send allow_prefixes는 deny_prefixes보다 엄격히 깊어야 한다: {detail}",
+    },
     "doctor.egress_ok": {
         "en": "model-send policy deny={deny} · allow={allow}",
         "ko": "모델 전송 정책 deny={deny} · allow={allow}",
@@ -610,8 +622,8 @@ STRINGS = {
     "gate.only_current": {"en": "current only: {items}", "ko": "현재에만: {items}"},
     "gate.more": {"en": " {count} more", "ko": " 외 {count}건"},
     "gate.new_issues": {
-        "en": "Issues absent before this turn appeared: {detail}. Fix them before finishing. If intentional, run `python3 tools/gate.py baseline`.",
-        "ko": "이번 턴에 없던 이슈가 생겼다 — {detail}. 고치고 끝내라. 의도한 변화면 `python3 tools/gate.py baseline`.",
+        "en": "Issues absent before this turn appeared: {detail}. Fix them before finishing. If intentional, have the dispatcher run `gate.py approve-adoption --adopt <checker:issue-id> ...`, then run `python3 tools/gate.py baseline`.",
+        "ko": "이번 턴에 없던 이슈가 생겼다: {detail}. 고치고 끝내라. 의도한 변화면 dispatcher가 `gate.py approve-adoption --adopt <checker:issue-id> ...`를 실행한 뒤 `python3 tools/gate.py baseline`.",
     },
     "gate.root_block": {
         "en": "Gate execution root differs from the tool location ({root} vs {tool}). Check whether MOTTORI_INSTANCE is set.",

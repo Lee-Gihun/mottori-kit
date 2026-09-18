@@ -4122,6 +4122,84 @@
       "bypass_log": null,
       "residual": "이 worker의 .claude와 .codex mount가 read-only라 실제 hook command를 wrapper로 전환하지 못했다.",
       "status": "REVIEW"
+    },
+    {
+      "id": "w2-19-language-pending-seal",
+      "origin": "W2-19",
+      "source_key": "G2-N1",
+      "sources": ["tools/test_language.py", "system/language-pending.txt"],
+      "invariant": "언어 이식 pending 목록의 신규 추가는 승인된 backlog를 가장해 검사를 건너뛰지 못한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {"positive": "tools/test_bypass_pins.py", "negative": "tools/test_bypass_pins.py"},
+      "bypass_log": true,
+      "residual": "W2-18의 게이트 정의 파일 변경 승인이 HEAD에 들어올 때까지 EXPECT_HOLE이다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "w2-19-locale-pair-stamp",
+      "origin": "W2-19",
+      "source_key": "G2-N2",
+      "sources": ["tools/test_language.py"],
+      "invariant": "한국어 locale만 의미 변경해 영어 정본과 어긋나는 변경은 번역 계약 없이 통과하지 못한다.",
+      "boundary": "none",
+      "fail_close": null,
+      "fixtures": {"positive": "tools/test_bypass_pins.py", "negative": "tools/test_bypass_pins.py"},
+      "bypass_log": true,
+      "residual": "W2-17의 번역 스탬프가 HEAD에 들어올 때까지 EXPECT_HOLE이며 자연어 의미 동등성은 직접 판정하지 않는다.",
+      "status": "REVIEW"
+    },
+    {
+      "id": "w2-19-head-owned-private-paths",
+      "origin": "W2-19",
+      "source_key": "G2-N3",
+      "sources": ["tools/enforce.py"],
+      "invariant": "HEAD에 없던 state, instance-owned, private 경로는 현재 .gitignore 내용과 무관하게 index에서 거부된다.",
+      "boundary": "precommit",
+      "fail_close": "HEAD 경로 계측 실패 또는 신규 금지 경로 발견 시 precommit이 nonzero다.",
+      "fixtures": {"positive": "tools/test_enforce.py", "negative": "tools/test_bypass_pins.py"},
+      "bypass_log": true,
+      "residual": "HEAD에 이미 추적된 public state와 instance-owned 파일은 원 인스턴스 호환을 위해 허용된다.",
+      "status": "ENFORCED"
+    },
+    {
+      "id": "w2-19-review-manifest-integrity",
+      "origin": "W2-19",
+      "source_key": "G2-N4",
+      "sources": ["tools/manifest_build.py --issues", "tools/gate.py precommit"],
+      "invariant": "review manifest 손편집은 재생성 결과와 다르면 commit gate에서 거부된다.",
+      "boundary": "gate",
+      "fail_close": "manifest-stale 이슈가 baseline 대비 새 이슈면 precommit이 nonzero다.",
+      "fixtures": {"positive": "tools/test_manifests.py", "negative": "tools/test_bypass_pins.py"},
+      "bypass_log": true,
+      "residual": "manifest가 없는 설치 인스턴스는 해당없음으로 남는다.",
+      "status": "ENFORCED"
+    },
+    {
+      "id": "w2-19-egress-prefix-depth",
+      "origin": "W2-19",
+      "source_key": "G2-N5",
+      "sources": ["tools/memlib.py", "tools/doctor.py c_egress", "tools/fresh_worker.py"],
+      "invariant": "모든 allow prefix는 deny의 엄격한 하위 경로이며 같거나 얕거나 무관한 allow는 거부된다.",
+      "boundary": "doctor",
+      "fail_close": "관계 검증 실패 config는 doctor FAIL이고 fresh worker는 runtime 시작 전에 exit 2다.",
+      "fixtures": {"positive": "tools/test_egress.py", "negative": "tools/test_bypass_pins.py"},
+      "bypass_log": true,
+      "residual": "prefix 정책은 prompt의 경로 참조를 분류하며 모델이 경로를 쓰지 않고 재서술한 민감 내용은 별도 egress 계측 대상이다.",
+      "status": "ENFORCED"
+    },
+    {
+      "id": "w2-19-sealed-baseline-adoption",
+      "origin": "W2-19",
+      "source_key": "G2-N6",
+      "sources": ["tools/gate.py approve-adoption", "tools/gate.py baseline"],
+      "invariant": "봉인된 기존 baseline은 기존 baseline hash와 현재 전체 이슈 집합에 결속된 checker-qualified 승인물 없이 새 이슈를 추가하지 못한다.",
+      "boundary": "gate",
+      "fail_close": ".git control plane의 승인물이 없거나 stale, 불완전, 변조 상태면 baseline 명령이 nonzero이고 저장본은 유지된다.",
+      "fixtures": {"positive": "tools/test_enforce.py", "negative": "tools/test_bypass_pins.py"},
+      "bypass_log": true,
+      "residual": "첫 baseline은 이전 집합이 없어 암묵 채택한다. fresh worker 밖 dispatcher가 approve-adoption을 실행해야 하며 동일 OS 권한으로 .git과 baseline을 함께 바꾸는 공격은 막지 않는다.",
+      "status": "ENFORCED"
     }
   ]
 }

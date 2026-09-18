@@ -105,27 +105,43 @@ def _index_changes(root: Path) -> list[str]:
     return _decode_paths(_run_git(root, ["diff", "--cached", "--name-only", "-z", "HEAD", "--"]))
 
 
-def _ignored_by_rules(root: Path, path: str) -> bool:
-    """True when the repo's own ignore rules cover the path, i.e. it can only be staged by force-add."""
-    run = subprocess.run(
-        ["git", "check-ignore", "--no-index", "-q", "--", path], cwd=root,
+def _head_paths(root: Path) -> set[str]:
+    """Return paths committed in HEAD without consulting mutable worktree ignore rules."""
+    head = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD"], cwd=root,
         capture_output=True, check=False,
     )
+    if head.returncode:
+        return set()
+    return set(_decode_paths(_run_git(
+        root, ["ls-tree", "-r", "--name-only", "-z", "HEAD", "--"])))
+
+
+def _ignored_by_rules(root: Path, path: str) -> bool:
+    """True when the repo's own ignore rules cover the path, i.e. it can only be staged by force-add."""
+    run = subprocess.run(["git", "check-ignore", "--no-index", "-q", "--", path], cwd=root,
+                         capture_output=True, check=False)
     if run.returncode not in (0, 1):
         raise MeasurementError(f"git check-ignore failed for {path}: {run.stderr.decode('utf-8', 'replace').strip()}")
     return run.returncode == 0
 
 
-def _forbidden_in_index(root: Path, path: str) -> bool:
-    """`_private/` is never allowed in any index. state/ and the instance-owned files are forbidden
-    only when the repo ignores them (a fresh kit instance) and they were force-added; an instance that
-    deliberately tracks its public state and decisions (the origin workspace) is not a violation.
-    2026-09-18 measured: the fixed list flagged every tracked state/ file of the origin instance."""
+def _forbidden_in_index(root: Path, path: str, head_paths: set[str], has_head: bool) -> bool:
+    """Block private/instance paths absent from HEAD, independent of editable ignore rules.
+
+    Existing tracked public state and instance files remain compatible with the origin workspace.
+    `_private/` stays forbidden even when a path was already committed historically.
+    """
     if path in TRACKED_STATE_EXCEPTIONS:
         return False
     if path.startswith("_private/"):
         return True
     if path in FORBIDDEN_EXACT or path.startswith(FORBIDDEN_PREFIXES):
+        if has_head:
+            return path not in head_paths
+        # Initial commit: there is no history to protect yet, so the only signal is the repo's own
+        # ignore rules (a force-add). Without this an origin-style instance that tracks its public
+        # state could never make its first commit (2026-09-18: the evidencecheck e2e fixture).
         return _ignored_by_rules(root, path)
     return False
 
@@ -135,13 +151,16 @@ def index_issues(root: Path = ROOT) -> list[tuple[str, str]]:
     context = instance_context(root)
     issues: list[tuple[str, str]] = []
     entries = _index_entries(root)
+    head_paths = _head_paths(root)
+    has_head = subprocess.run(["git", "rev-parse", "--verify", "HEAD"], cwd=root,
+                              capture_output=True, check=False).returncode == 0
     # symlink·submodule 규칙은 이번 커밋이 올리는 항목(HEAD 대비 변경분)에만 건다. HEAD에 이미 있는 항목까지
     # 걸면 과거 트리(예: 원 인스턴스 archive/의 추적 중인 .md symlink)가 모든 커밋을 영구히 막는다 (2026-09-18 실측).
     changed = set(_index_changes(root))
     for mode, stage, path in entries:
         if stage != "0":
             issues.append((f"index-unmerged:{path}", f"unmerged index entry: {path}"))
-        if _forbidden_in_index(root, path):
+        if _forbidden_in_index(root, path, head_paths, has_head):
             issues.append((f"forbidden-index-path:{path}", f"instance/private path staged: {path}"))
         if mode == "160000" and path in changed:
             issues.append((f"index-submodule:{path}", f"submodule gitlink is not allowed: {path}"))

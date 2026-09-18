@@ -70,6 +70,8 @@ CONFIG_PATH = os.path.join(ROOT, "system", "memory-config.json")
 CONFIG_WARNINGS = []
 _CONFIG_LOAD_OK = [True]
 _CONFIG_FINGERPRINT = [None]
+_CONFIG_ERROR = [None]
+_CONFIG_ERROR_DETAIL = [None]
 
 
 def file_fingerprint(path, missing_marker=b"<missing>"):
@@ -139,6 +141,12 @@ def _validate_config_shape(data):
                 and all(_valid_egress_prefix(x) for x in model_send[key])):
             raise ValueError(
                 f"config.egress.model_send.{key}가 안전한 상대경로 prefix list가 아님")
+    deny_prefixes = model_send.get("deny_prefixes", ["_private/"])
+    allow_prefixes = model_send.get("allow_prefixes", [])
+    relationship_errors = egress_prefix_relationship_errors(deny_prefixes, allow_prefixes)
+    if relationship_errors:
+        raise ValueError("config.egress.model_send.allow_prefixes 관계가 안전하지 않음: "
+                         + "; ".join(relationship_errors))
 
     for i, row in enumerate(data.get("episodic_sources", [])):
         if not isinstance(row, dict):
@@ -250,6 +258,19 @@ def _valid_egress_prefix(value):
     return all(part not in ("", ".", "..") for part in value[:-1].split("/"))
 
 
+def egress_prefix_relationship_errors(deny_prefixes, allow_prefixes):
+    """Each allow must narrow a deny and may not override an equal or deeper deny."""
+    errors = []
+    for allow in allow_prefixes:
+        ancestors = [deny for deny in deny_prefixes if allow.startswith(deny) and allow != deny]
+        unsafe = [deny for deny in deny_prefixes if deny.startswith(allow)]
+        if not ancestors:
+            errors.append(f"allow_prefixes {allow!r} is not strictly below a deny prefix")
+        if unsafe:
+            errors.append(f"allow_prefixes {allow!r} is equal to or above deny {unsafe!r}")
+    return errors
+
+
 def _valid_remote_allowlist_entry(value):
     """Accept hosts, remote URLs/scp forms, and explicit local repository paths."""
     if not isinstance(value, str) or not value or value != value.strip():
@@ -283,11 +304,15 @@ def _load_config():
         return _validate_config_shape(_json.loads(raw.decode("utf-8")))
     except FileNotFoundError:
         _CONFIG_LOAD_OK[0] = False
+        _CONFIG_ERROR[0] = "missing"
+        _CONFIG_ERROR_DETAIL[0] = f"config missing: {CONFIG_PATH}"
         _CONFIG_FINGERPRINT[0] = config_fingerprint(CONFIG_PATH)
         CONFIG_WARNINGS.append(f"config 없음: {CONFIG_PATH}")
         return {}
     except Exception as e:
         _CONFIG_LOAD_OK[0] = False
+        _CONFIG_ERROR[0] = "invalid"
+        _CONFIG_ERROR_DETAIL[0] = str(e)
         if _CONFIG_FINGERPRINT[0] is None:
             _CONFIG_FINGERPRINT[0] = config_fingerprint(CONFIG_PATH)
         CONFIG_WARNINGS.append(f"config 로드/검증 실패: {type(e).__name__}")
@@ -297,6 +322,8 @@ def _load_config():
 _CFG = _load_config()
 CONFIG_LOAD_OK = _CONFIG_LOAD_OK[0]
 CONFIG_FINGERPRINT = _CONFIG_FINGERPRINT[0]
+CONFIG_ERROR = _CONFIG_ERROR[0]
+CONFIG_ERROR_DETAIL = _CONFIG_ERROR_DETAIL[0]
 
 
 def _expand(path):
