@@ -4,6 +4,8 @@ import copy
 import json
 import os
 
+from testlib import run_test
+
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MATRIX = os.path.join(ROOT, "system", "test-matrix.yaml")
@@ -81,7 +83,7 @@ def _expected_tools(review):
     for row in review.get("files", []):
         path = row.get("path", "")
         name = os.path.basename(path)
-        if row.get("kind") not in {"tool", "hook"}:
+        if row.get("kind") not in {"tool", "hook", "gate-definition"}:
             continue
         if path == "setup.sh" or (path.startswith("tools/") and not name.startswith("test_")
                                   and name.endswith((".py", ".sh", ".js"))):
@@ -190,4 +192,4 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_test(main, __file__))

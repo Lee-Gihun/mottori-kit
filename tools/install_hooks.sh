@@ -194,7 +194,8 @@ if ! cmp -s "$TEMPLATE" "$HOOK" || [[ ! -x "$HOOK" ]] \
   exit 1
 fi
 
-# setup creates the legacy baseline before hooks. Repair upgrades it to a keyed hash+HMAC document.
+# setup measures the baseline before hooks. Repair signs that measured set with keyed hash+HMAC
+# without running the release regression boundary again.
 # Fixtures without a baseline are hook-only tests and intentionally skip this step.
 if [[ -f "$ROOT/state/.gate-baseline.json" ]] && ! python3 "$ROOT/tools/gate.py" seal-baseline >/dev/null; then
   rollback

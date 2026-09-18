@@ -10,6 +10,8 @@ import shutil
 import sys
 import tempfile
 
+from testlib import run_test
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import memlib as M
@@ -98,4 +100,4 @@ def run():
 
 
 if __name__ == "__main__":
-    sys.exit(run())
+    sys.exit(run_test(run, __file__))

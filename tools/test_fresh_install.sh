@@ -3,8 +3,9 @@
 #
 # README의 약속은 `git clone → bash setup.sh → python3 tools/doctor.py` 이고 SETUP.md는
 # "FAIL이 0이어야 세팅 완료"라고 말한다. 이 스크립트는 그 약속을 임시 클론에서 **비대화형으로**
-# 돌리고(에이전트·CI가 실제로 돌리는 방식), doctor FAIL 수·linkcheck broken 수·회귀 테스트
-# 결과를 표로 낸다. 2026-09-17 실측: 이 검사기 없이 릴리스한 v0.4는 첫 설치에서
+# 돌리고(에이전트·CI가 실제로 돌리는 방식), doctor FAIL 수와 linkcheck broken 수를
+# 표로 낸다. 전체 회귀와 installed-instance shape는 CI의 별도 release 경계가 한 번씩 맡는다.
+# 2026-09-17 실측: 이 검사기 없이 릴리스한 v0.4는 첫 설치에서
 # setup.sh가 조용히 exit 1 했고, 인자를 줘도 doctor FAIL 4·linkcheck 2·회귀 12/13이었다.
 # CRITICAL_E2E setup.sh
 # CRITICAL_E2E tools/memlib.py
@@ -18,7 +19,7 @@
 # 사용:  bash tools/test_fresh_install.sh            (이 킷을 임시 디렉토리에 클론해서 검사)
 #        bash tools/test_fresh_install.sh --keep     (임시 디렉토리를 지우지 않고 경로를 인쇄)
 # 내부 회귀용: --judge-linkcheck|--judge-doctor <subprocess-exit> <output-file>
-# 종료코드: doctor FAIL 0 · linkcheck broken 0 · 회귀 전부 통과면 0, 아니면 1.
+# 종료코드: doctor FAIL 0 · linkcheck broken 0 · 설치와 hook 검증 통과면 0, 아니면 1.
 set -uo pipefail
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -130,6 +131,11 @@ esac
 KEEP=0; [ "${1:-}" = "--keep" ] && KEEP=1
 TMP="$(mktemp -d)"
 DEST="$TMP/kit fresh"          # 공백 든 경로: 2026-08-24 실측 버그(경로 유도 규칙)의 재발 방지
+MOTTORI_TEST_LOG="$TMP/test-runs.log"
+MOTTORI_TEST_RUN_ID="fresh-install-$(date +%s)-$$"
+export MOTTORI_TEST_LOG
+export MOTTORI_TEST_RUN_ID
+: > "$MOTTORI_TEST_LOG"
 cleanup() { [ "$KEEP" -eq 1 ] && echo "kept: $DEST" || rm -rf "$TMP"; }
 trap cleanup EXIT
 
@@ -198,13 +204,7 @@ else
   fail=1
 fi
 
-# 5. 회귀 픽스처 (킷에 실린 것 전부)
-for t in tools/test_*.py; do
-  if python3 "$t" >"$TMP/test.log" 2>&1; then step "$(basename "$t")" "ok"; else
-    step "$(basename "$t")" "FAIL"; tail -3 "$TMP/test.log"; fail=1; fi
-done
-
-# 6. 두 번째 setup은 멈춰야 한다 (덮어쓰기 금지 계약)
+# 5. 두 번째 setup은 멈춰야 한다 (덮어쓰기 금지 계약)
 out2="$(bash setup.sh < /dev/null 2>&1)"; rc2=$?
 if [ $rc2 -eq 0 ] && echo "$out2" | grep -Eq "이미 세팅|already set up"; then step "setup.sh 재실행 (덮지 않음)" "ok"; else
   step "setup.sh 재실행 (덮지 않음)" "FAIL exit=$rc2"; fail=1; fi

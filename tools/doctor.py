@@ -9,7 +9,7 @@ doctor는 그 침묵을 깨는 쪽 계기다.
 원칙 하나. **검사 못 하는 것을 숨기지 않는다.** 자동 검사 가능한 것만 보고하면
 "전부 PASS"가 거짓말이 된다. MANUAL 칸이 이 도구의 반증 가능 칸이다 (WORKING-WITH-AI §4).
 
-사용: python3 tools/doctor.py [--verbose] [--json]
+사용: python3 tools/doctor.py [--verbose] [--json] [--release]
 종료코드: FAIL이 하나라도 있으면 1.
 """
 import json
@@ -28,6 +28,7 @@ ROOT = os.path.dirname(HERE)
 VERBOSE = "--verbose" in sys.argv
 JSON_OUTPUT = "--json" in sys.argv
 READY_MODE = "--ready" in sys.argv
+RELEASE_MODE = "--release" in sys.argv
 
 PASS, FAIL, WARN, SKIP = "PASS", "FAIL", "WARN", "SKIP"
 results = []
@@ -587,12 +588,25 @@ def c_coherence():
     return (PASS if not n else WARN), t("doctor.coherence_ok", count=n)
 
 
+def _is_kit_tree(root=ROOT):
+    """Recognize a distribution checkout without requiring every marker to survive."""
+    markers = (
+        "setup.sh",
+        "templates/memory-config.json",
+        "system/engine-inventory.txt",
+        "system/review-manifest.yaml",
+    )
+    return any(os.path.isfile(os.path.join(root, marker)) for marker in markers)
+
+
 def c_regression():
     """회귀 픽스처가 실제로 통과하는가. **doctor가 이걸 안 돌리고 있었다** (적대 검증 V1-9).
 
     검출기가 살아 있는지를 재는 유일한 자동 수단인데 검사 목록에 없었다.
     계측기가 자기 옆의 계측기를 안 보고 있었던 셈이다.
     """
+    if not RELEASE_MODE:
+        return SKIP, t("doctor.regression_release_only")
     # 공용 엔진 suite: 킷과 인스턴스 양쪽에 대상이 있다. test_i18n·test_doctor_json은 doctor 자신을
     # 돌리므로 여기 넣으면 재귀한다 (전수 실행은 test_fresh_install.sh와 스웜 계약이 맡는다).
     scripts = ["test_memcheck.py", "test_memlib_journal.py", "test_state_runtime.py",
@@ -602,6 +616,7 @@ def c_regression():
                "test_hookdiag.py", "test_install_hooks.py", "test_coherence.py",
                "test_evidencecheck.py", "test_egress.py"]
     kit_sync = os.path.join(ROOT, "tools", "kit_sync.py")
+    kit_tree = _is_kit_tree()
     # kit_sync.py는 상류에만 있는 표지다. 배포 킷에서는 installer와 그 fixture가 둘 다
     # distribution contract이므로 한쪽을 지워 4-suite green으로 축소하는 경로를 막는다.
     if os.path.isfile(kit_sync):
@@ -615,17 +630,21 @@ def c_regression():
         if missing:
             return FAIL, t("doctor.upstream_suites_missing", items=", ".join(missing))
         scripts.extend(upstream_suites)
-    else:
+    elif kit_tree:
         # 배포 킷 전용 suite: setup.sh·review manifest·skill 문서처럼 킷 트리에만 대상이 있다
         # (인스턴스엔 kit_sync NOT_SYNCED로 남는다). 하나라도 지우면 fail-close.
         kit_suites = ("test_setup_migration.py", "test_portability.py", "test_manifests.py",
                       "test_skill_parity.py", "test_matrix_check.py", "test_language.py",
                       "test_devtree_gate.py")
-        required = ("setup.sh",) + tuple(os.path.join("tools", s) for s in kit_suites)
+        required = ("setup.sh", "templates/memory-config.json", "system/engine-inventory.txt") \
+            + tuple(os.path.join("tools", s) for s in kit_suites) \
+            + ("tools/test_instance_shape.py",)
         missing = [path for path in required if not os.path.isfile(os.path.join(ROOT, path))]
         if missing:
             return FAIL, t("doctor.kit_suites_missing", items=", ".join(missing))
         scripts.extend(kit_suites)
+    # An installed instance has neither the origin-only exporter nor the kit-only installer.
+    # Its tools directory is the engine inventory, so only the shared suites above apply.
     passed, bad = [], []
     for script in scripts:
         r = sh(sys.executable, "tools/" + script)

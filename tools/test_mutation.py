@@ -12,6 +12,8 @@ import subprocess
 import sys
 import tempfile
 
+from testlib import run_test
+
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -180,4 +182,4 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_test(main, __file__))

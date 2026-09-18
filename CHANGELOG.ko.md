@@ -1,4 +1,4 @@
-<!-- source: CHANGELOG.md sha256:5a2d0218a35a93554a59bfdb95f3b0a862d556b2b4c08850ef49cce0b2e62185 source-of-truth: en -->
+<!-- source: CHANGELOG.md sha256:eb84977ec417f8a37bc17bdf039e98f1ec3600095984bdf0f63910eb10363394 source-of-truth: en -->
 # CHANGELOG
 
 **이 파일의 형식은 "무엇이 추가됐다"가 아니라 "기존 인스턴스가 무엇을 해야 하는가"다.**
@@ -37,6 +37,17 @@ locale-pair 게이트도 같은 검사를 실행한다.
 이슈를 내면 그 커밋에서 고친다. 2026-09-18 실측: CI workflow 파일을 `git add` 전에 manifest를 재생성해 커밋했고
 원격 게이트가 처음 돌자마자 실패했다. 생성 파일은 사람이 순서를 기억해서가 아니라 게이트가 잡는다. manifest가 없는
 트리(설치된 인스턴스)는 해당없음이다.
+
+### `[알아둘 것]` test 근거는 실행을 증명하고 gate 정의 변경에는 디스패처 승인이 필요하다
+
+모든 Python 회귀 suite는 `MOTTORI_TEST_LOG`가 설정되면 `tools/testlib.py`를 통해 실행 ID와 시각이 붙은
+`RAN <run-id> <time> tools/test_x.py::name` 행을 기록한다. `test:` 표지가 함수 정의만 가리키고 최근 실행 기록이 없으면
+evidencecheck는 fail-close한다. fresh-install, CI, `tools/gate.py`가 로그를 만든다.
+review manifest에서 `gate-definition`으로 분류한 파일은 변경 경로 집합과 binary diff SHA에 결박된
+디스패처 승인 줄이 있어야 `tools/manifest_build.py --check`를 통과한다.
+
+근거: `test:tools/test_evidencecheck.py::test_TESTS_omission_mutation_is_caught`,
+`test:tools/test_manifests.py::test_gate_definition_change_requires_dispatcher_approval`.
 
 ### `[자동]` 첫 킷 표면의 영어 정본과 한국어 로케일 파일
 
@@ -175,6 +186,15 @@ config와 state 입력이 둘 다 없는 상류 개발 트리에서 direct·port
 gated 0을 낸다. NOW 또는 journal은 있지만 config만 없는 반쪽 설치는 `config-absent`로 fail-close한다.
 `gate.py selfcheck`는 direct와 precommit의 checker-qualified gated ID 집합을 비교하고 다르면 WARN에 두
 집합을 모두 보여준다. 기존 인스턴스가 손으로 바꿀 파일은 없다.
+
+### `[자동]` 오래된 설치 인스턴스 모양도 릴리스 게이트가 잰다
+
+근거 표지: `experiment:w2-16-instance-shape-release-gate`.
+
+`tools/test_instance_shape.py`는 setup.sh와 templates가 없고 공개 state와 인스턴스 설정을 추적하며 과거
+Markdown symlink와 한국어 사용자 데이터를 가진 합성 인스턴스를 만든다. 그 안에서 ENGINE 회귀, doctor,
+gate, pre-commit, pre-push, 영어 doctor를 실행하고 과거 트리 모양 결함 7종의 되살리기 probe를 모두
+검출한다. ENGINE 복사 목록은 `system/engine-inventory.txt`가 소유한다.
 
 ### `[알아둘 것]` 공용 엔진 회귀는 설치된 인스턴스에서도 돈다
 

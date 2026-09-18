@@ -11,7 +11,9 @@ the same manifest is valid before and after the patch is applied upstream.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -22,6 +24,8 @@ ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "system" / "review-manifest.yaml"
 MANIFEST_REL = "system/review-manifest.yaml"
 DELIVERY_PATHS = {
+    ".github/workflows/gates.yml",
+    "system/engine-inventory.txt",
     "system/enforcement-matrix.yaml",
     "system/language-pending.txt",
     "system/reviews/content-audit.tsv",
@@ -36,14 +40,35 @@ DELIVERY_PATHS = {
     "tools/test_devtree_gate.py",
     "tools/test_egress.py",
     "tools/test_enforce.py",
+    "tools/test_instance_shape.py",
     "tools/test_language.py",
     "tools/test_manifests.py",
     "tools/test_matrix_check.py",
     "tools/test_mutation.py",
+    "tools/testlib.py",
     "tools/test_tool_entrypoints.py",
     "tools/test_worker_batch.py",
     "tools/worker_batch.py",
 }
+GATE_DEFINITION_PATHS = {
+    ".github/workflows/gates.yml",
+    "system/enforcement-matrix.yaml",
+    "system/language-pending.txt",
+    "system/review-manifest.yaml",
+    "system/test-matrix.yaml",
+    "tools/enforce.py",
+    "tools/evidencecheck.py",
+    "tools/gate.py",
+    "tools/manifest_build.py",
+    "tools/test_language.py",
+}
+# Tracked, append-only ledger. An untracked swarm-private path (the first draft) can never be seen by CI,
+# so every gate-definition change would fail the remote gate (2026-09-18 port measurement).
+APPROVAL_FILE = Path("system/gate-definition-approvals.md")
+APPROVAL_RE = re.compile(
+    r"^gate-definition-approval: decision:(?:KIT-)?DR-\d{3} "
+    r"files=([^\s]+) sha256=([0-9a-f]{64})$"
+)
 
 
 def locale_paths() -> set[str]:
@@ -97,6 +122,79 @@ def load_existing() -> dict[str, dict]:
     }
 
 
+def _approval_diff_args() -> tuple[Path, list[str]]:
+    repo = Path(os.environ.get("MOTTORI_APPROVAL_REPO", ROOT)).resolve()
+    mode = os.environ.get("MOTTORI_APPROVAL_MODE", "worktree")
+    if mode == "staged":
+        args = ["git", "diff", "--cached"]
+    elif mode == "commit":
+        base = os.environ.get("MOTTORI_APPROVAL_BASE", "")
+        if not base:
+            raise RuntimeError("MOTTORI_APPROVAL_BASE is required for commit approval comparison")
+        args = ["git", "diff", base, "HEAD"]
+    elif mode == "worktree":
+        args = ["git", "diff", "HEAD"]
+    else:
+        raise RuntimeError(f"unknown approval comparison mode: {mode}")
+    return repo, args
+
+
+def changed_gate_definitions(root: Path = ROOT) -> list[str]:
+    repo, args = _approval_diff_args()
+    command = [*args, "--name-only", "--", *sorted(GATE_DEFINITION_PATHS)]
+    result = subprocess.run(command, cwd=repo, capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError("cannot measure gate-definition diff: " + result.stderr.strip())
+    return sorted({line for line in result.stdout.splitlines() if line in GATE_DEFINITION_PATHS})
+
+
+def gate_definition_diff_sha(paths: list[str], root: Path = ROOT) -> str:
+    repo, args = _approval_diff_args()
+    result = subprocess.run(
+        [*args, "--binary", "--", *paths],
+        cwd=repo, check=True, capture_output=True,
+    )
+    return hashlib.sha256(result.stdout).hexdigest()
+
+
+def _approval_lines(path: Path) -> tuple[list[str], list[str]]:
+    if not path.is_file():
+        return [], []
+    valid, malformed = [], []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("gate-definition-approval:"):
+            continue
+        if APPROVAL_RE.fullmatch(line):
+            valid.append(line)
+        else:
+            malformed.append(f"{path}: invalid gate-definition approval syntax: {line}")
+    return valid, malformed
+
+
+def gate_definition_approval_issues(root: Path = ROOT) -> list[str]:
+    changed = changed_gate_definitions(root)
+    if not changed:
+        return []
+    candidates: list[str] = []
+    problems: list[str] = []
+    approval_root, _args = _approval_diff_args()
+    valid, malformed = _approval_lines(approval_root / APPROVAL_FILE)
+    candidates.extend(valid)
+    problems.extend(malformed)
+    expected_sha = gate_definition_diff_sha(changed, root)
+    expected_files = ",".join(changed)
+    if problems:
+        return problems
+    for line in candidates:
+        match = APPROVAL_RE.fullmatch(line)
+        if match and match.group(1) == expected_files and match.group(2) == expected_sha:
+            return []
+    return [
+        "gate-definition diff lacks matching dispatcher approval: "
+        f"files={expected_files} sha256={expected_sha}"
+    ]
+
+
 def dependencies(path: str, candidates: set[str]) -> list[str]:
     if path == MANIFEST_REL:
         # The inventory is generated from the whole corpus. This also keeps a
@@ -123,12 +221,21 @@ def build() -> dict:
     rows = []
     for path in sorted(paths):
         old = existing.get(path, {})
-        if path.endswith(".ko.md"):
+        if path in GATE_DEFINITION_PATHS:
+            default_kind, default_consumers = "gate-definition", ["human", "tool"]
+        elif path.endswith(".ko.md"):
             canonical = existing.get(path[:-len(".ko.md")] + ".md", {})
             default_kind = canonical.get("kind", "evidence")
             default_consumers = canonical.get("consumers", ["human"])
-        elif path in ("tools/i18n_stamp.py", "tools/test_devtree_gate.py", "tools/test_language.py"):
+        elif path in {
+            "tools/i18n_stamp.py", "tools/test_devtree_gate.py",
+            "tools/test_language.py", "tools/test_instance_shape.py", "tools/testlib.py",
+        }:
             default_kind, default_consumers = "tool", ["tool"]
+        elif path.startswith(".github/workflows/"):
+            default_kind, default_consumers = "hook", ["tool"]
+        elif path == "system/engine-inventory.txt":
+            default_kind, default_consumers = "rule", ["human", "tool"]
         elif path == "system/language-pending.txt":
             default_kind, default_consumers = "evidence", ["human", "tool"]
         elif path.startswith(".github/workflows/") and path.endswith((".yml", ".yaml")):
@@ -139,9 +246,9 @@ def build() -> dict:
         rows.append(
             {
                 "path": path,
-                # an existing unclassified row (None / []) takes the rule default (2026-09-18: a path whose rule
-                # was added later stayed stuck at None)
-                "kind": old.get("kind") or default_kind,
+                # Path-specific defaults added later fill old unclassified rows. Gate definitions
+                # always use the protected classification.
+                "kind": default_kind if path in GATE_DEFINITION_PATHS else old.get("kind") or default_kind,
                 "owner": "kit",
                 "consumers": old.get("consumers") or default_consumers,
                 "depends_on": dependencies(path, paths),
@@ -166,7 +273,13 @@ def issues_mode() -> int:
     behind the index (2026-09-18: the CI workflow was committed while missing from the manifest)."""
     if not MANIFEST.exists():
         print("~manifest-absent\tnot applicable: no system/review-manifest.yaml in this tree")
-        print("#issues 0")
+        try:
+            approval_issues = gate_definition_approval_issues()
+        except RuntimeError as error:
+            approval_issues = [str(error)]
+        for index, text in enumerate(approval_issues):
+            print(f"gate-definition-approval|{index}\t{text}")
+        print(f"#issues {len(approval_issues)}")
         return 0
     document = build()
     wanted = render(document)
@@ -183,6 +296,12 @@ def issues_mode() -> int:
             ids.append((f"manifest-unclassified|{row['path']}", f"kind/consumers unclassified: {row['path']}"))
     if current != wanted and not ids:
         ids.append(("manifest-stale|system/review-manifest.yaml", "manifest content differs from regeneration"))
+    try:
+        approval_issues = gate_definition_approval_issues()
+    except RuntimeError as error:
+        approval_issues = [str(error)]
+    for index, text in enumerate(approval_issues):
+        ids.append((f"gate-definition-approval|{index}", text))
     for issue_id, text in ids:
         print(f"{issue_id}\t{text}")
     print(f"#issues {len(ids)}")
@@ -200,6 +319,11 @@ def main() -> int:
     wanted = render(build())
     current = MANIFEST.read_text(encoding="utf-8") if MANIFEST.exists() else ""
     if args.check:
+        approval_issues = gate_definition_approval_issues()
+        if approval_issues:
+            for issue in approval_issues:
+                print(issue, file=sys.stderr)
+            return 1
         if current != wanted:
             print("review manifest is stale; run python3 tools/manifest_build.py", file=sys.stderr)
             return 1
