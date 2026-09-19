@@ -176,3 +176,22 @@ evidence: test:tools/test_manifests.py::test_gate_definition_change_requires_dis
 설치된 인스턴스는 게이트 정의를 엔진 동기화로 받고 그 diff는 원천 킷의 원장이 이미 승인했으므로 `--issues`가
 `~gate-definition-approval` 해당 없음으로 보고한다. 첫 구현은 인스턴스에서도 승인 줄을 요구해 모든 엔진 동기화가 막혔다.
 evidence: test:tools/test_manifests.py::test_gate_definition_approval_is_not_applicable_in_installed_instance
+
+### DR-014 트리거 저장소: "나중에 뜰 것"은 파일에 두고, 행동 티어는 상수다 (2026-09-19 · active-pilot · 3주기 후 재판정)
+결정: `tools/triggers.py`가 날짜 트리거를 인스턴스의 `_private/triggers/triggers.jsonl`에 둔다(`add`·`due`·`hook`·`claim`·`fire`·`sleep`·`list`·`scan`).
+`scan`은 실험 등록부의 만기 열과 재판정 날짜가 있는 결정 기록에서 안정된 id(`exp-X<n>`·`rereview-DR-<n>`)로 트리거를 만들어 재실행이 멱등이다.
+행동 티어는 손잡이가 아니라 상수다: T0 말하기 · T1 준비하기(개인 영역에 초안, 되돌릴 수 있음) · T2 밖으로 나가기(발송·커밋·결제·삭제;
+자동 없음, 초안 + 요청 한 줄로만 뜬다). `privacy`(기본 private)와 `destination`(기본 local, 외부 당사자 없음)은 티어와 직교하는 축이라
+"T0는 항상 허용"이 외부 알림 허가가 되지 않는다. `due`는 `--mark` 없이는 읽기 전용이고 `hook`만 표시를 기록한다. 세션당 최대 5건,
+표시 횟수 오름차순(carry-over)이라 cap이 뒤 항목을 굶기지 않으며, 세 번 보이고도 `fire`가 없으면 7일 자동 잠듦(무시 횟수 기록).
+`claim`은 lease를 걸고 살아 있는 lease는 두 번째 claim을 거부하며, `fire`는 반복을 거부하고 `history`에 사건을 남긴다. 저장은 파일 잠금 안의
+load-modify-save와 임시파일 교체다. 소스 파서의 언어 의존 단어(닫힘 상태·재판정 표지·"N주기 후")는 엔진에 영어 기본값만 두고
+인스턴스 설정 `triggers.sources`가 덮어쓴다(킷 트리는 언어 게이트를 그대로 통과한다). SessionStart 훅 한 줄(`.claude/settings.json`·
+`.codex/hooks.json` 동일 JSON 계약)은 별도 rollback 묶음이고 그 단위는 훅 줄 + 트리거 저장소다.
+맥락: 소유자 2026-09-19 지시 — 교정된 판정(Jev형)과 능동성(Instinct형)을 킷에 녹이되 Claude Code 전용이면 안 되고 Codex로 옮겨도 그대로
+돌아야 한다. 인스턴스의 Claude↔Codex 토론 10라운드에서 수렴(토론 파일은 원천 인스턴스의 debate 폴더, 2026-09-19 decide-triggers 쟁점; 킷 트리에는 없다).
+Codex가 바꾼 것: `due` 읽기 전용, destination 축, lease·history·잠금, carry-over 정렬, 소스 파서를 데이터로, `tools/runtime/` 패키지 기각
+(런타임 registry는 `fresh_worker.py` 안에), `decide`(교정 판정 registry·그림자 모드·판정 원장)는 다음 주기의 묶음으로.
+evidence: test:tools/test_triggers.py::test_add_due_fire_and_tier_boundary · test:tools/test_triggers.py::test_hook_limits_and_auto_sleep_after_ignores ·
+test:tools/test_triggers.py::test_claim_lease_refuses_second_holder_and_due_stays_read_only · test:tools/test_triggers.py::test_scan_experiments_and_decision_rereviews
+재판정(3주기): fire 대 자동 잠듦 비율, 세션 시작 절이 실제로 행동을 바꾼 횟수, 두 하네스에서 같은 출력이 나왔는지.

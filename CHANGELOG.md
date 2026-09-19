@@ -13,6 +13,29 @@ outstanding, `python3 tools/doctor.py` fails after the pull.
 
 ## v0.8 · 2026-09-18 (English canonical migration)
 
+### `[Note]` A trigger store surfaces due items at session start, inside a fixed action-tier boundary
+
+Evidence: `test:tools/test_triggers.py::test_add_due_fire_and_tier_boundary`,
+`test:tools/test_triggers.py::test_invalid_inputs_exit_2`,
+`test:tools/test_triggers.py::test_hook_limits_and_auto_sleep_after_ignores`,
+`test:tools/test_triggers.py::test_claim_lease_refuses_second_holder_and_due_stays_read_only`, and
+`test:tools/test_triggers.py::test_scan_experiments_and_decision_rereviews`.
+
+`tools/triggers.py` keeps "things to surface later" in `_private/triggers/triggers.jsonl`: `add`, `due`
+(read-only unless `--mark`), `hook` (up to five due items as SessionStart context, the same JSON for Claude and
+Codex), `claim` (a lease before acting), `fire`, `sleep`, `list`, and `scan`. `scan` creates date triggers from the
+experiments registry's due column and from decision records that carry a re-review date, with stable ids so a
+rescan is idempotent. Tiers are constants: T0 say, T1 prepare (a draft in the private area), T2 act outward, which
+is never unattended and is surfaced as a draft plus one ask. `privacy` and `destination` are separate axes with
+private and local defaults. An item shown three times without `fire` sleeps for a week; the least shown items are
+listed first so a cap never starves what sits behind it. Source-parser words are English defaults that the instance
+may override under `triggers.sources` in `system/memory-config.json` (a Korean registry sets its own words for
+closed status, the re-review marker, and "N cycles later"). Design: KIT-DR-014.
+
+Instance steps: optionally add `triggers.sources` to `system/memory-config.json`; run
+`python3 tools/triggers.py scan` once; the SessionStart hook line ships in `.claude/settings.json` and
+`.codex/hooks.json` and reaches an installed instance through `tools/install_hooks.sh`.
+
 ### `[Note]` Transcription listens harder on noisy audio and reports what it could not hear
 
 Evidence: `test:tools/test_transcribe_filter.py::test_repeated_lines_become_one_noise_span`,
