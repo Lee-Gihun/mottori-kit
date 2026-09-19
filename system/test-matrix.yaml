@@ -15,6 +15,7 @@
     {"path":"tools/coherence.py","risk":"normal","layers":{"U":"tools/test_coherence.py","S":"tools/test_coherence.py","N":"tools/test_coherence.py","M":null,"E2E":null}},
     {"path":"tools/context_budget.py","risk":"normal","layers":{"U":"tools/test_context_budget.py","S":"tools/test_context_budget.py","N":"tools/test_context_budget.py","M":null,"E2E":null}},
     {"path":"tools/diarize.py","risk":"normal","layers":{"U":"tools/test_tool_entrypoints.py","S":"tools/test_tool_entrypoints.py","N":"tools/test_tool_entrypoints.py","M":null,"E2E":null}},
+    {"path":"tools/triggers.py","risk":"normal","layers":{"U":"tools/test_triggers.py","S":"tools/test_triggers.py","N":"tools/test_triggers.py","M":null,"E2E":null}},
     {"path":"tools/enforce.py","risk":"normal","layers":{"U":"tools/test_enforce.py","S":"tools/test_enforce.py","N":"tools/test_enforce.py","M":null,"E2E":"tools/test_instance_shape.py"}},
     {"path":"tools/eval_recall.py","risk":"normal","layers":{"U":"tools/test_tool_entrypoints.py","S":"tools/test_tool_entrypoints.py","N":"tools/test_tool_entrypoints.py","M":null,"E2E":null}},
     {"path":"tools/evidencecheck.py","risk":"normal","layers":{"U":"tools/test_evidencecheck.py","S":"tools/test_evidencecheck.py","N":"tools/test_evidencecheck.py","M":null,"E2E":null}},

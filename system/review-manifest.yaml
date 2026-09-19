@@ -147,7 +147,8 @@
       "depends_on": [
         "tools/doctor.py",
         "tools/gate.py",
-        "tools/now.py"
+        "tools/now.py",
+        "tools/triggers.py"
       ],
       "reviewed_at": null
     },
@@ -161,7 +162,8 @@
       ],
       "depends_on": [
         "tools/doctor.py",
-        "tools/now.py"
+        "tools/now.py",
+        "tools/triggers.py"
       ],
       "reviewed_at": null
     },
@@ -282,6 +284,8 @@
         "codex"
       ],
       "depends_on": [
+        ".claude/settings.json",
+        ".codex/hooks.json",
         ".github/workflows/gates.yml",
         ".gitignore",
         "AGENTS.md",
@@ -332,8 +336,10 @@
         "tools/test_skill_parity.py",
         "tools/test_state_runtime.py",
         "tools/test_transcribe_filter.py",
+        "tools/test_triggers.py",
         "tools/testlib.py",
         "tools/transcribe.py",
+        "tools/triggers.py",
         "tools/worker_batch.py"
       ],
       "reviewed_at": null
@@ -348,6 +354,8 @@
         "codex"
       ],
       "depends_on": [
+        ".claude/settings.json",
+        ".codex/hooks.json",
         ".github/workflows/gates.yml",
         ".gitignore",
         "AGENTS.md",
@@ -397,8 +405,10 @@
         "tools/test_skill_parity.py",
         "tools/test_state_runtime.py",
         "tools/test_transcribe_filter.py",
+        "tools/test_triggers.py",
         "tools/testlib.py",
         "tools/transcribe.py",
+        "tools/triggers.py",
         "tools/worker_batch.py"
       ],
       "reviewed_at": null
@@ -892,7 +902,9 @@
         "tools/test_receipts.py",
         "tools/test_setup_migration.py",
         "tools/test_state_runtime.py",
-        "tools/testlib.py"
+        "tools/test_triggers.py",
+        "tools/testlib.py",
+        "tools/triggers.py"
       ],
       "reviewed_at": null
     },
@@ -979,6 +991,8 @@
         "codex"
       ],
       "depends_on": [
+        ".claude/settings.json",
+        ".codex/hooks.json",
         ".github/workflows/gates.yml",
         ".gitignore",
         "AGENTS.md",
@@ -994,7 +1008,9 @@
         "tools/sync_engine.sh",
         "tools/test_fresh_install.sh",
         "tools/test_fresh_worker.py",
-        "tools/test_manifests.py"
+        "tools/test_manifests.py",
+        "tools/test_triggers.py",
+        "tools/triggers.py"
       ],
       "reviewed_at": null
     },
@@ -1008,6 +1024,8 @@
         "codex"
       ],
       "depends_on": [
+        ".claude/settings.json",
+        ".codex/hooks.json",
         ".github/workflows/gates.yml",
         ".gitignore",
         "AGENTS.md",
@@ -1022,7 +1040,9 @@
         "tools/sync_engine.sh",
         "tools/test_fresh_install.sh",
         "tools/test_fresh_worker.py",
-        "tools/test_manifests.py"
+        "tools/test_manifests.py",
+        "tools/test_triggers.py",
+        "tools/triggers.py"
       ],
       "reviewed_at": null
     },
@@ -1618,9 +1638,11 @@
         "tools/test_state_runtime.py",
         "tools/test_tool_entrypoints.py",
         "tools/test_transcribe_filter.py",
+        "tools/test_triggers.py",
         "tools/test_worker_batch.py",
         "tools/testlib.py",
         "tools/transcribe.py",
+        "tools/triggers.py",
         "tools/wf_gardener.js",
         "tools/worker_batch.py"
       ],
@@ -2091,9 +2113,11 @@
         "tools/test_state_runtime.py",
         "tools/test_tool_entrypoints.py",
         "tools/test_transcribe_filter.py",
+        "tools/test_triggers.py",
         "tools/test_worker_batch.py",
         "tools/testlib.py",
         "tools/transcribe.py",
+        "tools/triggers.py",
         "tools/wf_gardener.js",
         "tools/worker_batch.py"
       ],
@@ -3199,6 +3223,19 @@
       "reviewed_at": null
     },
     {
+      "path": "tools/test_triggers.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        "tools/triggers.py"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": "tools/test_worker_batch.py",
       "kind": "tool",
       "owner": "kit",
@@ -3223,6 +3260,17 @@
     },
     {
       "path": "tools/transcribe.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/triggers.py",
       "kind": "tool",
       "owner": "kit",
       "consumers": [

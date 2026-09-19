@@ -52,3 +52,5 @@ test_rec.py
 test_recall.py
 test_receipts.py
 testlib.py
+triggers.py
+test_triggers.py
