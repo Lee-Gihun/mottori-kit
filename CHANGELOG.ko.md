@@ -1,4 +1,4 @@
-<!-- source: CHANGELOG.md sha256:c2ce0217a87cf935fe26b4340d57648d719810f1c331261463357a420ed9a963 source-of-truth: en -->
+<!-- source: CHANGELOG.md sha256:7740292adc1905cfc373256553d04a939f2b64d16dce5a93a9e41dfb925fe5dd source-of-truth: en -->
 # CHANGELOG
 
 **이 파일의 형식은 "무엇이 추가됐다"가 아니라 "기존 인스턴스가 무엇을 해야 하는가"다.**
@@ -14,6 +14,27 @@ system/instance-rules.md, system/decisions.md, system/rituals.local.md, `state/`
 ---
 
 ## v0.8 · 2026-09-18 (영어 정본화)
+
+### `[Note]` 트리거 저장소가 세션 시작에 만기 항목을 띄운다, 고정된 행동 티어 경계 안에서
+
+근거: `test:tools/test_triggers.py::test_add_due_fire_and_tier_boundary`,
+`test:tools/test_triggers.py::test_invalid_inputs_exit_2`,
+`test:tools/test_triggers.py::test_hook_limits_and_auto_sleep_after_ignores`,
+`test:tools/test_triggers.py::test_claim_lease_refuses_second_holder_and_due_stays_read_only`,
+`test:tools/test_triggers.py::test_scan_experiments_and_decision_rereviews`.
+
+`tools/triggers.py`는 "나중에 띄울 것"을 `_private/triggers/triggers.jsonl`에 둔다: `add`, `due`(`--mark` 없이는 읽기
+전용), `hook`(만기 항목 최대 5건을 SessionStart 컨텍스트로, Claude와 Codex 같은 JSON), `claim`(행동 전 lease), `fire`,
+`sleep`, `list`, `scan`. `scan`은 실험 등록부의 만기 열과 재판정 날짜가 있는 결정 기록에서 안정된 id로 날짜 트리거를
+만들어 재실행이 멱등이다. 티어는 상수다: T0 말하기, T1 준비하기(개인 영역에 초안), T2 밖으로 나가기(자동 없음, 초안 +
+요청 한 줄로만 뜬다). `privacy`와 `destination`은 별도 축이고 기본은 private·local이다. 세 번 보이고도 `fire`가 없으면 한
+주 잠들고, 덜 보인 항목이 먼저 나열되어 cap이 뒤 항목을 굶기지 않는다. 소스 파서의 단어는 영어 기본값이고 인스턴스가
+`system/memory-config.json`의 `triggers.sources`로 덮어쓴다(한국어 등록부는 닫힘 상태·재판정 표지·"N주기 후"를 자기 말로).
+설계: KIT-DR-014.
+
+인스턴스 절차: 선택적으로 `system/memory-config.json`에 `triggers.sources`를 추가한다; `python3 tools/triggers.py scan`을
+한 번 돌린다; SessionStart 훅 줄은 `.claude/settings.json`·`.codex/hooks.json`에 실려 오고 `tools/install_hooks.sh`로
+설치된 인스턴스에 닿는다.
 
 ### `[알아둘 것]` 전사가 잡음 많은 녹음을 더 열심히 듣고, 못 들은 자리는 그대로 보고한다
 
