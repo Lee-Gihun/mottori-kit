@@ -35,6 +35,7 @@ tools/eval_recall.py
 tools/evidencecheck.py
 tools/fresh_worker.py
 tools/gate.py
+tools/harness.py
 tools/install_hooks.sh
 tools/linkcheck.py
 tools/memlib.py

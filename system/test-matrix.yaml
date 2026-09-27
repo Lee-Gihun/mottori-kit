@@ -30,6 +30,7 @@
     {"path":"tools/rec.py","risk":"normal","layers":{"U":"tools/test_rec.py","S":"tools/test_rec.py","N":"tools/test_rec.py","M":null,"E2E":null}},
     {"path":"tools/recall.py","risk":"normal","layers":{"U":"tools/test_recall.py","S":"tools/test_recall.py","N":"tools/test_recall.py","M":null,"E2E":null}},
     {"path":"tools/receipts.py","risk":"normal","layers":{"U":"tools/test_receipts.py","S":"tools/test_receipts.py","N":"tools/test_receipts.py","M":null,"E2E":null}},
+    {"path":"tools/harness.py","risk":"normal","layers":{"U":"tools/test_harness.py","S":"tools/test_harness.py","N":"tools/test_harness.py","M":null,"E2E":null}},
     {"path":"tools/skill_adapters.py","risk":"normal","layers":{"U":"tools/test_skill_parity.py","S":"tools/test_skill_parity.py","N":"tools/test_skill_parity.py","M":null,"E2E":null}},
     {"path":"tools/sync_engine.sh","risk":"wrapper","layers":{"U":null,"S":"tools/test_tool_entrypoints.py","N":"tools/test_tool_entrypoints.py","M":null,"E2E":null}},
     {"path":"tools/transcribe.py","risk":"normal","layers":{"U":"tools/test_transcribe_filter.py","S":"tools/test_tool_entrypoints.py","N":"tools/test_transcribe_filter.py","M":null,"E2E":null}},

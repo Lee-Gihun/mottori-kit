@@ -4,6 +4,7 @@
     now.py log "[track/type] 내용"   journal append (스키마 검증) + NOW 재생성
     now.py render                     NOW.md 재생성만
     now.py hook-context               SessionStart 훅용: NOW를 additionalContext JSON으로
+    now.py context [--public-only]    훅 표면이 없는 하네스용: 같은 본문을 평문으로
     now.py precompact                 PreCompact 훅용: 컴팩션 사건 기록
     now.py check                      드리프트 계기 (5종 검출기, PRD §3.3)
 
@@ -645,57 +646,82 @@ def _ensure_snapshots():
     return private_error
 
 
+def build_context(public_only=False):
+    """주입할 상태 본문을 만든다 — 하네스 중립.
+
+    봉투(클로드 훅 JSON / 평문 파일)는 호출자가 씌운다. `public_only`는 개인 overlay를
+    담을 수 없는 배선(예: 생성물이 Git 안에 남는 하네스)에서 fail-close 하는 길이다.
+    """
+    private_error = _ensure_snapshots()
+    if not os.path.isfile(M.NOW_PATH):
+        raise FileNotFoundError(f"public NOW 부재: {M.NOW_PATH}")
+    public = open(M.NOW_PATH, encoding="utf-8").read()
+    age = _age_days(M.NOW_PATH)
+    private_inputs = _private_inputs_present()
+    private_available = (private_error is None and private_inputs
+                         and os.path.isfile(M.PRIVATE_NOW_PATH)
+                         and not public_only)
+    if public_only:
+        private = ("[local private overlay 생략 — 이 배선은 public 상태만 주입한다. "
+                   "local 상태는 unavailable이지 없음이 아니다]")
+        private_status = "omitted"
+    elif private_available:
+        private = open(M.PRIVATE_NOW_PATH, encoding="utf-8").read()
+        private_status = "available" if M.PRIVATE_THREADS_LOAD_OK else "degraded"
+    elif private_error is not None:
+        private = ("[local private overlay unavailable/corrupt — public 상태만 주입됨. "
+                   "doctor로 수리하기 전 local 상태를 없음으로 단언하지 말 것]")
+        private_status = "unavailable/corrupt"
+    else:
+        private = "[local private overlay unavailable — 없음으로 단언하지 말 것]"
+        private_status = "unavailable"
+    canary = os.environ.get("MOTTORI_HOOK_CANARY")
+    head = (f"[상태 자동 주입 · public {age}일 전 · local overlay "
+            f"{private_status}]\n"
+            "public projection과 local overlay를 합친 view가 정본이다.\n")
+    if not M.VISIBILITY_READY:
+        head += "[DEGRADED: visibility config 불가 · public snapshot frozen · 새 사건은 local]\n"
+    if canary:
+        head += f"HOOK_CANARY:{canary}\n"
+    public_label = "\n## PUBLIC STATE\n"
+    private_label = "\n## LOCAL PRIVATE OVERLAY\n"
+    fixed = head + public_label + private_label
+    room = M.NOW_HOOK_MAX_BYTES - len(fixed.encode("utf-8"))
+    if room < 256:
+        raise ValueError("now_hook_max_bytes가 고정 헤더보다 작다")
+    if private_available:
+        public_budget = int(room * 0.62)
+        private_budget = room - public_budget
+    else:
+        marker_n = len(private.encode("utf-8"))
+        private_budget = marker_n
+        public_budget = room - marker_n
+    context = (head + public_label + M.clip_utf8(public, public_budget)
+               + private_label + M.clip_utf8(private, private_budget))
+    if len(context.encode("utf-8")) > M.NOW_HOOK_MAX_BYTES:
+        raise AssertionError("hook byte budget 계산 오류")
+    return context
+
+
 def hook_context():
-    """SessionStart 훅: public/local view를 byte budget 안에서 합친다."""
+    """SessionStart 훅(Claude·Codex): 같은 본문을 hookSpecificOutput 봉투에 담는다."""
     try:
-        private_error = _ensure_snapshots()
-        if not os.path.isfile(M.NOW_PATH):
-            raise FileNotFoundError(f"public NOW 부재: {M.NOW_PATH}")
-        public = open(M.NOW_PATH, encoding="utf-8").read()
-        age = _age_days(M.NOW_PATH)
-        private_inputs = _private_inputs_present()
-        private_available = (private_error is None and private_inputs
-                             and os.path.isfile(M.PRIVATE_NOW_PATH))
-        if private_available:
-            private = open(M.PRIVATE_NOW_PATH, encoding="utf-8").read()
-            private_status = "available" if M.PRIVATE_THREADS_LOAD_OK else "degraded"
-        elif private_error is not None:
-            private = ("[local private overlay unavailable/corrupt — public 상태만 주입됨. "
-                       "doctor로 수리하기 전 local 상태를 없음으로 단언하지 말 것]")
-            private_status = "unavailable/corrupt"
-        else:
-            private = "[local private overlay unavailable — 없음으로 단언하지 말 것]"
-            private_status = "unavailable"
-        canary = os.environ.get("MOTTORI_HOOK_CANARY")
-        head = (f"[상태 자동 주입 · public {age}일 전 · local overlay "
-                f"{private_status}]\n"
-                "public projection과 local overlay를 합친 view가 정본이다.\n")
-        if not M.VISIBILITY_READY:
-            head += "[DEGRADED: visibility config 불가 · public snapshot frozen · 새 사건은 local]\n"
-        if canary:
-            head += f"HOOK_CANARY:{canary}\n"
-        public_label = "\n## PUBLIC STATE\n"
-        private_label = "\n## LOCAL PRIVATE OVERLAY\n"
-        fixed = head + public_label + private_label
-        room = M.NOW_HOOK_MAX_BYTES - len(fixed.encode("utf-8"))
-        if room < 256:
-            raise ValueError("now_hook_max_bytes가 고정 헤더보다 작다")
-        if private_available:
-            public_budget = int(room * 0.62)
-            private_budget = room - public_budget
-        else:
-            marker_n = len(private.encode("utf-8"))
-            private_budget = marker_n
-            public_budget = room - marker_n
-        context = (head + public_label + M.clip_utf8(public, public_budget)
-                   + private_label + M.clip_utf8(private, private_budget))
-        if len(context.encode("utf-8")) > M.NOW_HOOK_MAX_BYTES:
-            raise AssertionError("hook byte budget 계산 오류")
+        context = build_context()
         print(json.dumps({"hookSpecificOutput": {
             "hookEventName": "SessionStart",
             "additionalContext": context}}, ensure_ascii=False))
     except Exception as e:
         print(f"hook-context 실패: {type(e).__name__}: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def context(public_only=False):
+    """훅 표면이 없는 하네스용: 같은 본문을 평문으로 낸다 (harness.py가 파일로 굽는다)."""
+    try:
+        sys.stdout.write(build_context(public_only=public_only))
+    except Exception as e:
+        print(f"context 실패: {type(e).__name__}: {e}", file=sys.stderr)
         return 1
     return 0
 
@@ -968,6 +994,8 @@ def main():
         return threads()
     if cmd == "hook-context":
         return hook_context()
+    if cmd == "context":
+        return context(public_only="--public-only" in sys.argv)
     if cmd == "precompact":
         return precompact()
     print(f"모르는 명령: {cmd}\n{__doc__}")

@@ -560,12 +560,14 @@
         "tools/doctor.py",
         "tools/fresh_worker.py",
         "tools/gate.py",
+        "tools/harness.py",
         "tools/install_hooks.sh",
         "tools/linkcheck.py",
         "tools/now.py",
         "tools/rec.py",
         "tools/test_devtree_gate.py",
         "tools/test_fresh_install.sh",
+        "tools/test_manifests.py",
         "tools/test_portability.py"
       ],
       "reviewed_at": null
@@ -595,12 +597,14 @@
         "tools/doctor.py",
         "tools/fresh_worker.py",
         "tools/gate.py",
+        "tools/harness.py",
         "tools/install_hooks.sh",
         "tools/linkcheck.py",
         "tools/now.py",
         "tools/rec.py",
         "tools/test_devtree_gate.py",
         "tools/test_fresh_install.sh",
+        "tools/test_manifests.py",
         "tools/test_portability.py"
       ],
       "reviewed_at": null
@@ -972,6 +976,7 @@
       "depends_on": [
         ".github/workflows/gates.yml",
         "system/enforcement-matrix.yaml",
+        "system/language-pending.txt",
         "system/review-manifest.yaml",
         "system/test-matrix.yaml",
         "tools/evidencecheck.py",
@@ -1003,11 +1008,13 @@
         "system/kit-decisions.md",
         "system/review-manifest.yaml",
         "system/rituals.md",
+        "tools/harness.py",
         "tools/manifest_build.py",
         "tools/memlib.py",
         "tools/sync_engine.sh",
         "tools/test_fresh_install.sh",
         "tools/test_fresh_worker.py",
+        "tools/test_harness.py",
         "tools/test_manifests.py",
         "tools/test_triggers.py",
         "tools/triggers.py"
@@ -1035,11 +1042,13 @@
         "system/gate-definition-approvals.md",
         "system/review-manifest.yaml",
         "system/rituals.md",
+        "tools/harness.py",
         "tools/manifest_build.py",
         "tools/memlib.py",
         "tools/sync_engine.sh",
         "tools/test_fresh_install.sh",
         "tools/test_fresh_worker.py",
+        "tools/test_harness.py",
         "tools/test_manifests.py",
         "tools/test_triggers.py",
         "tools/triggers.py"
@@ -1093,6 +1102,7 @@
         "tools/evidencecheck.py",
         "tools/fresh_worker.py",
         "tools/gate.py",
+        "tools/harness.py",
         "tools/install_hooks.sh",
         "tools/linkcheck.py",
         "tools/memlib.py",
@@ -1591,6 +1601,7 @@
         "tools/evidencecheck.py",
         "tools/fresh_worker.py",
         "tools/gate.py",
+        "tools/harness.py",
         "tools/hook_canary.py",
         "tools/hookdiag.py",
         "tools/i18n.py",
@@ -1617,6 +1628,7 @@
         "tools/test_evidencecheck.py",
         "tools/test_fresh_install.sh",
         "tools/test_fresh_worker.py",
+        "tools/test_harness.py",
         "tools/test_hook_runtime.py",
         "tools/test_hookdiag.py",
         "tools/test_i18n.py",
@@ -2072,6 +2084,7 @@
         "tools/evidencecheck.py",
         "tools/fresh_worker.py",
         "tools/gate.py",
+        "tools/harness.py",
         "tools/hook_canary.py",
         "tools/hookdiag.py",
         "tools/i18n.py",
@@ -2095,6 +2108,7 @@
         "tools/test_evidencecheck.py",
         "tools/test_fresh_install.sh",
         "tools/test_fresh_worker.py",
+        "tools/test_harness.py",
         "tools/test_hook_runtime.py",
         "tools/test_hookdiag.py",
         "tools/test_i18n.py",
@@ -2426,6 +2440,28 @@
         "system/kit-decisions.md",
         "tools/install_hooks.sh",
         "tools/test_evidencecheck.py"
+      ],
+      "reviewed_at": null
+    },
+    {
+      "path": "tools/harness.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex",
+        "opencode",
+        "tool"
+      ],
+      "depends_on": [
+        ".claude/settings.json",
+        ".codex/hooks.json",
+        ".gitignore",
+        "AGENTS.md",
+        "tools/doctor.py",
+        "tools/hook_canary.py",
+        "tools/now.py"
       ],
       "reviewed_at": null
     },
@@ -2869,6 +2905,19 @@
       "reviewed_at": null
     },
     {
+      "path": "tools/test_harness.py",
+      "kind": "tool",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "tool"
+      ],
+      "depends_on": [
+        ".gitignore"
+      ],
+      "reviewed_at": null
+    },
+    {
       "path": "tools/test_hook_runtime.py",
       "kind": "tool",
       "owner": "kit",
@@ -3009,6 +3058,7 @@
         "tools/enforce.py",
         "tools/evidencecheck.py",
         "tools/gate.py",
+        "tools/harness.py",
         "tools/manifest_build.py",
         "tools/test_language.py"
       ],

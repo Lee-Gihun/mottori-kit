@@ -1,4 +1,4 @@
-<!-- source: README.md sha256:279db7856a7e911926759fca3d61ccde55b7744b04eec95bb6d401aa44c3a746 source-of-truth: en -->
+<!-- source: README.md sha256:5639047b51e819db84d43e6aa5df537af4813f104bb8fd8a4949664d1247e791 source-of-truth: en -->
 # mottori-kit
 
 무한 세션에서 상태와 깊이를 잃지 않기 위한 **에이전트 워크스페이스 엔진**.
@@ -58,6 +58,7 @@ system/          규약. PRD 둘 · rituals · 렌즈 13종 · deep-pass · WORK
   skills/        런타임 중립 정본 workflow. adapter는 tools/skill_adapters.py가 생성·검사
 .claude/         Claude 훅 (SessionStart · PreCompact · UserPromptSubmit · PostToolUse · Stop) + 슬래시 커맨드 5종
 .codex/          Codex 훅 2종 (SessionStart · PreCompact)
+kit-state.md     opencode 주입용 생성 상태 — Git 밖에 둔다 (harness.py · 출력은 아직 한국어)
 templates/       인스턴스가 채울 것들
 ```
 
