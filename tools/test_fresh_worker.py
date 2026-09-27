@@ -542,6 +542,19 @@ print(json.dumps({"type":"turn.completed"}))
         shutil.rmtree(root, ignore_errors=True)
 
 
+
+def test_worktree_ignores_git_env_pinned_by_an_outer_hook():
+    # A commit hook exports GIT_INDEX_FILE (relative). Inherited, it made `worktree add` open the outer
+    # index and fail (kit pre-commit, 2026-09-28). The worker's git must only see the cwd repository.
+    root, prompt, fake = _init_worktree_repo()
+    try:
+        r = _run_worktree(root, prompt, fake, extra_env={"GIT_INDEX_FILE": ".git/index"})
+        assert r.returncode == 0, (r.stdout, r.stderr)
+        run = _run_dir(root, r.stdout)
+        assert not (run / "wt").exists()
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
 def test_worktree_patch_extracts_modified_new_and_deleted_files():
     root, prompt, fake = _init_worktree_repo()
     try:
@@ -1030,6 +1043,7 @@ TESTS = [
     test_usage_string_numbers_stay_raw_but_normalize_to_null,
     test_engine_sha256_ignores_sync_stamp_lines,
     test_worktree_is_created_with_minimum_instance_state_and_cleaned,
+    test_worktree_ignores_git_env_pinned_by_an_outer_hook,
     test_worktree_patch_extracts_modified_new_and_deleted_files,
     test_worktree_scope_uses_isolate_and_original_tree_is_unchanged,
     test_worktree_dirty_mode_applies_original_tracked_diff,

@@ -195,3 +195,43 @@ Codex가 바꾼 것: `due` 읽기 전용, destination 축, lease·history·잠�
 evidence: test:tools/test_triggers.py::test_add_due_fire_and_tier_boundary · test:tools/test_triggers.py::test_hook_limits_and_auto_sleep_after_ignores ·
 test:tools/test_triggers.py::test_claim_lease_refuses_second_holder_and_due_stays_read_only · test:tools/test_triggers.py::test_scan_experiments_and_decision_rereviews
 재판정(3주기): fire 대 자동 잠듦 비율, 세션 시작 절이 실제로 행동을 바꾼 횟수, 두 하네스에서 같은 출력이 나왔는지.
+
+### DR-015 런타임 어휘는 등록부 한 항목에서 파생되고, 하네스가 못 받는 역할은 선언한다 (2026-09-21 · active-pilot · 3주기 후 재판정)
+결정: `tools/harness.py`가 하네스 배선의 등록부이자 런타임 어휘의 정본이다. 하네스 하나는 `RUNTIMES`의 한 항목이고
+(바이너리 · 배선 경로 · 모드 `checked-in|generated` · 받는 역할 · **못 받는 역할의 사유**), 역할 어휘는 `hookdiag.ROLE_EVENTS`와
+같은 6종(injector·recovery·observer·enforcer·side_effect·guard)을 쓴다. `tools/test_manifests.py`의 `CONSUMERS`는 리터럴이 아니라
+이 표에서 파생된다 — 전에는 세 번째 하네스가 테스트 파일까지 고쳐야 했다. 한 항목으로 붙는 것은 **런타임 어휘**까지다.
+새 하네스의 어댑터 코드·테스트·배포 메타데이터(review manifest·test matrix·번역 목록)는 여전히 따로 붙인다(opencode 추가가 그랬다).
+opencode는 첫 generated 하네스다. 훅 표면이 없고, v2.0.11에서 설정의 `instructions` 항목이 로드되지 않음을 실측했다(2026-09-21).
+그래서 injector는 런처가 진다: `harness.py open opencode`가 상태 파일을 다시 굽고 첫 프롬프트로 심는다. 직접 띄운 세션에는
+상태가 안 들어간다. 슬래시 명령 4개는 `.claude/commands/*.md` 정본에서 렌더한다. 나머지 다섯 역할은 미배선이며 `status`가
+gap으로 출력한다. `status`는 상태 파일과 명령 디렉토리가 다 있고 명령이 정본과 같을 때만 "배선됨"이라 한다(`check`와 같은
+parity 함수). 데이터 국경: 주입 파일은 local private overlay를 담을 수 있으므로 **Git 밖임이 증명되지 않으면 public 상태만
+쓴다**(fail-close). 그 출력구가 `now.py context [--public-only]`이고, 같은 본문을 훅 JSON 봉투 없이 평문으로 낸다.
+검증은 배선 유무가 아니라 카나리 왕복이다(`harness.py verify`). 프롬프트는 nonce를 담지 않는다. 주입 본문이 파일인 하네스에서는
+모델이 grep으로 같은 파일을 찾아 주입 없이도 통과할 수 있다(2026-09-21 실측: 첫 실험에서 모델이 grep을 불러 실험이 오염됐다).
+도구는 끄지 못한다 — v2.0.11의 `opencode run`에는 도구를 끄는 플래그가 없고, 도구를 끈 설정으로 돌렸더니 무료 티어가 실행을
+거부했다(403). 그래서 **도구를 쓴 실행은 증거로 세지 않는다**(inconclusive): 같은 정답도 도구 호출이 있으면 PASS가 아니다.
+nonce는 실행 동안만 주입 파일(Git 밖)에 있다 — 그 파일이 재려는 채널이기 때문이다. 실행이 끝나면(타임아웃·예외 포함) nonce 없는
+본문으로 다시 쓰고, 원장에는 판정만 남긴다.
+맥락: 소유자 2026-09-21 지적 — "설치 → 세팅 → 사용" 시나리오가 없으면 킷이 하네스 불가지론을 주장할 수 없다. 실측으로 확인한 출발점:
+`setup.sh`는 `.claude/`도 `.codex/`도 깔지 않았고(배선은 레포 체크인에 의존), 킷 전체에 `opencode`라는 단어가 0회였다.
+관측된 제약: opencode v2.0.11의 플러그인 API는 공개 문서와 다르고(`export default {id, setup}`) 이벤트·세션 훅 시그니처가 아직
+고정되지 않아, 플러그인이 필요한 나머지 역할은 이번 주기에서 붙이지 않았다.
+evidence: test:tools/test_harness.py::test_every_runtime_declares_the_roles_it_cannot_take ·
+test:tools/test_harness.py::test_state_falls_back_to_public_when_the_path_is_not_outside_git ·
+test:tools/test_harness.py::test_canary_prompt_never_carries_the_nonce ·
+test:tools/test_harness.py::test_a_tool_using_run_is_never_counted_as_proof ·
+test:tools/test_harness.py::test_state_file_holds_no_nonce_after_a_canary_run ·
+test:tools/test_harness.py::test_status_does_not_call_a_half_wired_opencode_wired
+모델 레인 보완(2026-09-21, 소유자 사용 계획): 하네스는 모델 공급자별 레인이다 — Claude는 Claude Code, GPT는 Codex,
+제3 모델(무료 티어·중국 모델 등)은 opencode. 그래서 카나리는 런타임당 한 번이 아니라 **모델마다** 재고 판정만
+state/harness-canary.json 원장에 남긴다(`verify opencode --sweep`). 이 원장은 선택 생성물이라 verify를 돌린 적 없는 인스턴스에는
+없다. 모델을 갈아탈 때 "이 모델이 킷 상태를 실제로 받아서 따르나"는 모델의 성질이지 배선의 성질이 아니기 때문이다. 약한 모델은
+도구를 부르거나 지시를 못 따라 INCONCLUSIVE·FAIL로 떨어지고, 그 기록은 라우팅에 쓸 수 있는 측정 원장이다. 아직 자동으로 읽는
+소비자는 없다.
+정정(2026-09-28, 커밋 전 독립 감사): 초안의 네 주장을 구현에 맞게 좁혔다 — "실행은 도구를 전부 끈다"(구현은 도구를 쓴 실행을
+판정 불가로 둔다), "nonce는 디스크에 안 닿는다"(실행 동안 주입 파일에 있다), "라우팅이 원장을 읽는다"(소비자 없음), "새 하네스는
+한 항목으로 붙는다"(런타임 어휘만). 같은 감사로 `status`가 상태 파일 하나만 보고 배선됨이라 하던 것을 고쳤다.
+재판정(3주기): opencode 세션이 실제로 쓰였는지, 카나리가 회귀를 잡았는지, 네 번째 하네스가 런타임 어휘를 정말 한 항목으로
+얻었는지, 모델 원장이 라우팅 결정을 실제로 바꿨는지.

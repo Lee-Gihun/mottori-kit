@@ -1,4 +1,4 @@
-<!-- source: SETUP.md sha256:acd0027da4940d04a6616d02866679f4c7cadcdcdb08546daccf0b0b0256042c source-of-truth: en -->
+<!-- source: SETUP.md sha256:36fa13a1788d310928bbe82fadb7b253fe06cc2c432e75381ef4d0167057ca88 source-of-truth: en -->
 # SETUP — 이 디렉토리를 세팅하는 법
 
 **이 문서는 에이전트에게 주는 지시서다.** 새 머신에서 클론한 다음, Claude Code 또는 Codex를
@@ -224,6 +224,47 @@ bash tools/ask_codex.sh <프롬프트파일>   # Codex fresh worker의 호환 �
 직접 쓰면 백틱이 셸 명령으로 실행될 수 있다. 기본 실행은 동기식이고, 전체 trace는
 `_private/work/runs/`에 두며 호출자에게는 bounded receipt만 반환한다. 정확한 byte·capability
 계약은 `system/PRD-session-memory.md` §10.5가 정본이다.
+
+## 7a. 제3 하네스 연결 (선택)
+
+`tools/harness.py`가 하네스 배선의 등록부다. 하네스 하나는 `RUNTIMES`의 한 항목이다 — 바이너리,
+배선 경로, 배선이 체크인인지 생성물인지, 받을 수 있는 역할, 그리고 **못 받는 역할의 사유**.
+다른 곳의 런타임 어휘(예: `tools/test_manifests.py`의 `CONSUMERS`)가 이 표에서 파생되므로,
+런타임 어휘는 한 자리에서 붙는다. 새 하네스의 어댑터 코드·테스트·배포 메타데이터(review manifest,
+test matrix, 번역 목록)는 여전히 따로 붙여야 한다. 하네스 CLI 출력은 아직 한국어이고, `tools/harness.py`는
+번역 목록에 올라 있다.
+
+```bash
+python3 tools/harness.py status                   # 설치·배선·역할 커버리지·선언된 gap
+python3 tools/harness.py install opencode         # 이 인스턴스에 배선을 생성
+python3 tools/harness.py check                    # 생성된 슬래시 명령이 정본과 같은가 (모델 호출 없음)
+python3 tools/harness.py refresh                  # 주입용 상태 파일만 다시 굽는다
+python3 tools/harness.py open opencode            # 상태를 다시 굽고 띄운다
+python3 tools/harness.py verify opencode          # 카나리 왕복 — 주입이 모델에 닿았나
+python3 tools/harness.py verify opencode --sweep  # 부를 수 있는 모델 전부에 같은 카나리
+```
+
+`status`는 상태 파일과 `.opencode/command/`가 둘 다 있고 생성된 명령이 전부 `.claude/commands/`의 정본과
+같을 때만 opencode를 배선됨이라 한다. `check`는 같은 parity 검사를 돌리고 어긋나면 exit 1이라, CI나 사람이
+모델 호출 없이 돌릴 수 있다. opencode를 install한 적 없는 인스턴스는 통과한다. `refresh`는 상태 파일만 다시
+굽고 명령 파일은 건드리지 않는다. `open`이 띄우기 전마다 그것을 부른다.
+
+하네스는 모델 공급자별 레인이기도 하므로 카나리는 런타임당이 아니라 **모델당**이다. `--sweep`은 부를 수 있는
+모델을 전부 재서 판정을 state/harness-canary.json에 남긴다. 이 파일은 선택 생성물이라 `verify`를 돌린 뒤에만
+있다. 원장에 nonce를 보존하지 않는다. 실행 동안에는 nonce가 주입 상태 파일에 있다 — 그 파일이 재려는
+채널이기 때문이다. 실행이 끝나면(타임아웃·오류 포함) nonce 없는 본문으로 다시 쓴다. `opencode run`에는 도구를
+끄는 스위치가 없으므로, 도구를 부른 모델은 답이 맞아도 증거가 아니라 판정 불가로 기록된다. 이 원장은
+라우팅에 쓸 수 있는 측정 원장이고, 아직 자동으로 읽는 소비자는 없다.
+
+opencode에는 훅 표면이 없다. v2.0.11에서 2026-09-21 실측: `AGENTS.md`는 세션마다 읽히므로 공유 규칙은
+그냥 따라가지만, 설정의 `instructions` 항목은 **로드되지 않는다** — 문서와 공개 스키마 둘 다와 다르다.
+그래서 injector는 런처가 진다: `harness.py open opencode`가 상태를 다시 굽고 첫 프롬프트로 심는다.
+`opencode`를 직접 친 세션에는 상태가 안 들어가고, `status`가 그것을 숨기지 않고 gap으로 출력한다.
+
+생성된 상태 파일은 local private overlay를 담을 수 있으므로 Git 밖에 있어야 한다. `install`은 경로가
+이미 ignore돼 있지 않으면 ignore 줄을 넣고, **Git 밖임을 증명할 수 없으면 public 상태만 쓴다**
+(`now.py context --public-only`). 검증은 파일 검사가 아니라 카나리 왕복이다 — 주입이 닿았는지는 모델의
+답만 말해주고, 프롬프트는 nonce를 담지 않는다.
 
 ## 8. 마지막 — 사람에게 넘길 것
 

@@ -401,9 +401,21 @@ def _claude_result(stream_path):
     return result
 
 
+# git은 훅을 부를 때 GIT_INDEX_FILE·GIT_DIR 같은 저장소 고정 변수를 내보낸다. 그대로 물려받으면 이 파일이
+# 다른 저장소(워크트리, 테스트 저장소)에 부르는 git이 바깥 커밋의 인덱스를 연다(2026-09-28 킷 pre-commit 실측:
+# worktree add가 ".git/index: Not a directory"로 실패). 여기서 부르는 git은 항상 cwd의 저장소를 보게 지운다.
+_GIT_PINNING_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
+                    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "GIT_PREFIX")
+
+
+def _git_env():
+    return {k: v for k, v in os.environ.items() if k not in _GIT_PINNING_ENV}
+
+
 def _git(args, cwd):
     try:
-        p = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=10)
+        p = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=10,
+                           env=_git_env())
     except (OSError, subprocess.TimeoutExpired):
         return None
     return p.stdout.strip() if p.returncode == 0 else None
@@ -765,7 +777,7 @@ def _git_process(args, cwd, input_bytes=None, timeout=30):
     try:
         return subprocess.run(
             ["git", *args], cwd=cwd, input=input_bytes, capture_output=True,
-            timeout=timeout, check=False,
+            timeout=timeout, check=False, env=_git_env(),
         )
     except (OSError, subprocess.TimeoutExpired) as e:
         raise InputError(f"git 실행 실패: {type(e).__name__}")

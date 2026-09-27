@@ -61,6 +61,7 @@ system/          Rules, two PRDs, rituals, 13 lenses, deep-pass, and WORKING-WIT
   skills/        Runtime-neutral canonical workflows; tools/skill_adapters.py generates and checks adapters
 .claude/         Five Claude hooks and five slash commands
 .codex/          Two Codex hooks: SessionStart and PreCompact
+kit-state.md     Generated opencode injection state, kept outside Git (harness.py; its output is Korean for now)
 templates/       Files each instance must complete
 ```
 

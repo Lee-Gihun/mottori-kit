@@ -251,6 +251,49 @@ directly on the command line, backticks can execute as shell commands. The defau
 traces stay in `_private/work/runs/`, and the caller receives only a bounded receipt. The exact byte and
 capability contract is defined in `system/PRD-session-memory.md` section 10.5.
 
+## 7a. Connect a third harness (optional)
+
+`tools/harness.py` is the registry for harness wiring. A harness is one row in its `RUNTIMES` table:
+the binary, the wiring paths, whether the wiring is checked in or generated, the roles it can take, and a
+note naming the roles it cannot. Runtime vocabulary elsewhere (for example `CONSUMERS` in
+`tools/test_manifests.py`) is derived from that table, so the runtime vocabulary is added in one place. A new
+harness still needs its own adapter code, tests, and release metadata: the review manifest, the test matrix, and
+the translation list. The harness CLI prints Korean for now; `tools/harness.py` is on the translation list.
+
+```bash
+python3 tools/harness.py status                   # installed, wired, role coverage, declared gaps
+python3 tools/harness.py install opencode         # generate the wiring for this instance
+python3 tools/harness.py check                    # generated slash commands still match their source? (no model call)
+python3 tools/harness.py refresh                  # rebuild only the injected state file
+python3 tools/harness.py open opencode            # rebuild the state file, then launch
+python3 tools/harness.py verify opencode          # canary round trip: did injection reach the model?
+python3 tools/harness.py verify opencode --sweep  # same canary for every model this install can call
+```
+
+`status` calls opencode wired only when the state file and `.opencode/command/` both exist and every generated
+command matches its source in `.claude/commands/`. `check` runs that same parity test and exits 1 on drift, so CI
+or a person can run it without calling a model; an instance that never installed opencode passes. `refresh`
+rebuilds only the state file and leaves the command files alone; `open` runs it before every launch.
+
+A harness is also a lane for a model vendor, so the canary is per model, not per runtime. `--sweep` measures
+every callable model and writes verdicts to state/harness-canary.json, an optional file that exists only after
+`verify` has run. The ledger never keeps the nonce. During a run the nonce sits in the injected state file,
+because that file is the channel being measured; when the run ends, including on timeout or error, the file is
+rewritten without it. `opencode run` has no switch that turns tools off, so a model that calls a tool is recorded
+as inconclusive rather than counted as proof, even when its answer is right. The ledger is a measurement that
+routing can use; nothing reads it automatically yet.
+
+`opencode` has no hook surface. Measured on v2.0.11, 2026-09-21: `AGENTS.md` is read at every session start, so
+the shared rules travel for free, but entries listed under the `instructions` config key are never loaded, which
+the documentation and the published schema both contradict. The injector therefore runs through the launcher:
+`harness.py open opencode` rebuilds the state file and seeds it as the first prompt. A session started by typing
+`opencode` carries no state, and `status` prints that as a gap rather than hiding it.
+
+The generated state file can contain the local private overlay, so it must sit outside Git. `install` adds an
+ignore line unless the path is already ignored; when it cannot prove the path is ignored, it writes public state
+only (`now.py context --public-only`). Verification is a canary round trip, not a file check: only the model's
+answer shows that injection arrived, and the prompt never carries the nonce.
+
 ## 8. Final handoff to a person
 
 Open `CHECKLIST.md` and report the remaining items to a person. That document is the source of truth for

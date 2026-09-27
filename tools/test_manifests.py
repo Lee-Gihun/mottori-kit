@@ -2,6 +2,7 @@
 """Structural and coverage checks for the review and enforcement manifests."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import hashlib
 import os
@@ -35,7 +36,20 @@ def locale_paths() -> set[str]:
     return {path for path in paths if path not in instance_locales and not path.startswith("system/debate/_")}
 KINDS = {"rule", "evidence", "tool", "hook", "template", "generated", "gate-definition"}
 OWNERS = {"kit", "instance"}
-CONSUMERS = {"human", "claude", "codex", "tool"}
+
+def _runtime_names() -> set[str]:
+    """Runtime vocabulary comes from tools/harness.py, the harness registry.
+
+    It used to be a literal here, so adding a third harness meant editing this test too.
+    A new harness is one row in harness.RUNTIMES; this reads that row.
+    """
+    spec = importlib.util.spec_from_file_location("harness", str(ROOT / "tools" / "harness.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return set(module.RUNTIMES)
+
+
+CONSUMERS = {"human", "tool"} | _runtime_names()
 BOUNDARIES = {"hook", "gate", "precommit", "test", "doctor", "none"}
 STATUSES = {"ENFORCED", "DETECTED", "REVIEW", "UNENFORCED"}
 
