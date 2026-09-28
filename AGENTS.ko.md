@@ -1,4 +1,4 @@
-<!-- source: AGENTS.md sha256:fca1db40a81a279422310960aa49094bc76cc4530ec2a72687ba8e21ba17cc02 source-of-truth: en -->
+<!-- source: AGENTS.md sha256:3f695d16c3761aeae818827aa3ead9027f3ed0c09f862f448f1b66952a10a22b source-of-truth: en -->
 # 세션 지침
 
 이 워크스페이스는 코드베이스가 아니라 **작업 저장소**다. 여러 트랙을 한 자리에서 굴리고,
@@ -61,6 +61,7 @@
 - 런타임 간 토론 → `system/debate/README.md` (Claude·Codex 비동기 논쟁판)
 - 기억 시스템 spec → `system/PRD-session-memory.md` · 정보 아키텍처 → `system/PRD-info-architecture.md`
 - 설치·이식 → `SETUP.md` · 검증 → `python3 tools/doctor.py`
+- 조직 안의 보고·약속·일 고르기 판단 → `system/work-craft.md` (초안)
 
 ## 왜 상시 규칙이 일곱 개인가
 
