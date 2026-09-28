@@ -235,6 +235,7 @@
         "system/kit-decisions.md",
         "system/lenses/README.md",
         "system/rituals.md",
+        "system/work-craft.md",
         "templates/instance-rules.md",
         "tools/doctor.py",
         "tools/now.py",
@@ -266,6 +267,7 @@
         "system/kit-decisions.md",
         "system/lenses/README.md",
         "system/rituals.md",
+        "system/work-craft.md",
         "templates/instance-rules.md",
         "tools/doctor.py",
         "tools/now.py",
@@ -1581,6 +1583,8 @@
         "system/skills/paper-to-kit.ko.md",
         "system/skills/paper-to-kit.md",
         "system/test-matrix.yaml",
+        "system/work-craft.ko.md",
+        "system/work-craft.md",
         "templates/decisions.ko.md",
         "templates/decisions.md",
         "templates/instance-rules.ko.md",
@@ -2135,6 +2139,28 @@
         "tools/wf_gardener.js",
         "tools/worker_batch.py"
       ],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/work-craft.ko.md",
+      "kind": "evidence",
+      "owner": "kit",
+      "consumers": [
+        "human"
+      ],
+      "depends_on": [],
+      "reviewed_at": null
+    },
+    {
+      "path": "system/work-craft.md",
+      "kind": "rule",
+      "owner": "kit",
+      "consumers": [
+        "human",
+        "claude",
+        "codex"
+      ],
+      "depends_on": [],
       "reviewed_at": null
     },
     {

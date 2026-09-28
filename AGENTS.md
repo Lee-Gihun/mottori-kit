@@ -77,6 +77,7 @@ Read these only when the stated situation applies.
 - Memory system specification: `system/PRD-session-memory.md`; information architecture:
   `system/PRD-info-architecture.md`
 - Installation and migration: `SETUP.md`; verification: `python3 tools/doctor.py`
+- Judging reports, promises, and which work to pick inside an organization: `system/work-craft.md` (draft)
 
 ## Why there are seven always-on rules
 
