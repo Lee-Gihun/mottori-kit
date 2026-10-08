@@ -423,6 +423,76 @@ def test_doctor_keeps_release_regressions_out_of_interactive_run():
         doctor.RELEASE_MODE, doctor.sh = original_mode, original_sh
 
 
+def test_doctor_engine_drift_uses_export_policy():
+    import doctor
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory(prefix="doctor-export-") as temporary:
+        root, kit = os.path.join(temporary, "source"), os.path.join(temporary, "kit")
+        for base, content in ((root, "source bytes\n"), (kit, "kit bytes\n")):
+            for name in ("shared.py", "variant.py", "unowned.py"):
+                write(base, "tools/" + name, content)
+        exporter = (
+            "import json, os\n"
+            "KIT = os.environ['MOTTORI_KIT']\n"
+            "ENGINE = ['shared.py', 'variant.py']\n"
+            "PRESERVED_VARIANTS = {'variant.py': 'Different policy.'}\n"
+            "def plan_export(selected):\n"
+            "    assert selected == {'tools/shared.py'}\n"
+            "    with open(os.path.join(os.path.dirname(__file__), 'plan.json')) as stream:\n"
+            "        return json.load(stream)\n"
+        )
+        plan = {"same": ["shared.py"], "changed": [], "missing": [], "leaks": []}
+        with patch.object(doctor, "ROOT", root), patch.dict(os.environ, {"MOTTORI_KIT": kit}), \
+                patch.object(sys, "dont_write_bytecode", True):
+            write(root, "tools/kit_sync.py", exporter)
+            write(root, "tools/plan.json", json.dumps(plan))
+            status, detail = doctor.c_engine_drift()
+            ok("doctor accepts export-normalized tools and ignores intentional variants and unowned overlap",
+               status == doctor.PASS and "1" in detail, repr((status, detail)))
+
+            drift = dict(plan, same=[], changed=["shared.py"])
+            write(root, "tools/plan.json", json.dumps(drift))
+            status, detail = doctor.c_engine_drift()
+            ok("doctor reports true export drift", status == doctor.WARN and "shared.py" in detail,
+               repr((status, detail)))
+
+            failures = (
+                ("missing source", dict(plan, missing=["tools/shared.py"])),
+                ("privacy finding", dict(plan, leaks=["PRIVATE-SENTINEL"])),
+                ("missing result field", {"same": ["shared.py"]}),
+                ("wrong field type", dict(plan, same="shared.py")),
+                ("incomplete scope", dict(plan, same=[])),
+                ("unexpected scope", dict(plan, same=["unowned.py"])),
+                ("duplicated result", dict(plan, same=["shared.py", "shared.py"])),
+            )
+            for label, broken in failures:
+                write(root, "tools/plan.json", json.dumps(broken))
+                status, detail = doctor.c_engine_drift()
+                ok("doctor fails closed on export " + label,
+                   status == doctor.FAIL and "PRIVATE-SENTINEL" not in detail,
+                   repr((status, detail)))
+            write(root, "tools/plan.json", json.dumps(plan))
+            for label, broken in (
+                ("runtime error", exporter + "raise RuntimeError('PRIVATE-SENTINEL')\n"),
+                ("syntax error", "def broken PRIVATE-SENTINEL\n"),
+                ("destination mismatch", exporter + "KIT += '-different'\n"),
+                ("empty scope", exporter + "ENGINE = []\n"),
+            ):
+                write(root, "tools/kit_sync.py", broken)
+                status, detail = doctor.c_engine_drift()
+                ok("doctor fails closed on exporter " + label,
+                   status == doctor.FAIL and "PRIVATE-SENTINEL" not in detail,
+                   repr((status, detail)))
+            os.unlink(os.path.join(root, "tools/kit_sync.py"))
+            ok("doctor skips an installed tree without an exporter",
+               doctor.c_engine_drift()[0] == doctor.SKIP)
+            write(root, "tools/kit_sync.py", "raise AssertionError('must not load')\n")
+            with patch.dict(os.environ, {"MOTTORI_KIT": root}):
+                ok("doctor skips the kit's own tree before importing the exporter",
+                   doctor.c_engine_drift()[0] == doctor.SKIP)
+
+
 def test_doctor_work_context_rejects_tracked_private_symlink():
     root = make_repo(with_config=True)
     try:
@@ -533,6 +603,7 @@ if __name__ == "__main__":
                test_doctor_precommit_accepts_localized_status_tokens,
                test_doctor_kit_shape_markers_fail_closed_individually,
                test_doctor_keeps_release_regressions_out_of_interactive_run,
+               test_doctor_engine_drift_uses_export_policy,
                test_doctor_work_context_rejects_tracked_private_symlink,
                test_gate_check_blocks_when_measure_raises,
                test_gate_verdict_checker_key_growth_and_shrink,

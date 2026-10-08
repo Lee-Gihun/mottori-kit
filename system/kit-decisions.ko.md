@@ -263,3 +263,7 @@ Rejected alternatives: blanket source overwrite; inheriting the source instance'
 Reconsider: a supported installed consumer fails after a verified upgrade, a future export rewrites a kit-owned policy, or a concrete task requires a portable opt-in application engine. That engine needs separate execution/commit/egress controls and its own installed E2E before distribution.
 
 KIT-DR-018 output-delivery supplement: collect safe ignored outputs only within explicit write prefixes; preserve bytes, hashes and replayable patches before cleanup. Failed or incomplete capture returns exit 5 and preserves the worktree. Termination during capture also preserves it. Capture failure takes precedence over strict-scope exit 4 without erasing scope metadata. Known bundled startup metadata is distinct from configured plugins; unknown or malformed plugin records still fail the canary. Temporary verification owns cleanup of its own runtime configuration side effects; the worker does not automatically clean up user configuration.
+
+DR-018 진단·검증 보완: 동기화 진단은 exporter의 읽기 전용 계획을 사용해 소유 범위와 정규화를 공유한다. 입력 누락·개인정보 검증 실패·계획을 얻지 못한 경우는 FAIL이다. 개발 트리 게이트 회귀는 실제 실행되는 작은 합성 증거에 결속하며, 배포 전체 회귀와 설치 검증은 별도로 유지한다. 증거 실행의 제한 시간과 차단 판정은 유지하고 실패 이유를 진단에 남긴다. 이 보완은 집중된 회귀 안의 전체 검사 중복을 없애며, 합성 표본 검증을 배포 검증으로 대신 세지 않는다. CI 증거 단계는 문제가 있으면 실패하는 일반 명령을 사용한다. 항상 정상 종료하는 기계용 목록 모드는 이슈 개수를 직접 판정하는 호출자에만 쓴다.
+
+RAN은 테스트 진입 기록이며 성공 증명이 아니다. 게이트의 최상위 시도마다 새 실행 ID로 인용된 suite를 실제 실행한다. 이전 또는 늦게 도착한 기록을 새 시도의 성공 근거로 쓰지 않으며 내부 재귀 방지는 유지한다.

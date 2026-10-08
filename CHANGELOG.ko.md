@@ -1,4 +1,4 @@
-<!-- source: CHANGELOG.md sha256:5543d881718ba181081192b36278c4ef438f09caa41081ae5b60f2b82cc8a7bc source-of-truth: en -->
+<!-- source: CHANGELOG.md sha256:fe57aebaaffa5de5dd8d1573edda10f8050b5eefcde4972a5c80e76e82bdc1f8 source-of-truth: en -->
 # CHANGELOG
 
 **이 파일의 형식은 "무엇이 추가됐다"가 아니라 "기존 인스턴스가 무엇을 해야 하는가"다.**
@@ -89,9 +89,11 @@ KIT-DR-013은 게이트 정의가 작성되는 킷 트리를 다스린다. 설�
 신규 설치 게이트가 나중에 유령 경로로 실패하는 대신 `tools/test_manifests.py`가 규칙과 함께 먼저 실패한다
 (`test:tools/test_manifests.py::test_new_files_are_within_delivery_prefixes`).
 
-### `[알아둘 것]` 게이트가 같은 실행의 신선한 테스트 증거를 재사용하고 스위트를 다시 돌리지 않는다
+### `[알아둘 것]` 같은 실행의 증거 재사용 (v0.9에서 대체됨)
 
-근거 표지: `test:tools/test_evidencecheck.py::test_refresh_reuses_fresh_evidence_for_the_same_run`.
+근거 표지: `test:tools/test_evidencecheck.py::test_refresh_reruns_inherited_evidence_with_new_ids`.
+
+이 v0.8 동작은 과거 기록이다. 이제 게이트의 최상위 시도마다 새 실행 ID로 인용된 suite를 실행하고 정상 종료를 요구한다. RAN은 테스트 진입 기록이지 성공 증명이 아니며, 이전 또는 늦게 도착한 기록은 새 시도의 성공 근거가 될 수 없다. 내부 재귀 방지는 유지한다. 집중된 회귀는 실제 실행되는 합성 probe를 쓰고 배포 전체·설치 검증은 별도로 유지한다. 로그 삭제나 수동 migration은 필요 없다.
 
 `tools/gate.py`는 test 표지가 인용한 스위트를, 물려받은 실행 로그에 같은 실행 ID의 신선한 기록이 없는 테스트가
 있을 때만 다시 실행한다. 이 규칙 전에는 픽스처 안에서 게이트가 돌 때마다 인용된 스위트 전부를 다시 돌렸고, 픽스처에서

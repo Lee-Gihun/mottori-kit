@@ -93,9 +93,11 @@ counts, so a worker clone or the fresh-install fixture sees the same inventory a
 file outside those locations fails `tools/test_manifests.py` first with the rule instead of the fresh-install
 gate later with a ghost path (`test:tools/test_manifests.py::test_new_files_are_within_delivery_prefixes`).
 
-### `[Note]` The gate reuses fresh test evidence of the same run instead of re-running every suite
+### `[Note]` Same-run evidence reuse (superseded in v0.9)
 
-Evidence: `test:tools/test_evidencecheck.py::test_refresh_reuses_fresh_evidence_for_the_same_run`.
+Evidence: `test:tools/test_evidencecheck.py::test_refresh_reruns_inherited_evidence_with_new_ids`.
+
+This v0.8 behavior is historical. Each top-level gate attempt now executes cited suites under a fresh run ID and requires successful exits. RAN records show test entry, not success; earlier or late records cannot certify the new attempt. The internal recursion guard remains. Focused fixtures use real synthetic probes while full release and installation checks remain separate. No log deletion or manual migration is required.
 
 `tools/gate.py` re-executes the suites cited by test markers only when the inherited run log lacks a fresh
 record of the same run ID for some cited test. Before this rule every gate run inside a fixture re-ran all
