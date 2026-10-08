@@ -56,12 +56,11 @@
 - **에르고드**와 직결: 역산이 찾은 사망 조건 중 흡수상태(복구 불가)는 확률 불문 우선 제거.
 - **침묵**과 상보: 역산은 내 계획의 구멍을, 침묵은 내 증거의 구멍을 찾는다.
 
-## 시금석 (사용 원장 — 적용할 때마다 한 줄 추가)
+## 적용 기록
 
-*(사용 원장은 인스턴스마다 따로 쌓인다. 이 렌즈를 쓸 때마다 한 줄씩 여기 append.)*
+실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
 
 ## 원전
 
 Jacobi "man muss immer umkehren" · Munger, *Poor Charlie's Almanack* (inversion 장) ·
 Klein의 premortem · Popper 반증주의가 이 렌즈의 인식론 판본.
-

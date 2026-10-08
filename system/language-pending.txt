@@ -1,14 +1,9 @@
 .claude/settings.json
 .codex/hooks.json
 setup.sh
-system/PRD-info-architecture.md
-system/PRD-session-memory.md
 system/WORKING-WITH-AI.md
-system/debate/README.md
-system/deep-pass.md
 system/enforcement-matrix.yaml
 system/kit-decisions.md
-system/lenses/README.md
 system/lenses/ergodic.md
 system/lenses/feedback-loop.md
 system/lenses/fence.md
@@ -37,7 +32,6 @@ tools/fresh_worker.py
 tools/gate.py
 tools/harness.py
 tools/install_hooks.sh
-tools/linkcheck.py
 tools/memlib.py
 tools/now.py
 tools/portrait.py

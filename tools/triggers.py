@@ -1,42 +1,31 @@
 #!/usr/bin/env python3
-"""Trigger store: things the instance should surface later, with a hard action-tier boundary.
+"""Store deferred actions with explicit action-tier and delivery boundaries.
 
-A trigger is a small JSON record kept in ``_private/triggers/triggers.jsonl`` of the instance:
+Records live in the instance's _private/triggers/triggers.jsonl:
+  id, when, what, tier, source, privacy, destination, tz, state, created, fired,
+  outcome, shown, slept_until, leased_until, leased_by, history
 
-    id, when, what, tier, source, privacy, destination, tz, state, created, fired, outcome,
-    shown, slept_until, leased_until, history
+Defaults are privacy=private and destination=local; no tier implies outward delivery.
+Mutations take an exclusive lock and atomically replace the store. list and due are
+read-only unless due --mark is used; hook marks the items shown. claim creates a UTC
+lease naming its holder. fire requires that holder's active lease and rejects repeats.
 
-``privacy`` defaults to ``private`` and ``destination`` to ``local``: a trigger never reaches an
-outward channel on its own, whatever its tier. Mutating commands take an exclusive file lock and replace the store atomically; ``due`` and ``list``
-are read-only and never change the store unless ``due --mark`` is given. ``hook`` marks what it showed.
-A lease (``claim``) names a holder; ``fire`` requires a live lease held by the same holder (claim, then
-fire) and refuses to fire twice. Lease timestamps are UTC.
+when accepts date:YYYY-MM-DD, file_change:<path>, state:<predicate>, or event:<name>.
+Only date triggers are evaluated here; other kinds are stored for explicit dispatch.
 
-``when`` is one of ``date:YYYY-MM-DD``, ``file_change:<path>``, ``state:<predicate>`` or
-``event:<name>``. Only ``date`` triggers are evaluated by this tool; the other kinds are stored so a
-loop or a person can fire them.
-
-Tiers are constants, not knobs:
-
-    T0  say it        (always allowed)
-    T1  prepare it    (draft into the private area, reversible, allowed unattended)
-    T2  act outward   (send, commit, pay, delete; never unattended; surfaced as a draft plus one ask)
-
-Sources that create triggers today: the experiments registry (due column), decision records with a
-re-review date, and explicit ``add`` calls (for example from a transcript extraction step).
+T0: notify. T1: prepare reversible private drafts. T2: outward actions require human
+execution and are surfaced as a draft plus a question, never executed unattended.
+Sources include experiment due dates, decision re-review dates, and explicit add calls.
 
 Usage:
-  triggers.py add --when date:2026-10-02 --what "..." [--tier T1] [--source file:line] [--id ID]
-  triggers.py due [--date YYYY-MM-DD] [--limit 5] [--mark]   due date triggers (read-only by default)
-  triggers.py hook [--date YYYY-MM-DD] [--format claude|text] SessionStart context; marks shown
-  triggers.py claim ID [--minutes 30] [--holder NAME]       lease before acting on a trigger
-  triggers.py fire ID [--outcome TEXT] [--holder NAME]      needs this holder's live lease; refuses a repeat
+  triggers.py add --when date:YYYY-MM-DD --what "..." [--tier T1] [--source file:line] [--id ID]
+  triggers.py due [--date YYYY-MM-DD] [--limit 5] [--mark]
+  triggers.py hook [--date YYYY-MM-DD] [--format claude|text]
+  triggers.py claim ID [--minutes 30] [--holder NAME]
+  triggers.py fire ID [--outcome TEXT] [--holder NAME]
   triggers.py sleep ID [--days 7]
   triggers.py list [--all]
-  triggers.py scan [--experiments FILE] [--decisions FILE] [--date YYYY-MM-DD]
-
-Design decision: KIT-DR-014.
-"""
+  triggers.py scan [--experiments FILE] [--decisions FILE] [--date YYYY-MM-DD]"""
 import argparse
 import contextlib
 import datetime as dt

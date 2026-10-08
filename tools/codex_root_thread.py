@@ -1,15 +1,8 @@
 #!/usr/bin/env python3
-"""Find and print the owner's Codex root thread ID.
+"""Find the owner's Codex root thread by the number of eligible owner turns.
 
-Rank by the **number of owner-authored turns**, not the latest modification time. Ranking
-by mtime selects the dispatch session just created by ask_codex.sh (measured 2026-08-22).
-Exclude:
-
-- Subagent rollouts: first-line session_meta has thread_source == "subagent" or source.subagent.
-- System injection records: role=user but starting with a tag, the full AGENTS.md text, or the
-  team-of-agents preamble.
-- ask_codex.sh dispatch prompts: prompts beginning with the Korean dispatch prefix.
-"""
+Do not rank by modification time: a newly dispatched session may be newer.
+Exclude subagent rollouts, known system envelopes, and ask_codex dispatch prompts."""
 import glob
 import json
 import os

@@ -9,3 +9,12 @@ gate-definition-approval: decision:KIT-DR-013 files=tools/gate.py sha256=a4cc85f
 gate-definition-approval: decision:KIT-DR-014 files=system/enforcement-matrix.yaml,system/review-manifest.yaml,system/test-matrix.yaml sha256=afd06f5b15e225543061cba60786bb1ca163f18d00de7edf35a4c133f0b7a189
 gate-definition-approval: decision:KIT-DR-015 files=system/language-pending.txt,system/review-manifest.yaml,system/test-matrix.yaml sha256=d6c8e2c4d0a27b27e6140a14efde2774c945cdc672f7ae868fdf53c150aecb60
 gate-definition-approval: decision:KIT-DR-013 files=system/review-manifest.yaml sha256=a8df5cc2580e3409d4497a4813f6636c1128539672ca5e7a1118272bdcac301c
+gate-definition-approval: decision:KIT-DR-016 files=system/language-pending.txt,system/review-manifest.yaml,system/test-matrix.yaml,tools/manifest_build.py sha256=dabffd0139fcdbde6eec01504b4589b280623cbb0f921e46add2086c9d5dde83
+gate-definition-approval: decision:KIT-DR-017 files=.github/workflows/gates.yml,system/language-pending.txt,system/review-manifest.yaml,system/test-matrix.yaml,tools/enforce.py,tools/evidencecheck.py,tools/gate.py,tools/manifest_build.py sha256=472f9755d9a1264b3ad63b5fd3b872f3040d8dafd6e61c446186f799b301f8ea
+gate-definition-approval: decision:KIT-DR-017 files=.github/workflows/gates.yml,system/language-pending.txt,system/review-manifest.yaml,system/test-matrix.yaml,tools/enforce.py,tools/evidencecheck.py,tools/gate.py,tools/manifest_build.py sha256=d130787aacfaf2945f43f0dcf0fb3b5cd84b755b45276389b71e25c7a099fd62
+
+gate-definition-approval: decision:KIT-DR-018 files=.github/workflows/gates.yml,system/language-pending.txt,system/review-manifest.yaml,system/test-matrix.yaml,tools/enforce.py,tools/evidencecheck.py,tools/gate.py,tools/manifest_build.py sha256=2040c33a13370b9bc20824e3b305511e92dc971e3804a6c27af1fa4c7a2f265f
+
+gate-definition-approval: decision:KIT-DR-018 files=.github/workflows/gates.yml,system/language-pending.txt,system/review-manifest.yaml,system/test-matrix.yaml,tools/enforce.py,tools/evidencecheck.py,tools/gate.py,tools/manifest_build.py sha256=8a4e3a38e26a26c39453ed30f2b2e393b65dadc40ac57b94d30d3363539d1519
+
+gate-definition-approval: decision:KIT-DR-018 files=.github/workflows/gates.yml,system/enforcement-matrix.yaml,system/language-pending.txt,system/review-manifest.yaml,system/test-matrix.yaml,tools/enforce.py,tools/evidencecheck.py,tools/gate.py,tools/manifest_build.py sha256=ea86d984fbbfab52c7ba04e4a02383bcfa0cdd670e470baa51c1549fb8b911eb

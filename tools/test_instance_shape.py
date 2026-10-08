@@ -19,8 +19,8 @@ from testlib import run_test
 
 ROOT = Path(__file__).resolve().parent.parent
 INVENTORY = ROOT / "system" / "engine-inventory.txt"
-ENGINE_COUNT = 54
-ENGINE_SHA256 = "f2699e1ceb8220597fc6fe94bef6b4488150dcc6c4bdbf9ff871a8368859fa5f"
+ENGINE_COUNT = 58
+ENGINE_SHA256 = "3b78671a9b4504fb3f9c569d5913dc99aae9327aa519c2fb59cd55095bf37d5b"
 HANGUL = re.compile(r"[\uac00-\ud7a3]")
 
 
@@ -280,11 +280,7 @@ def mutation_probes(root: Path, parent: Path) -> list[tuple[str, bool]]:
     replace_once(path,
                  "if path in FORBIDDEN_EXACT or path.startswith(FORBIDDEN_PREFIXES):\n"
                  "        if has_head:\n"
-                 "            return path not in head_paths\n"
-                 "        # Initial commit: there is no history to protect yet, so the only signal is the repo's own\n"
-                 "        # ignore rules (a force-add). Without this an origin-style instance that tracks its public\n"
-                 "        # state could never make its first commit (2026-09-18: the evidencecheck e2e fixture).\n"
-                 "        return _ignored_by_rules(root, path)",
+                 "            return path not in head_paths",
                  "if path in FORBIDDEN_EXACT or path.startswith(FORBIDDEN_PREFIXES):\n"
                  "        return True",
                  "tracked state assumption")

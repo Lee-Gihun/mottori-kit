@@ -10,7 +10,7 @@
     {"path":"tools/fresh_worker.py","risk":"critical","layers":{"U":"tools/test_fresh_worker.py","S":"tools/test_fresh_worker.py","N":"tools/test_fresh_worker.py","M":"tools/test_mutation.py","E2E":"tools/test_fresh_install.sh"}},
     {"path":"tools/install_hooks.sh","risk":"critical","layers":{"U":"tools/test_install_hooks.py","S":"tools/test_install_hooks.py","N":"tools/test_install_hooks.py","M":"tools/test_mutation.py","E2E":"tools/test_fresh_install.sh"}},
     {"path":"tools/ask_codex.sh","risk":"wrapper","layers":{"U":null,"S":"tools/test_tool_entrypoints.py","N":"tools/test_tool_entrypoints.py","M":null,"E2E":null}},
-    {"path":"tools/build_memory_map.py","risk":"normal","layers":{"U":"tools/test_coherence.py","S":"tools/test_coherence.py","N":"tools/test_coherence.py","M":null,"E2E":null}},
+    {"path":"tools/build_memory_map.py","risk":"normal","layers":{"U":"tools/test_memory_map.py","S":"tools/test_memory_map.py","N":"tools/test_memory_map.py","M":null,"E2E":null}},
     {"path":"tools/codex_root_thread.py","risk":"normal","layers":{"U":"tools/test_recall.py","S":"tools/test_tool_entrypoints.py","N":"tools/test_tool_entrypoints.py","M":null,"E2E":null}},
     {"path":"tools/coherence.py","risk":"normal","layers":{"U":"tools/test_coherence.py","S":"tools/test_coherence.py","N":"tools/test_coherence.py","M":null,"E2E":null}},
     {"path":"tools/context_budget.py","risk":"normal","layers":{"U":"tools/test_context_budget.py","S":"tools/test_context_budget.py","N":"tools/test_context_budget.py","M":null,"E2E":null}},
@@ -32,9 +32,10 @@
     {"path":"tools/receipts.py","risk":"normal","layers":{"U":"tools/test_receipts.py","S":"tools/test_receipts.py","N":"tools/test_receipts.py","M":null,"E2E":null}},
     {"path":"tools/harness.py","risk":"normal","layers":{"U":"tools/test_harness.py","S":"tools/test_harness.py","N":"tools/test_harness.py","M":null,"E2E":null}},
     {"path":"tools/skill_adapters.py","risk":"normal","layers":{"U":"tools/test_skill_parity.py","S":"tools/test_skill_parity.py","N":"tools/test_skill_parity.py","M":null,"E2E":null}},
-    {"path":"tools/sync_engine.sh","risk":"wrapper","layers":{"U":null,"S":"tools/test_tool_entrypoints.py","N":"tools/test_tool_entrypoints.py","M":null,"E2E":null}},
+    {"path":"tools/sync_engine.sh","risk":"wrapper","layers":{"U":null,"S":"tools/test_sync_engine.py","N":"tools/test_sync_engine.py","M":null,"E2E":"tools/test_sync_engine.py"}},
     {"path":"tools/transcribe.py","risk":"normal","layers":{"U":"tools/test_transcribe_filter.py","S":"tools/test_tool_entrypoints.py","N":"tools/test_transcribe_filter.py","M":null,"E2E":null}},
     {"path":"tools/wf_gardener.js","risk":"wrapper","layers":{"U":null,"S":"tools/test_tool_entrypoints.py","N":"tools/test_tool_entrypoints.py","M":null,"E2E":null}},
-    {"path":"tools/worker_batch.py","risk":"normal","layers":{"U":"tools/test_worker_batch.py","S":"tools/test_worker_batch.py","N":"tools/test_worker_batch.py","M":null,"E2E":null}}
+    {"path":"tools/worker_batch.py","risk":"normal","layers":{"U":"tools/test_worker_batch.py","S":"tools/test_worker_batch.py","N":"tools/test_worker_batch.py","M":null,"E2E":null}},
+    {"path":"tools/claude_auth.py","risk":"normal","layers":{"U":"tools/test_claude_auth.py","S":"tools/test_claude_auth.py","N":"tools/test_claude_auth.py","M":null,"E2E":null}}
   ]
 }

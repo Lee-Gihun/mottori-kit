@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""check 검출기의 픽스처 테스트 — 과거 사고를 재현해 잡히는지 확인한다.
-
-goal 요구사항: "check 검출기는 과거 사고(8/8 낡은 인덱스, tracker 드리프트) 재현
-픽스처로 검증." 통과 기준: 두 픽스처 모두에서 해당 검출기가 발화.
-"""
+"""Fixture tests for stale memory indexes and track-state drift."""
 import datetime
 import os
 import shutil
@@ -20,8 +16,7 @@ now = importlib.import_module("now")
 
 
 def fixture_8_8_stale_index(tmp):
-    """사고 재현 1: 2026-08-08 시점의 실제 MEMORY.md 인덱스 줄 —
-    '트랙 완주(8/8)→다음 국면(응답 대기)' 류의 상태 줄이 8/15까지 정본 행세."""
+    """An old index entry must not override newer track state."""
     mem = os.path.join(tmp, "memory")
     os.makedirs(mem)
     open(os.path.join(mem, "MEMORY.md"), "w", encoding="utf-8").write(
@@ -32,15 +27,12 @@ def fixture_8_8_stale_index(tmp):
     return mem
 
 
-# 픽스처 전용 트랙. **라이브 config를 쓰지 않는다** (2026-08-24 적대 검증).
-# 이전 판은 config에 `jobs` 트랙이 등록돼 있어야만 통과했다. 즉 회귀 테스트가
-# 인스턴스 설정에 의존해서, 트랙이 없는 새 인스턴스에서는 검출기가 멀쩡해도 실패했다.
-# 테스트는 자기가 재려는 것만 재야 한다.
+# Use fixture-owned tracks so results do not depend on live instance configuration.
 FIXTURE_TRACKS = [("demo", "데모", "demo/tracker.md")]
 
 
 def fixture_tracker_drift(tmp):
-    """사고 재현 2: journal에는 나중 사건이 있는데 트랙 정본 파일은 그 전에 멈춤."""
+    """A newer journal event makes the older canonical track state stale."""
     root = os.path.join(tmp, "repo")
     os.makedirs(os.path.join(root, "demo"))
     tracker = os.path.join(root, "demo", "tracker.md")
@@ -59,7 +51,7 @@ def run():
     tmp = tempfile.mkdtemp(prefix="memcheck-fixture-")
     failures = []
     try:
-        # --- 픽스처 1: 낡은 인덱스 ---
+        # --- Stale index fixture ---
         mem = fixture_8_8_stale_index(tmp)
         import io, contextlib
         buf = io.StringIO()
@@ -71,11 +63,11 @@ def run():
         else:
             failures.append("픽스처 1: 인덱스 휘발성 미검출\n" + out1)
 
-        # --- 픽스처 2: tracker 드리프트 ---
+        # --- Track drift fixture ---
         root, state = fixture_tracker_drift(tmp)
         orig_state, orig_tracks = M.STATE, M.TRACKS
-        M.STATE = state           # journal 위치 재지정
-        M.TRACKS = FIXTURE_TRACKS  # 라이브 config와 격리
+        M.STATE = state           # Redirect the journal.
+        M.TRACKS = FIXTURE_TRACKS  # Isolate the fixture from live configuration.
         try:
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):

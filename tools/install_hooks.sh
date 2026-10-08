@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# active Git pre-commit backstop의 상태를 진단하거나 명시적으로 복구한다.
+# Check and repair owned Git hooks.
 #
-#   bash tools/install_hooks.sh --check   # read-only: current/missing/owned-drift/foreign
-#   bash tools/install_hooks.sh --repair  # foreign은 거부, owned drift는 backup 뒤 atomic 교체
+# Reject foreign hooks. Back up drifted owned hooks and replace them atomically.
+# Usage: bash tools/install_hooks.sh --check|--repair
 set -euo pipefail
 
 MODE="${1:-}"
@@ -43,8 +43,7 @@ if [[ -n "$HOOKSPATH" ]]; then
     *) echo "outside-repo hooksPath: $RESOLVED" >&2; exit 2 ;;
   esac
 else
-  # linked worktree의 `$GIT_DIR/hooks`는 dispatcher가 읽지 않는 admin 하위다. Git 자신에게
-  # common hooks 경로를 묻는다. --path-format은 Git 2.31+ 전용이라 결과를 직접 절대화한다.
+  # Ask Git for the common hook directory, including linked worktrees; avoid newer-version-only flags.
   RAW_DIR="$(git -C "$ROOT" rev-parse --git-path hooks)"
   case "$RAW_DIR" in
     /*) DIR="$RAW_DIR" ;;
@@ -54,10 +53,7 @@ fi
 HOOK="$DIR/pre-commit"
 PUSH_HOOK="$DIR/pre-push"
 
-# Sentinel 도입 직전 canonical 둘만 migration 대상으로 인정한다. 임의 hook에 설명문으로
-# "mottori gate"가 들어갔다고 소유권을 주장하면 --repair가 foreign 코드를 덮어쓴다.
-# 2026-09-18 실측: v0.4~v0.6으로 배포된 precommit-hook.sh(동일 내용) 해시가 빠져 있어 실제 설치본 전부가
-# foreign으로 분류되고 CHANGELOG의 "[해야 함] install_hooks.sh --repair"를 수행할 수 없었다.
+# Recognize legacy ownership by exact bytes, never by a matching phrase.
 LEGACY_HASHES="
 a90b84bf06dbc075c3c269b3e61c61ebdf25ea55f4fb8bd268f24fe1acc41c3e
 c078fa3e14b9a9152bad2ba4540efac5e3ca19e9d8b7467028e07f80dd022141
@@ -84,10 +80,7 @@ sha256() {
   fi
 }
 
-# Ownership stamp: the installer records the sha256 of what it installed. A hook whose hash equals its
-# stamp is ours even after the template changed (2026-09-18 twice: a template edit orphaned every
-# installed hook as "foreign" and the hook self-check silently blocked all commits). Hand-maintained
-# LEGACY_HASHES stays only for installs made before the stamp existed.
+# A hash stamp preserves ownership across template updates; legacy hashes cover only unstamped versions.
 STAMP="$DIR/mottori-hooks.stamp"
 stamped_hash() {  # stamped_hash <hook-basename>
   [[ -f "$STAMP" ]] && awk -v n="$1" '$1==n {print $2}' "$STAMP" || true
@@ -204,8 +197,7 @@ if [[ -f "$ROOT/state/.gate-baseline.json" ]] && ! python3 "$ROOT/tools/gate.py"
 fi
 
 NONCE="probe-$$-$(date +%s)"
-# Git 2.36보다 오래된 배포판에도 hook dispatcher는 commit 때 executable pre-commit을 실행한다.
-# 설치된 파일 자체를 probe하면 신규 `git hook run` 명령 없이 같은 실행 가능성을 검증할 수 있다.
+# Probe the executable directly to support Git versions without git hook run.
 GOT="$("$HOOK" --mottori-probe "$NONCE" 2>&1 || true)"
 if [[ "$GOT" != "$NONCE" ]]; then
   rollback

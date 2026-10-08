@@ -1,46 +1,18 @@
 #!/usr/bin/env python3
-"""gate — 편집이 있었던 턴이 끝날 때 자동으로 도는 검증 게이트.
+"""Check changed work against a recorded set of known issues.
 
-**왜 있나.** 2026-08-24 하루에 같은 실패를 세 번 했다. `rituals.md`에 "재편 후 linkcheck 필수"가
-명시돼 있는데 새 산출물(킷)을 만들고 안 돌려서 깨진 참조 27개가 "검증 완료"로 나갔다.
-조건부 문서는 **내가 읽어야겠다고 판단해야만** 열리고, 그 판단이 실패하는 것이 문제였다.
+Checker protocol (--issues): stable-id<TAB>message rows followed by a final #issues N line.
+Findings exit zero; failed measurement exits nonzero. Missing or inconsistent trailers fail
+closed. IDs prefixed with ~ are advisory time-based findings.
 
-스킬로는 안 된다. 설명이 맞으면 뜨지만 **반드시 뜨지는 않는다** — `P(발동|해당사건) > 0`과
-`P = 1`은 다르다. 검증은 계약이어야 하므로 결정적 훅이다.
+Block newly introduced issues and removed checkers. Tighten the baseline when issues
+disappear; only an explicit baseline command may adopt a new set.
 
-**검사기 계약 (v2).** 각 검사기는 `--issues`로
-    <안정ID>\\t<표시문구>      ← 시간이 만든 것은 ID 앞에 `~`
-    #issues <N>               ← 반드시 마지막 줄
-을 내고 **이슈 유무와 무관하게 exit 0**으로 끝난다. 종료코드는 "측정이 됐는가"만 뜻한다.
+Stop hooks cover Write, Edit, and NotebookEdit. Precommit checks the staged tree; resume
+reports pending work after missed or interrupted hooks. Local hooks cannot prevent
+--no-verify.
 
-게이트가 측정 실패로 보는 것 (전부 차단):
-  - nonzero exit
-  - 트레일러가 없거나 마지막 줄이 아님
-  - 선언 수와 실제 gated ID 수 불일치
-  - 기준선과 **검사기 목록이 다름** (검사기를 지워서 우회하는 것을 막는다)
-
-**개수가 아니라 집합이다.** 개수는 치환에 눈이 멀었다 — 링크 하나 고치고 하나 깨면 같은 수라
-통과했다. `현재 - 기준선`이 비지 않으면 막고, 현재가 기준선의 진부분집합일 때만 당긴다.
-
-**기준선은 사람만 만든다.** 삭제와 첫 설치를 기계가 구분할 수 없다. 세 운영 명령(check·resume·
-precommit)은 기준선이 없으면 각자의 방식으로 거부하고, 쓰기는 `gate.py baseline` 하나에만 있다.
-(줄어들 때 당기는 것은 조이는 방향이라 허용한다.)
-
-**범위 (정직하게).** Stop 훅은 `Write|Edit|NotebookEdit`만 본다. Bash 편집·외부 writer·
-Codex 편집·interrupt는 못 본다. 그래서 후방선 둘이 있다.
-  gate.py precommit   커밋될 index를 검사 (`tools/install_hooks.sh`로 설치)
-  gate.py resume      UserPromptSubmit에서 남은 dirty와 미해결 실패를 회수
-`git commit --no-verify`는 전부 우회한다. 계약이 아니라 후방선이다.
-
-사용:
-    python3 tools/gate.py dirty     PostToolUse 훅에서 (표시만)
-    python3 tools/gate.py check     Stop 훅에서
-    python3 tools/gate.py resume    UserPromptSubmit 훅에서
-    python3 tools/gate.py precommit pre-commit 훅에서 (fail closed)
-    python3 tools/gate.py selfcheck direct/precommit gated ID 집합 비교
-    python3 tools/gate.py approve-adoption --adopt <checker:issue-id> ...  신규 이슈 채택 승인
-    python3 tools/gate.py baseline  현재 이슈 집합을 기준선으로 (사람만)
-    python3 tools/gate.py status    지금 상태 보기
+Commands: dirty, check, resume, precommit, selfcheck, approve-adoption, baseline, status.
 """
 import contextlib
 import fcntl
@@ -61,8 +33,8 @@ sys.path.insert(0, HERE)
 import memlib as M
 from i18n import t
 
-# **실행 root를 자기 파일에서 유도한다** (codex 라운드 4). `MOTTORI_INSTANCE`로 깨끗한 다른
-# 클론을 가리키면 깨진 index가 통과했다. 훅은 이 변수를 지우고, 게이트는 불일치면 거부한다.
+# Bind execution to this file's root; an environment override must not redirect validation to a
+# clean clone.
 SELF_ROOT = os.path.dirname(HERE)
 
 BASELINE = os.path.join(M.STATE, ".gate-baseline.json")
@@ -71,7 +43,7 @@ CHECKS = [
     ("linkcheck", [sys.executable, os.path.join(HERE, "linkcheck.py"), "--issues"]),
     ("evidencecheck", [sys.executable, os.path.join(HERE, "evidencecheck.py"), "--issues"]),
     ("now-check", [sys.executable, os.path.join(HERE, "now.py"), "check", "--issues"]),
-    # 생성 파일(review manifest)이 index보다 낡은 채 커밋되는 경로를 닫는다 (2026-09-18 CI 실측). 킷 트리에만 해당.
+    # Check generated manifests against the staged tree in kit distributions.
     ("manifest", [sys.executable, os.path.join(HERE, "manifest_build.py"), "--issues"]),
 ]
 TEST_EVIDENCE_ACTIVE = "MOTTORI_TEST_EVIDENCE_ACTIVE"
@@ -101,13 +73,13 @@ def _gitdir():
 
 
 def _ephem(name):
-    """마커는 **추적 밖**에 산다. `state/`에 뒀더니 커밋돼서 리포에 들어갔다 (실측)."""
+    """Return an untracked path for gate state."""
     g = _gitdir()
     return os.path.join(g, name) if g else os.path.join(M.STATE, "." + name)
 
 
 DIRTY = lambda: _ephem("mottori-gate-dirty")
-PENDING = lambda: _ephem("mottori-gate-pending")     # 막힌 뒤 아직 재검증 안 된 상태
+PENDING = lambda: _ephem("mottori-gate-pending")     # A blocked check remains pending until revalidated.
 LOCK = lambda: _ephem("mottori-gate-lock")
 SIGNING_KEY = lambda: _ephem("mottori-gate-key")
 
@@ -122,10 +94,9 @@ APPROVAL = _approval_path
 
 @contextlib.contextmanager
 def _lock(timeout=150):
-    """dirty 표시·검사·기준선 갱신을 직렬화한다.
-
-    없으면 lost wakeup이 난다 (codex 라운드 4 재현): A가 검사 중일 때 B가 편집하고 dirty를
-    다시 찍으면, A가 옛 결과로 통과한 뒤 B의 마커까지 지웠다."""
+    """Serialize dirty marking, measurement, and baseline updates so a concurrent edit cannot
+    lose its pending marker.
+    """
     p = LOCK()
     os.makedirs(os.path.dirname(p), exist_ok=True)
     f = open(p, "w")
@@ -148,7 +119,7 @@ def _lock(timeout=150):
 
 
 def _issues(cmd, cwd=None, instance=None, extra_env=None):
-    """검사기 하나 → 게이트가 무는 ID 집합. 측정 실패면 None."""
+    """Return one checker's gated issue IDs, or None when measurement fails."""
     env = dict(os.environ, MOTTORI_INTERNAL_RUN="1")
     if instance is None:
         env.pop("MOTTORI_INSTANCE", None)
@@ -162,10 +133,10 @@ def _issues(cmd, cwd=None, instance=None, extra_env=None):
     except Exception:
         return None
     if r.returncode != 0:
-        return None                      # issues 모드는 이슈가 있어도 0으로 끝나야 한다
+        return None                      # Findings still exit zero in machine-protocol mode.
     lines = [l for l in r.stdout.splitlines() if l.strip()]
     if not lines or not lines[-1].startswith("#issues "):
-        return None                      # 트레일러는 반드시 마지막 줄
+        return None                      # The trailer must be the final output line.
     try:
         declared = int(lines[-1].split()[1])
     except (IndexError, ValueError):
@@ -179,9 +150,8 @@ def _issues(cmd, cwd=None, instance=None, extra_env=None):
 
 def _ensure_git_tree(tree):
     """Give an extracted staged tree local Git metadata before support files are created."""
-    # The tree must be its own repository. An extracted tree under the parent's .git resolves to the
-    # parent's git dir, so suites that touch git then hit the parent's index from the wrong root
-    # (2026-09-18: "index file open failed: Not a directory" during pre-commit evidence collection).
+    # Give the extracted tree its own Git metadata before tests can resolve the parent
+    # repository.
     git_probe = subprocess.run(
         ["git", "-C", tree, "rev-parse", "--show-toplevel"], capture_output=True, text=True,
     )
@@ -224,14 +194,10 @@ def _log_covers(log_path, run_id, ids):
 
 
 def _refresh_test_evidence(tree):
-    """Create a fresh RAN log for every suite cited by a test marker.
-
-    Evidence is reused, not recomputed: when the caller inherited a log and a run ID and that log
-    already holds a fresh record of the same run for every cited test, nothing is re-executed. Before
-    this rule every gate run inside a fixture re-ran all cited suites (14 of them), and suites that
-    exercise the gate in fixtures do so about twenty times; CI's regression step went from 2.5 to
-    32 minutes and one cell hit the 40-minute limit (2026-09-18, ad032ec). Fixtures that need a real
-    execution use their own empty log or another run ID, as the evidencecheck suite does."""
+    """Ensure each cited suite has fresh evidence for the current run ID. Reuse an inherited
+    log only when it already covers every required test; otherwise run the cited suites.
+    Fixtures needing a real execution use an empty log or a different run ID.
+    """
     if not _ensure_git_tree(tree):
         return os.environ.get(TEST_LOG_ENV), False
     if os.environ.get(TEST_EVIDENCE_ACTIVE) == "1":
@@ -299,14 +265,14 @@ def measure(tree=None, filelist=None):
             out[name] = None
             continue
         if tree and name == "evidencecheck":
-            # 커밋될 index의 검사기와 문서를 함께 쓴다. run과 인스턴스 DR만 로컬 overlay에서 찾는다.
+            # Use staged checkers and documents; resolve run evidence and instance decisions
+            # from the local overlay.
             staged_checker = os.path.join(tree, "tools", "evidencecheck.py")
             c = [sys.executable, staged_checker, "--issues", "--tree", tree,
                  "--local-root", M.ROOT]
         if tree and name == "now-check":
-            # pre-commit은 worktree가 아니라 index에서 꺼낸 엔진과 상태를 검사해야 한다.
-            # 원본 인스턴스 저장소는 config/state가 tracked라 extracted tree가 정본이고,
-            # 배포 킷은 둘 다 의도적으로 ignored라 staged 엔진을 현재 local instance에 대입한다.
+            # Validate staged engine bytes. Installed kits supply ignored config/state through
+            # the local overlay.
             staged_now = os.path.join(tree, "tools", "now.py")
             staged_config = os.path.join(tree, "system", "memory-config.json")
             instance = tree if os.path.isfile(staged_config) else M.ROOT
@@ -329,7 +295,7 @@ def measure(tree=None, filelist=None):
 
 
 def _load_baseline():
-    """(집합 dict, 상태). 상태: ok · absent · corrupt."""
+    """Return (issue-set mapping, state), where state is ok, absent, or corrupt."""
     if not os.path.exists(BASELINE):
         return {}, "absent"
     try:
@@ -476,7 +442,9 @@ def _save_baseline(cur, adopted=()):
 
 
 def _verdict(cur, base, state):
-    """(막을 이유 or None, 기준선을 당길지). **채택은 절대 안 한다.**"""
+    """Return (blocking reason or None, whether to tighten the baseline). Never adopt new
+    issues.
+    """
     dead = sorted(k for k, v in cur.items() if v is None)
     if dead:
         return t("gate.checker_dead", items=", ".join(dead)), False
@@ -486,12 +454,11 @@ def _verdict(cur, base, state):
         return t("gate.baseline_absent"), False
     only_b = sorted(set(base) - set(cur))
     if only_b:
-        # 검사기가 사라진 것은 검사기를 지워서 통과시키는 경로다. 막는다.
+        # Removing a checker must not erase its findings.
         return t("gate.checks_changed", only_base=t("gate.only_base", items=", ".join(only_b)),
                  only_current=""), False
-    # 검사기가 늘어난 것은 빈 기준선으로 취급한다: 새 검사기의 이슈는 전부 "새 이슈"라 숨길 수 없고,
-    # 이슈 0이면 기준선에 그 키를 기록한다. 2026-09-18 실측: 검사기 추가 커밋이 "목록이 다르다"와
-    # "sealed tree가 clean하지 않으면 baseline 금지"에 동시에 걸려 커밋도 재기준선도 불가능한 교착이었다.
+    # A new checker starts with an empty baseline: all its findings are new, while zero findings
+    # can be recorded safely.
     grown = sorted(set(cur) - set(base))
     base = {k: base.get(k, set()) for k in cur}
 
@@ -519,7 +486,7 @@ def _mark(p, val="1"):
 
 def cmd_dirty():
     with _lock(timeout=150) as got:
-        # 잠금을 못 얻어도 표시는 남긴다. 안 남기는 쪽이 더 나쁜 실패다.
+        # Keep the dirty marker even when the lock cannot be acquired.
         _mark(DIRTY(), str(time.time_ns()))
     return 0
 
@@ -636,8 +603,7 @@ def cmd_approve_adoption(adopt_qualified_ids=()):
 
 
 def _cmd_baseline_locked():
-    # A sealed installation may not silently replace its baseline while an index change is staged.
-    # This is the setup --force bypass: a failed setup used to adopt the broken staged tree first.
+    # A sealed installation must not replace its baseline while an index change is staged.
     staged = subprocess.run(["git", "-C", M.ROOT, "diff", "--cached", "--quiet", "--"],
                             capture_output=True)
     unstaged = subprocess.run(["git", "-C", M.ROOT, "diff", "--quiet", "--"],
@@ -731,7 +697,7 @@ def cmd_status():
 
 
 def cmd_check():
-    """Stop 훅. dirty이거나 미해결 실패(pending)가 있으면 검사한다."""
+    """Run the Stop check when dirty or when a previous failure remains pending."""
     try:
         try:
             payload = json.loads(sys.stdin.read() or "{}")
@@ -748,13 +714,13 @@ def cmd_check():
             token = _read(DIRTY())
             base, state = _load_baseline()
             cur = measure()
-            # 검사 도중 새 편집이 들어왔으면 마커를 지우지 않는다 (lost wakeup 차단).
+            # Do not clear a marker created by an edit during measurement.
             moved = _read(DIRTY()) != token
             reason, advance = _verdict(cur, base, state)
             if advance and not moved:
                 _save_baseline(cur)
             if reason:
-                # **막은 뒤에도 재검증이 남아야 한다.** 마커만 지우면 다음 Stop이 조용히 통과했다.
+                # Keep unresolved failures pending so the next Stop rechecks them.
                 _mark(PENDING())
                 if not moved:
                     with contextlib.suppress(OSError):
@@ -768,8 +734,7 @@ def cmd_check():
             M.log_run("gate", "pass@Stop", ok=True)
             return 0
     except Exception as e:
-        # 게이트 자신의 예외는 측정 실패다. 조용히 0을 내면 후방선이 fail-open이 된다
-        # (2026-09-17 독립 감사 K: measure()가 터져도 무출력 성공). pending을 남겨 다음 턴이 회수한다.
+        # Treat gate exceptions as failed measurement and retain pending state.
         with contextlib.suppress(Exception):
             _mark(PENDING())
         with contextlib.suppress(Exception):
@@ -785,9 +750,9 @@ def _read(p):
 
 
 def cmd_resume():
-    """UserPromptSubmit 훅. interrupt로 Stop이 안 돈 턴과, 막혔는데 안 고쳐진 상태를 회수한다.
-
-    막지 않고 알린다 — 사용자가 방금 새 지시를 넣은 순간에 차단하면 성가시기만 하다."""
+    """Report pending work at UserPromptSubmit without blocking the new instruction.
+    Interrupted turns and unresolved failures remain eligible for later Stop checks.
+    """
     try:
         if not _root_ok():
             return 0
@@ -820,7 +785,7 @@ def cmd_resume():
                         os.remove(p)
             return 0
     except Exception as e:
-        # 막지는 않되 침묵하지 않는다. pending을 유지해 다음 Stop이 다시 검사하게 한다 (독립 감사 K).
+        # Report failure without blocking the prompt; keep pending state for the next Stop.
         with contextlib.suppress(Exception):
             _mark(PENDING())
         with contextlib.suppress(Exception):
@@ -832,17 +797,24 @@ def cmd_resume():
 
 
 def _staged_tools_compile(tmp):
-    """index에 올라간 파이썬 도구가 문법적으로 성립하는가.
-
-    안 보면 이 구멍이 난다 (codex 라운드 4): 검사기를 깨진 채로 stage하고 worktree만
-    되돌리면, 훅은 worktree 검사기로 index 문서를 검사해서 통과시킨다."""
+    """Check Python syntax in the staged tree rather than a potentially different worktree
+    copy.
+    """
     import py_compile
     bad = []
-    ls = subprocess.run(["git", "-C", M.ROOT, "ls-files", "--cached", "tools/*.py"],
-                        capture_output=True, text=True).stdout.split()
-    for rel in ls:
+    listed = subprocess.run(
+        ["git", "-C", M.ROOT, "ls-files", "-z", "--cached", "tools/*.py"],
+        capture_output=True,
+    )
+    if listed.returncode != 0 or (listed.stdout and not listed.stdout.endswith(b"\0")):
+        raise ValueError("staged Python file list measurement failed")
+    for raw_path in listed.stdout.split(b"\0"):
+        if not raw_path:
+            continue
+        rel = os.fsdecode(raw_path)
         p = os.path.join(tmp, rel)
         if not os.path.exists(p):
+            bad.append(f"{rel}: missing staged file")
             continue
         try:
             py_compile.compile(p, cfile=os.path.join(tmp, ".pyc-scratch"), doraise=True)
@@ -869,7 +841,7 @@ def _staged_markdown_paths():
 
 
 def cmd_precommit():
-    """pre-commit 훅. 커밋되는 index를 검사하고, 조금이라도 못 미더우면 막는다 (fail closed)."""
+    """Check the index that will be committed and fail closed when measurement is incomplete."""
     if not _root_ok():
         print(f"[gate] 실행 root 불일치 ({M.ROOT} vs {SELF_ROOT}). 커밋을 막는다.", file=sys.stderr)
         return 1

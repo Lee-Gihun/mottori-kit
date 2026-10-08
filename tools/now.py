@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""now — 작업 상태의 계기. PRD: system/PRD-session-memory.md (v3).
+"""Append journal events, render state, and detect state drift.
 
-    now.py log "[track/type] 내용"   journal append (스키마 검증) + NOW 재생성
-    now.py render                     NOW.md 재생성만
-    now.py hook-context               SessionStart 훅용: NOW를 additionalContext JSON으로
-    now.py context [--public-only]    훅 표면이 없는 하네스용: 같은 본문을 평문으로
-    now.py precompact                 PreCompact 훅용: 컴팩션 사건 기록
-    now.py check                      드리프트 계기 (5종 검출기, PRD §3.3)
+Commands:
+  log [--private] "[track/type] text"  Append a validated event and regenerate NOW.
+  render                             Regenerate NOW only.
+  threads                            Show configured dossier pointers.
+  hook-context                       Emit SessionStart additionalContext JSON.
+  context [--public-only]             Emit the same state as plain text.
+  precompact [--runtime NAME]         Record a compaction event.
+  check [--issues] [--portable]       Report state drift.
 
-NOW.md는 생성물이다 — 손으로 고치지 말 것. 고치고 싶은 내용이 있다면 그 내용의
-정본(트랙 정본 또는 journal)을 고쳐라. (DIGEST·hotset과 같은 규칙.)
-"""
+NOW is generated. Edit the source journal or canonical document instead."""
 import datetime
 import hashlib
 import json
@@ -33,7 +33,7 @@ class LoadedInputChanged(RuntimeInputChanged):
 
 
 class _SkipCheck(Exception):
-    """check() 안에서 '이 인스턴스엔 해당 검사가 없다'를 경고 없이 빠져나가는 신호."""
+    """Signal that a drift check does not apply to this instance."""
 
 
 class ConfigChanged(LoadedInputChanged):
@@ -159,15 +159,13 @@ def log(body, quiet=False, force_private=False):
     _warn_visibility_fail_closed()
     match = M.JOURNAL_LINE.match(line)
     visibility = M.journal_visibility(match.group("track"), force_private=force_private)
-    # 사건 시각과 물리 월별 경로를 한 번만 고정한다. 월 경계에서 append와 rollback이
-    # 서로 다른 journal을 잡거나 신규 파일 header가 사건 월과 어긋나면 안 된다.
+    # Fix event time and journal path once so append and rollback agree across a month boundary.
     journal_path = M.journal_path(dt=event_time, visibility=visibility)
     try:
-        # append와 그 append를 반영한 snapshot publish가 한 transaction이다. append만 잠그면
-        # 오래된 renderer가 나중에 replace하는 stale-last-writer가 남는다 (DR-043).
+        # Hold one lock across append and snapshot publication to prevent stale writers from winning.
         with M.locked():
             _assert_runtime_inputs_unchanged((visibility,))
-            # 손상된 기존 사건 뒤에 새 사건을 더 써서 복구 범위를 넓히지 않는다.
+            # Do not append after a corrupt existing event.
             _assert_journal_tail(journal_path)
             physical = ("public",) if visibility == "public" else ("public", "private")
             M.parse_journal(strict=True, physical_visibilities=physical)
@@ -181,7 +179,7 @@ def log(body, quiet=False, force_private=False):
             except Exception:
                 _rollback_journal(journal_path, existed, size, previous_stat)
                 raise
-    except Exception as e:  # hook caller가 shell fallback을 탈 수 있도록 실패를 숨기지 않는다.
+    except Exception as e:  # Propagate failure so hook callers can use their fallback.
         print(f"상태 기록 실패: {type(e).__name__}: {e}", file=sys.stderr)
         return 1
     if not quiet:
@@ -204,7 +202,7 @@ def _track_rows():
         warn = " ⚠" if (age is not None and age > M.TRACK_STALE_DAYS) else ""
         rows.append(f"- **{name}** — {snippet or '(갱신줄 없음)'} "
                     f"(파일 {age}일 전{warn}) → `{rel}`")
-    # personal_pointer가 null인 새 인스턴스에서 `None`을 인쇄하지 않는다 (2026-09-17 독립 감사 M).
+    # Do not render a null personal pointer.
     pointer = f"정본 `{M.PERSONAL_POINTER}`" if M.PERSONAL_POINTER else "정본 미지정 (config personal_pointer)"
     rows.append(f"- **개인** — {pointer} (개인 영역: NOW에 내용 비표시)")
     return rows
@@ -221,11 +219,7 @@ def _thread_rows(visibility):
 
 
 def threads():
-    """스레드 서류철 레지스트리를 인쇄한다 (복귀 의식용).
-
-    슬래시 커맨드가 목록을 본문에 박고 있었는데, 그러면 스레드가 바뀔 때마다
-    커맨드 파일을 고쳐야 하고 이식하면 남의 스레드를 가리킨다 (DR-025).
-    """
+    """Print the configured deep-thread dossier registry."""
     if not M.THREADS:
         print("(등록된 스레드 없음 — system/memory-config.json의 threads에 추가)")
         return 0
@@ -236,11 +230,7 @@ def threads():
 
 
 def _pointer_block():
-    """정본 포인터를 config에서 조립한다 (DR-025).
-
-    이전에는 이 문단이 렌더러 안에 리터럴로 박혀 있었다. 생성물이 남의 리포 경로를
-    가리키는 구조라, 트랙이 바뀌어도 NOW는 옛 포인터를 계속 인쇄했다.
-    """
+    """Build canonical-document pointers from instance config."""
     parts = []
     for key, name, canon in M.TRACKS:
         refs = "+".join(f"`{p}`" for p in [canon] + M.track_also(key))
@@ -250,7 +240,7 @@ def _pointer_block():
     parts.append("개인 사실 `python3 tools/rec.py find|hot`")
     parts.append("결정 기록 `system/decisions.md`")
     parts.append('회상 `python3 tools/recall.py find "질의"`')
-    # 3개씩 끊어 줄바꿈 (NOW는 사람이 훑는 화면이다)
+    # Wrap pointer rows in groups of three for readability.
     chunks = [" · ".join(parts[i:i + 3]) for i in range(0, len(parts), 3)]
     return "\n".join(chunks) or "- (트랙 미정의)"
 
@@ -264,7 +254,7 @@ def _clip_event_body(body, max_bytes):
 
 
 def _fit_snapshot(builder):
-    """고정 구조와 최신 사건을 보존하며 오래된 반복 줄부터 줄인다."""
+    """Trim old repeated lines while retaining the fixed structure and recent events."""
     decisions, recent = M.NOW_RECENT_DECISIONS, M.NOW_TAIL_EVENTS
     body_limit = None
     while True:
@@ -288,6 +278,7 @@ _CONTENT_FINGERPRINT_PLACEHOLDER = (
 
 
 def _public_snapshot(entries, fingerprint):
+    entries = _fold_compactions(entries)
     jp = M.journal_path()
     j_age = _age_days(jp)
     fresh = [f"journal {j_age if j_age is not None else '?'}일 전"
@@ -329,6 +320,7 @@ def _public_snapshot(entries, fingerprint):
 
 
 def _private_snapshot(entries, fingerprint):
+    entries = _fold_compactions(entries)
     def fmt(e, body_limit):
         return (f"- {e['ts'][:16]} [{e['track']}/{e['type']}] "
                 f"{_clip_event_body(e['body'], body_limit)}")
@@ -362,8 +354,7 @@ def _private_snapshot(entries, fingerprint):
 def _publish_if_changed(path, text):
     try:
         if os.path.isfile(path) and open(path, encoding="utf-8").read() == text:
-            # mtime은 "이 snapshot이 현재 input을 검증했다"는 cursor다. touch/checkout으로 input
-            # mtime만 바뀐 경우 bytes skip과 함께 cursor도 갱신해야 stale gate가 풀린다.
+            # Refresh the validation cursor when inputs were touched without changing bytes.
             os.utime(path, None)
             return False
     except OSError:
@@ -451,8 +442,7 @@ def _input_fingerprint(scope, portable=False):
     bytes were rendered under the policy it has actually loaded.
     """
     digest = hashlib.sha256()
-    # Git tree에는 mtime이 없다. live cursor는 mtime까지 보되 pre-commit의 extracted index는
-    # content marker를 쓴다. 둘 다 policy/source/date와 모든 input bytes는 동일하게 묶는다.
+    # Git trees lack mtimes: staged checks use content markers while live checks also track metadata.
     flavor = "state-content-v1" if portable else "state-snapshot-v1"
     digest.update((flavor + "\0" + scope + "\0" +
                    datetime.datetime.now().astimezone().date().isoformat()).encode())
@@ -533,9 +523,7 @@ def _bind_content_fingerprint(scope, text):
 
 def _private_inputs_present():
     """Distinguish absent local state from an explicitly present empty/degraded overlay."""
-    # v1/v2 migration은 과거 tracked journal을 legacy-private로 재분류할 수 있다. 아직
-    # `_private/state/` 디렉터리가 없다는 이유로 먼저 return하면 그 행들이 local view에서
-    # 사라진다. 물리 public 파일 안의 private projection을 먼저 본다.
+    # Legacy private events may still live in tracked journals; inspect the private projection before declaring local state absent.
     if M.parse_journal(visibility="private", physical_visibilities=("public",)):
         return True
     if not os.path.isdir(M.PRIVATE_STATE):
@@ -627,8 +615,7 @@ def _snapshot_stale(scope, portable=False):
 
 def _ensure_snapshots():
     scopes = tuple(s for s in ("public", "private") if _snapshot_stale(s))
-    # config가 망가졌을 때 기존 public snapshot을 빈 projection으로 덮지 않는다. local append는
-    # 계속 복구할 수 있고 hook header가 degraded 상태를 밝힌다.
+    # Preserve the previous public snapshot on config errors; expose degraded state during recovery.
     if not M.VISIBILITY_READY:
         scopes = tuple(s for s in scopes if s != "public")
     if not scopes:
@@ -647,11 +634,7 @@ def _ensure_snapshots():
 
 
 def build_context(public_only=False):
-    """주입할 상태 본문을 만든다 — 하네스 중립.
-
-    봉투(클로드 훅 JSON / 평문 파일)는 호출자가 씌운다. `public_only`는 개인 overlay를
-    담을 수 없는 배선(예: 생성물이 Git 안에 남는 하네스)에서 fail-close 하는 길이다.
-    """
+    """Build runtime-neutral injected state. The caller supplies the envelope. public_only excludes the private overlay when the delivery surface cannot safely carry it."""
     private_error = _ensure_snapshots()
     if not os.path.isfile(M.NOW_PATH):
         raise FileNotFoundError(f"public NOW 부재: {M.NOW_PATH}")
@@ -704,7 +687,7 @@ def build_context(public_only=False):
 
 
 def hook_context():
-    """SessionStart 훅(Claude·Codex): 같은 본문을 hookSpecificOutput 봉투에 담는다."""
+    """Wrap the shared state body as SessionStart hookSpecificOutput JSON."""
     try:
         context = build_context()
         print(json.dumps({"hookSpecificOutput": {
@@ -717,7 +700,7 @@ def hook_context():
 
 
 def context(public_only=False):
-    """훅 표면이 없는 하네스용: 같은 본문을 평문으로 낸다 (harness.py가 파일로 굽는다)."""
+    """Print the shared state body for runtimes without a hook envelope."""
     try:
         sys.stdout.write(build_context(public_only=public_only))
     except Exception as e:
@@ -726,30 +709,91 @@ def context(public_only=False):
     return 0
 
 
-def precompact():
-    return log("[system/state] 컴팩션 발생 — 이후 컨텍스트는 요약본", quiet=True)
+COMPACTION_TOKEN = "컴팩션 발생"
 
 
-VOLATILE_RE = None  # lazy
+def _compaction_tag_re():
+    import re as _re
+    return _re.compile(r"컴팩션 발생 \((?P<runtime>[a-z]+) · s:(?P<sid>[0-9a-f]{8}|unknown)\)")
+
+
+def _hook_session_hash():
+    """Hash hook stdin session_id to eight characters; use unknown rather than inferred attribution.
+    Wait at most 0.5 seconds so an idle stdin cannot hang the hook."""
+    import hashlib as _h
+    import json as _json
+    import select as _select
+    try:
+        if sys.stdin is None or sys.stdin.isatty():
+            return "unknown"
+        ready, _, _ = _select.select([sys.stdin], [], [], 0.5)
+        if not ready:
+            return "unknown"
+        raw = sys.stdin.read()
+        sid = _json.loads(raw).get("session_id") if raw.strip() else None
+        if not sid:
+            return "unknown"
+        return _h.sha256(str(sid).encode("utf-8")).hexdigest()[:8]
+    except Exception:
+        return "unknown"
+
+
+def precompact(runtime=None):
+    """Record a PreCompact event with runtime and session hash."""
+    import re as _re
+    runtime = runtime if runtime and _re.fullmatch(r"[a-z]+", runtime) else "unknown"
+    return log(f"[system/state] {COMPACTION_TOKEN} ({runtime} · s:{_hook_session_hash()}) — 이후 컨텍스트는 요약본",
+               quiet=True)
+
+
+def _fold_compactions(entries):
+    """Fold consecutive compaction events by runtime in the projection only.
+    Do not cross non-compaction events or alter the original journal."""
+    tag_re = _compaction_tag_re()
+    out, run = [], []
+
+    def flush():
+        if not run:
+            return
+        if len(run) == 1:
+            out.append(run[0])
+            run.clear()
+            return
+        counts = {}
+        for e in run:
+            m = tag_re.search(e.get("body", ""))
+            rt = m.group("runtime") if m else "unknown"
+            counts[rt] = counts.get(rt, 0) + 1
+        parts = " · ".join(f"{k} {v}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1]))
+        folded = dict(run[0])
+        folded["body"] = (f"{COMPACTION_TOKEN} {len(run)}회 ({parts}) ~{run[-1]['ts'][:16]}"
+                          " — 이후 컨텍스트는 요약본")
+        out.append(folded)
+        run.clear()
+
+    for e in entries:
+        if e.get("type") == "state" and COMPACTION_TOKEN in e.get("body", ""):
+            run.append(e)
+        else:
+            flush()
+            out.append(e)
+    flush()
+    return out
+
+
+VOLATILE_RE = None
 
 
 def check(memory_dir=None, root=None, issues=False, portable=False):
-    """드리프트 계기 — PRD §3.3의 5종 검출기. 반환: 경고 수.
-
-    `issues=True`면 게이트용 이슈 집합 계약으로 출력한다. 시간이 흘러서 저절로 생기는
-    이슈(`~` 접두)와 편집이 만든 이슈를 가른다 — 전자로 Stop을 막으면 이번 턴에 고칠 수
-    없는 경보가 되고, 못 고칠 경보는 곧 꺼진다 (codex 라운드 3).
-    """
+    """Report state drift and return its count. In issues mode, distinguish advisory time-based findings from gated edit-induced findings."""
     import hashlib as _h
     import glob as _glob
     import re as _re
     root = root or M.ROOT
-    # auto-memory는 전사 디렉토리 아래 산다. 전사 경로가 유도값이므로 이것도 유도값이다 (DR-025).
+    # Derive the auto-memory directory from the transcript directory.
     memory_dir = memory_dir or os.path.join(M.TRANSCRIPTS, "memory")
 
-    # (gated, 안정 ID, 사람이 읽는 문구).
-    # **ID와 문구를 가른 이유** (codex 라운드 4): 문구 전체를 ID로 쓰면 표시 문구만 고쳐도
-    # 게이트가 "새 이슈"로 막았다. ID엔 상태를 식별하는 것만 넣고 날짜·줄번호·나이는 문구로 뺀다.
+    # Separate stable issue identity from display text so wording, age, and line changes do not create new issues.
     warns = []
     notices = []
     def W(gated, ident, text):
@@ -760,7 +804,7 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
 
     def finish():
         if issues:
-            # 계약: `안정ID\t표시문구`, 시간 유발은 `~` 접두, 마지막 줄은 트레일러.
+            # Protocol: stable-id<TAB>message, optional ~ prefix for advisory findings, then a final count trailer.
             gated = 0
             for ident, text in notices:
                 print(f"~{ident}\t{text}")
@@ -776,8 +820,7 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
         print(f"check: 경고 {len(warns)}건" if warns else "check: 깨끗함")
         return len(warns)
 
-    # 설치 전 개발 트리와 config만 사라진 반설치를 구분한다. root override는 아래의
-    # 검출기 단위 fixture가 쓰는 가상 경로라 런타임 설치 상태로 분류하지 않는다.
+    # Distinguish pre-setup development trees from broken installations; fixture root overrides are not installations.
     if os.path.realpath(root) == os.path.realpath(M.ROOT):
         config_path = os.path.join(root, "system", "memory-config.json")
         if not os.path.isfile(config_path):
@@ -799,8 +842,7 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
                   "[NOW 검사 해당없음] config와 state 입력이 없는 설치 전 개발 트리")
             return finish()
 
-    # 1) 트랙 정본 낙후: journal의 해당 트랙 최신 사건보다 정본 파일이 오래됨
-    #    시간만 흘러서는 안 생긴다 (codex가 시계를 9/1로 고정해 확인). 편집 유발이라 gated.
+    # Canonical documents are stale when their track has a newer journal event; this is edit-induced.
     parse_errors = []
     entries = M.parse_journal(
         errors=parse_errors,
@@ -810,9 +852,7 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
         ident = _h.sha1(item.encode()).hexdigest()[:10]
         W(True, "journal-corrupt:" + ident, "[journal 손상] " + item)
     if portable:
-        # extracted Git tree에는 녹취·Drive 처리표·auto-memory와 mtime이 없다. 그것들을 검사하면
-        # index 변화가 아닌 local 부재가 새 이슈로 생긴다. portable gate는 tracked public
-        # journal의 구조와 content marker 정합성만 소유한다.
+        # Staged trees lack local recordings, inboxes, and mtimes; validate only portable tracked state there.
         if not os.path.isfile(M.NOW_PATH):
             W(True, "now-absent", f"[NOW 부재] {M.NOW_PATH}")
         elif _snapshot_stale("public", portable=True):
@@ -830,32 +870,44 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
                 W(True, f"canonical-stale:{rel}",
                   f"[정본 낙후] {rel} ({fdate}) < journal {key} 최신 사건 ({jdate})")
 
-    # 2) MEMORY.md 인덱스 휘발성 (8/8 사고의 패턴)
+    # Detect volatile state claims in the memory index, not provenance dates.
     idx = os.path.join(memory_dir, "MEMORY.md")
-    # 8/8 사고의 시그니처는 날짜가 아니라 상태 어휘였다 (대기·콜·온사이트·딜 국면).
-    # 제정일·이관일 같은 provenance 날짜는 정상이므로 날짜 자체는 물지 않는다 (dr:008).
+
     vol = _re.compile(r"대기\b|콜 대기|온사이트|딜 국면|→ 딜|R\d [화수목금월]|예정\)")
     if os.path.exists(idx):
         for i, line in enumerate(open(idx, encoding="utf-8"), 1):
             if line.startswith("- ") and vol.search(line):
-                # ID에 줄번호를 안 쓴다 — 위에 한 줄만 넣어도 전부 새 이슈가 됐다.
+                # Exclude line numbers from stable IDs.
                 m = _re.search(r"\]\(([a-z0-9-]+\.md)\)", line)
                 k = m.group(1) if m else _h.sha1(line.strip().encode()).hexdigest()[:8]
                 W(True, f"index-volatile:{k}",
                   f"[인덱스 휘발성] MEMORY.md:{i} {line.strip()[:80]}")
 
-    # 3) 메모리 파일 ↔ 인덱스 정합
+    # Check memory-file and index consistency.
     if os.path.exists(idx):
         text = open(idx, encoding="utf-8").read()
         files = {f for f in os.listdir(memory_dir)
                  if f.endswith(".md") and f != "MEMORY.md"}
         linked = set(_re.findall(r"\]\(([a-z0-9-]+\.md)\)", text))
+        # Count links in one level of *-index.md files directly linked by MEMORY.md as indexed.
+        via = {}  # Map a sub-index link to its source index for missing-target reports.
+        for sub in [x for x in linked if x.endswith("-index.md") and x in files]:
+            try:
+                sub_text = open(os.path.join(memory_dir, sub), encoding="utf-8").read()
+            except Exception as e:
+                W(True, f"subindex-unreadable:{sub}", f"[하위 색인 읽기 실패] {sub}: {e}")
+                continue
+            for x in _re.findall(r"\]\(([a-z0-9-]+\.md)\)", sub_text):
+                if x not in linked:
+                    via.setdefault(x, sub)
+        linked |= set(via)
         for f in sorted(files - linked):
             W(True, f"index-missing:{f}", f"[인덱스 누락] {f} — 파일은 있는데 인덱스 줄 없음")
         for f in sorted(linked - files):
-            W(True, f"index-ghost:{f}", f"[유령 인덱스] {f} — 인덱스 줄은 있는데 파일 없음")
+            src = via.get(f, "MEMORY.md")
+            W(True, f"index-ghost:{f}", f"[유령 인덱스] {f} — {src}에 줄은 있는데 파일 없음")
 
-    # 4) type:project 메모리 부패 후보 (14일 무갱신). 시간 유발이라 자문용.
+    # Old project-memory entries are advisory rot candidates.
     for f in sorted(os.listdir(memory_dir)) if os.path.isdir(memory_dir) else []:
         fp = os.path.join(memory_dir, f)
         if not f.endswith(".md") or f == "MEMORY.md":
@@ -871,15 +923,12 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
                 W(False, f"memory-rot:{f}",
                   f"[부패 후보] {f} — project형 {age}일 무갱신 (포인터화 검토)")
 
-    # 4b) 녹취 파이프라인. 전사만 하고 멈춘 것을 잡는다.
-    #     (2026-08-25 실측: 전사·결손복구까지 하고 정독을 안 해서 재료만 쌓였다.
-    #      건너뛸 수 있으면 워크플로우가 아니다.)
+    # Detect recordings that stopped before the required reading output.
     rec_root = os.path.join(root, "_private", "recordings")
     if os.path.isdir(rec_root):
         for name in sorted(os.listdir(rec_root)):
             rd = os.path.join(rec_root, name)
-            # watch_recordings 의 명명 규약(YYYY-MM-DD-슬러그)을 따르는 것만 본다.
-            # prep 같은 작업 폴더는 녹취가 아니다.
+            # Only date-slug folders following the recording adapter convention are recordings.
             if not os.path.isdir(rd) or not re.match(r"^\d{4}-\d{2}-\d{2}-", name):
                 continue
             try:
@@ -888,8 +937,7 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
                 continue
             if not any(f.endswith("-timestamped.txt") for f in files):
                 continue
-            # 정독을 이미 마친 것 (analysis.md 가 정독 산출이던 이전 판)은 제외한다.
-            # 도구 도입 전에 손으로 끝낸 건이 있다.
+            # Accept the previous analysis.md output convention for completed readings.
             if "analysis.md" in files and "linebyline" not in files \
                     and os.path.exists(os.path.join(rd, ".정독완료")):
                 continue
@@ -913,12 +961,7 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
                   "python3 tools/analyze_recording.py _private/recordings/{}".format(
                       name, name))
 
-    # 4c) 구글 드라이브 인박스. 올린 것은 무조건 정독까지 간다.
-    #     (인스턴스 규칙 2026-08-25: "inbox recording에 올리는건 무조건 정독하는거")
-    #     정독 여부는 판단 대상이 아니므로 게이트로 강제한다.
-    #     인박스 어댑터(tools/drive_inbox.py)는 개인 장비용이라 킷에 안 실린다. 어댑터가 없는
-    #     인스턴스에서는 이 검사 자체가 없는 것이지 실패가 아니다 (2026-09-17 문서 감사: 킷 클론의
-    #     `now.py check`가 매번 "인박스 검사 실패" 경고를 냈다).
+    # The optional inbox adapter requires reading completion for imported items. Skip the check when the adapter is absent.
     try:
         if os.path.join(root, "tools") not in sys.path:
             sys.path.insert(0, os.path.join(root, "tools"))
@@ -927,8 +970,7 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
         import drive_inbox as _di
         _path, _rows = _di.survey()
         if _path is None:
-            # 마운트를 못 찾는 것도 사건이다. 조용히 0건으로 넘어가면
-            # 인박스에 올린 것이 영영 안 보인다.
+            # Report an unavailable mount rather than treating it as an empty inbox.
             W(False, "drive-inbox-unmounted",
               "[드라이브 인박스 없음] 구글 드라이브 데스크톱 동기화 확인 필요. "
               "python3 tools/drive_inbox.py --list")
@@ -944,7 +986,7 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
         W(False, "drive-inbox-error",
           "[드라이브 인박스 검사 실패] {}".format(_e))
 
-    # 5) NOW 나이
+    # Check NOW freshness.
     a = _age_days(M.NOW_PATH)
     if a is None:
         W(True, "now-absent", f"[NOW 부재] {M.NOW_PATH}")
@@ -953,9 +995,7 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
     elif _snapshot_stale("public", portable=portable):
         W(True, "now-input-newer", "[NOW 입력이 더 새로움] journal commit 뒤 snapshot publish 미완")
 
-    # 6) journal 나이. **월 경계를 부재와 가르는 이유** (codex 라운드 4): journal 경로는
-    #    월별이라 매달 1일이면 이번 달 파일이 없다. 그것만으로 hard issue를 내면 달력이
-    #    게이트를 막는다. 직전 달 것이 신선하면 정상 rollover(자문), 아예 하나도 없으면 부재(gated).
+    # Use the previous month's journal during normal rollover; distinguish a recent prior journal from total absence.
     jp = M.journal_path()
     ja = _age_days(jp)
     if ja is None:
@@ -997,7 +1037,12 @@ def main():
     if cmd == "context":
         return context(public_only="--public-only" in sys.argv)
     if cmd == "precompact":
-        return precompact()
+        args = sys.argv[2:]
+        runtime = None
+        if "--runtime" in args:
+            i = args.index("--runtime")
+            runtime = args[i + 1] if i + 1 < len(args) else None
+        return precompact(runtime)
     print(f"모르는 명령: {cmd}\n{__doc__}")
     return 1
 

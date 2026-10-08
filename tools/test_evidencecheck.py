@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""evidencecheck 공개 CLI 계약의 회귀 테스트."""
+"""Regression tests for the public evidencecheck CLI."""
 
 import os
 import pathlib
@@ -147,6 +147,7 @@ def test_ok():
 
 def test_other():
     pass
+
 
 TESTS = [test_other]
 
@@ -307,9 +308,7 @@ evidence: none
 
 
 def test_refresh_reuses_fresh_evidence_for_the_same_run():
-    """The gate re-runs cited suites only when the inherited log lacks a fresh record of the same run ID
-    (2026-09-18: every fixture gate run re-executed all cited suites; CI's regression step went from
-    2.5 to 32 minutes and one cell hit the 40-minute limit)."""
+    """Re-run cited suites only when the inherited log lacks a fresh record for the same run ID."""
     sys.path.insert(0, str(ROOT / "tools"))
     import gate as G
     tmp = tempfile.TemporaryDirectory(prefix="evidence-reuse-")
@@ -348,31 +347,58 @@ def test_gate_consumes_evidencecheck_issues_end_to_end():
     try:
         repo = pathlib.Path(tmp.name) / "repo"
         repo.mkdir()
-        listed = subprocess.run(
-            ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True
-        ).stdout.decode().split("\0")
-        new_engine_files = {
-            "system/engine-inventory.txt",
-            "system/enforcement-matrix.md",
-            "system/evidence-schema.md",
-            "system/test-matrix.yaml",
-            "tools/evidencecheck.py",
-            "tools/enforce.py",
-            "tools/i18n.py",
-            "tools/test_egress.py",
-            "tools/test_enforce.py",
-            "tools/test_evidencecheck.py",
-            "tools/test_devtree_gate.py",
-            "tools/test_instance_shape.py",
-            "tools/test_language.py",
-            "tools/test_matrix_check.py",
-            "tools/testlib.py",
-        }
-        for rel in sorted(set(path for path in listed if path) | new_engine_files):
+        kit_tree = (ROOT / "system/engine-inventory.txt").is_file()
+        if kit_tree:
+            import manifest_build
+            # Cited suites require source provenance from a real HEAD.
+            # Keep that history and overlay the prospective delivery inventory.
+            cloned = subprocess.run(
+                ["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(repo)],
+                capture_output=True, text=True,
+            )
+            assert cloned.returncode == 0, cloned.stdout + cloned.stderr
+            paths = sorted(manifest_build.git_paths())
+            previous = subprocess.run(
+                ["git", "-C", str(repo), "ls-files", "-z"], check=True, capture_output=True,
+            ).stdout
+            for raw in previous.split(b"\0"):
+                if raw and raw.decode("utf-8") not in paths:
+                    (repo / raw.decode("utf-8")).unlink()
+        else:
+            # An installed instance has unrelated documents and local evidence.
+            # Exercise the gate with synthetic evidence, not a copy of that workspace.
+            paths = ["tools/" + name for name in (
+                "gate.py", "enforce.py", "memlib.py", "i18n.py", "now.py",
+                "linkcheck.py", "evidencecheck.py", "manifest_build.py",
+                "testlib.py", "install_hooks.sh", "precommit-hook.sh")]
+            import json
+            _write(repo / ".gitignore", "_private/\nstate/\nsystem/memory-config.json\n")
+            _write(repo / "README.md", "# Gate fixture\n")
+            _write(repo / "system/memory-config.json", json.dumps({
+                "schema_version": 4, "instance": {"name": "fixture", "context": "personal"},
+                "tracks": [{"key": "system", "name": "System", "canonical": "README.md"}],
+                "journal_visibility": {"public_tracks": ["system"], "legacy_cutoff": None,
+                                       "legacy_public_tracks": []},
+            }))
+            marker = "`test:tools/test_sample.py::test_ok`"
+            _write(repo / "system/kit-decisions.md",
+                   "### DR-001 fixture (2026-09-17 · active)\nContext: " + marker + ".\n")
+            _write(repo / "CHANGELOG.md", "## v0\n\n### [Note] fixture\nEvidence: " + marker + ".\n")
+            _write(repo / "system/enforcement-matrix.md",
+                   "| Contract | Status | Evidence |\n|---|---|---|\n| fixture | ENFORCED | "
+                   + marker + " |\n")
+            _write(repo / "tools/test_sample.py",
+                   "from testlib import run_test\n"
+                   "def test_ok():\n    assert 1 + 1 == 2\n"
+                   "if __name__ == '__main__':\n"
+                   "    run_test(test_ok, __file__)\n    print('PASS test_ok')\n")
+        for rel in paths:
             source = ROOT / rel
-            if not source.is_file():
-                continue
             target = repo / rel
+            if not source.is_file():
+                if target.is_file():
+                    target.unlink()
+                continue
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
         env = dict(os.environ)
@@ -430,13 +456,24 @@ def test_gate_consumes_evidencecheck_issues_end_to_end():
             env=env,
         )
         if hook.returncode != 0:
-            manifest_test = subprocess.run(
-                [sys.executable, "tools/test_manifests.py"], cwd=repo,
-                capture_output=True, text=True, env=env,
-            )
-            raise AssertionError(
-                hook.stdout + hook.stderr + "\n" + manifest_test.stdout + manifest_test.stderr
-            )
+            detail = hook.stdout + hook.stderr
+            if (repo / "tools/test_manifests.py").is_file():
+                manifest_test = subprocess.run(
+                    [sys.executable, "tools/test_manifests.py"], cwd=repo,
+                    capture_output=True, text=True, env=env,
+                )
+                detail += "\n" + manifest_test.stdout + manifest_test.stderr
+            raise AssertionError(detail)
+        if not kit_tree:
+            matrix = repo / "system/enforcement-matrix.md"
+            matrix.write_text(matrix.read_text() + "\n`test:tools/test_sample.py::test_missing`\n")
+            staged = subprocess.run(["git", "add", "system/enforcement-matrix.md"],
+                                    cwd=repo, capture_output=True, text=True, env=env)
+            assert staged.returncode == 0, staged.stderr
+            blocked = subprocess.run([str(repo / ".git/hooks/pre-commit")], cwd=repo,
+                                     capture_output=True, text=True, env=env)
+            assert blocked.returncode != 0, "a missing evidence target passed the installed hook"
+            assert "evidencecheck" in blocked.stderr and "test_missing" in blocked.stderr, blocked.stderr
     finally:
         tmp.cleanup()
 
@@ -469,7 +506,21 @@ def test_tree_with_partial_targets_reports_missing_files():
         tmp.cleanup()
 
 
+def test_english_context_uses_same_evidence_boundary():
+    tmp, root = _fixture()
+    try:
+        path = root / "system/kit-decisions.md"
+        for label in ("Context:", "Reason:", "맥락:"):
+            path.write_text(f"### DR-001 fixture\nDecision: rule.\n{label} evidence: none\nVerification: separate.\n")
+            assert "required|kit-decisions|DR-001" not in _run(root, "--issues").stdout
+            path.write_text(f"### DR-001 fixture\n{label} no evidence here.\nVerification: evidence: none\n")
+            assert "required|kit-decisions|DR-001" in _run(root, "--issues").stdout
+    finally:
+        tmp.cleanup()
+
+
 TESTS = [
+    test_english_context_uses_same_evidence_boundary,
     test_defined_but_not_run_is_issue,
     test_run_log_allows_test_marker,
     test_missing_run_log_fails_closed,

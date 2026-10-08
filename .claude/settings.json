@@ -23,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/now.py\" precompact 2>/dev/null || date \"+%FT%T precompact 훅 실패\" >> \"$CLAUDE_PROJECT_DIR/state/.hook-errors.log\""
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/now.py\" precompact --runtime claude 2>/dev/null || date \"+%FT%T precompact 훅 실패\" >> \"$CLAUDE_PROJECT_DIR/state/.hook-errors.log\""
           }
         ]
       }

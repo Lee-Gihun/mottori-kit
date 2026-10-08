@@ -139,9 +139,7 @@ def _forbidden_in_index(root: Path, path: str, head_paths: set[str], has_head: b
     if path in FORBIDDEN_EXACT or path.startswith(FORBIDDEN_PREFIXES):
         if has_head:
             return path not in head_paths
-        # Initial commit: there is no history to protect yet, so the only signal is the repo's own
-        # ignore rules (a force-add). Without this an origin-style instance that tracks its public
-        # state could never make its first commit (2026-09-18: the evidencecheck e2e fixture).
+        # Without HEAD, use force-add detection so an instance may create its initial public state.
         return _ignored_by_rules(root, path)
     return False
 
@@ -154,8 +152,7 @@ def index_issues(root: Path = ROOT) -> list[tuple[str, str]]:
     head_paths = _head_paths(root)
     has_head = subprocess.run(["git", "rev-parse", "--verify", "HEAD"], cwd=root,
                               capture_output=True, check=False).returncode == 0
-    # symlink·submodule 규칙은 이번 커밋이 올리는 항목(HEAD 대비 변경분)에만 건다. HEAD에 이미 있는 항목까지
-    # 걸면 과거 트리(예: 원 인스턴스 archive/의 추적 중인 .md symlink)가 모든 커밋을 영구히 막는다 (2026-09-18 실측).
+    # Apply symlink and submodule restrictions to newly staged changes, not unchanged legacy entries.
     changed = set(_index_changes(root))
     for mode, stage, path in entries:
         if stage != "0":
@@ -220,8 +217,7 @@ def cmd_ready(root: Path) -> int:
 
 
 def is_presetup_kit_tree(root: Path = ROOT) -> bool:
-    """A kit checkout that was never set up: no instance config, but the installer and its template exist.
-    It is not an instance, so instance.context cannot and need not be judged (2026-09-18: the kit dev tree)."""
+    """Recognize a kit checkout before setup by its installer and config template. Without instance config, no instance context is available to validate."""
     return (not (root / "system" / "memory-config.json").is_file()
             and (root / "setup.sh").is_file()
             and (root / "templates" / "memory-config.json").is_file())

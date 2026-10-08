@@ -60,12 +60,11 @@
 - **역산**과 직렬: 역산이 찾은 사망 조건 중 복구 불가만 골라내는 것이 이 렌즈다.
 - **되먹임**과 접속: 흡수상태로의 추락은 대부분 강화 루프를 탄다 — 루프 감지가 조기경보다.
 
-## 시금석 (사용 원장 — 적용할 때마다 한 줄 추가)
+## 적용 기록
 
-*(사용 원장은 인스턴스마다 따로 쌓인다. 이 렌즈를 쓸 때마다 한 줄씩 여기 append.)*
+실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
 
 ## 원전
 
 Kelly (1956) · Ole Peters의 ergodicity economics · Taleb, *Antifragile* (barbell과 ruin) ·
 Bezos 주주서한 (one-way / two-way doors).
-

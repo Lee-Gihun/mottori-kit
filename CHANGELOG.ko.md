@@ -1,4 +1,4 @@
-<!-- source: CHANGELOG.md sha256:7740292adc1905cfc373256553d04a939f2b64d16dce5a93a9e41dfb925fe5dd source-of-truth: en -->
+<!-- source: CHANGELOG.md sha256:5543d881718ba181081192b36278c4ef438f09caa41081ae5b60f2b82cc8a7bc source-of-truth: en -->
 # CHANGELOG
 
 **이 파일의 형식은 "무엇이 추가됐다"가 아니라 "기존 인스턴스가 무엇을 해야 하는가"다.**
@@ -10,6 +10,26 @@ system/instance-rules.md, system/decisions.md, system/rituals.local.md, `state/`
 
 각 항목은 `[해야 함]`, `[알아둘 것]`, `[자동]` 중 하나를 단다.
 `[해야 함]`이 하나라도 있으면 pull 뒤에 `python3 tools/doctor.py`가 FAIL을 낸다.
+
+---
+
+## v0.9 · 2026-10-08 (기억과 검토된 엔진 이식)
+
+### `[알아둘 것]` 엔진 갱신과 인스턴스 설정 확인은 별개
+
+근거: `decision:KIT-DR-018`.
+
+킷을 clone한 인스턴스는 `git pull` 뒤 `python3 tools/doctor.py`를 실행한다. schema 변경 안내가 나오면 문서화된 setup 절차를 따른다. worker 묶음만 받는 인스턴스는 `bash /path/to/kit/tools/sync_engine.sh /path/to/instance`를 실행한다. worker와 직접 의존성을 갱신하고 기존 상태 도구 소비자를 확인하며 실패하면 되돌린다. 전체 킷 설치·인스턴스 설정 변경·일정 등록은 하지 않는다.
+
+새 설치에는 `~/.codex/archived_sessions`가 `codex-jsonl` 소스로 추가된다. 기존 `episodic_sources` 배열은 인스턴스 정본이라 pull만으로 확장하지 않는다. 보관 세션을 검색하려면 기존 항목을 유지하고 `templates/memory-config.json`의 해당 항목을 추가한 뒤 `python3 tools/recall.py sessions`로 확인한다. 활성·보관 세션에 같은 인스턴스·발화자 필터와 native-ID 중복 제거를 적용한다. 회상 시각은 실행 머신의 로컬 시간대로 표시한다.
+
+### `[알아둘 것]` 인증 정보와 적용 기록은 인스턴스 소유
+
+근거: `decision:KIT-DR-018`.
+
+선택 도구 `tools/claude_auth.py`는 명시적으로 저장한 헤드리스 Claude 인증 정보를 사용할 수 있다. 설치는 인증 정보를 만들지 않으며 기존 로그인도 유효하다. 저장 credential은 Claude worker에만 전달하고 각 worker는 다른 공급자의 credential 환경변수를 제거한다. 읽기 선언은 자기 보고이며 읽기 sandbox가 아니다. 자료 동일성과 쓰기 범위는 별도로 검사한다.
+
+사고 기록은 `templates/deep-pass-ledger.md`에서 시작해 인스턴스 private 영역에 둔다. 추적되는 렌즈 정의에는 적지 않는다. 토론은 `templates/debate-round.md`를 복사해 시작할 수 있다. 킷은 자동 적용 루프를 설치하거나 다른 인스턴스의 커밋 권한을 상속하지 않는다. 생성 기억 지도 UI는 한국어이며 번역 pending을 명시한다. 선택 adapter가 없으면 UNAVAILABLE이다.
 
 ---
 

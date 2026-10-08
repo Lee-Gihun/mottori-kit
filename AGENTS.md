@@ -3,8 +3,8 @@ Korean: `AGENTS.ko.md`
 # Session instructions
 
 This workspace is not a codebase. It is a **work repository**. It runs multiple tracks in one place. Sessions
-continue indefinitely, and context is compacted periodically. The seven rules below have proved their value by
-measurement under those conditions.
+continue indefinitely, and context is compacted periodically. The core rules preserve data boundaries,
+source attribution, and continuity across sessions.
 
 Instance-specific rules, which are true only in this workspace, live in `system/instance-rules.md`. If that file
 does not exist, the rules have not been written yet. Copy `templates/instance-rules.md` and complete it.
@@ -42,10 +42,10 @@ Do not keep rules without evidence.
 
 3. **Look things up before making claims. Say when you do not know.** For personal facts, use
    `python3 tools/rec.py find` plus the hotset. For original past statements, use
-   `python3 tools/recall.py find`. Before prescribing an action, ask what has already been tried. The owner's own
+   `python3 tools/recall.py find`. Before prescribing an action, first look up what has already been tried, then ask only about remaining unknowns. The owner's own
    statement is the origin for the owner's decisions, preferences, and plans. Summaries and memories are
    derivative.
-   *(Why: attribution bias was measured four times. Guessing contaminates the source of truth.)*
+   *(Why: attribution needs a retrievable source. Guessing contaminates the source of truth.)*
 
 4. **Before returning to a deep thread, read its dossier.** List registered threads with
    `python3 tools/now.py threads`. Before leaving a deep session, append a five-line delta.
@@ -60,13 +60,15 @@ Do not keep rules without evidence.
 
 6. **Before a large task, read `system/WORKING-WITH-AI.md`.** Large tasks include exhaustive collection,
    large-scale parallel work, and long-running work.
-   *(Why: it is an instrument, not a summary. The framework was verified in a run of 660 items.)*
+   *(Why: large tasks need explicit success criteria, evidence scope, and a way to stop and resume.)*
 
 7. **Do not quietly change a PRD or decision record during conversation.** Change policy in the document and add
    a decision record to `system/decisions.md`.
-   *(Why: unrecorded decisions cause drift and repeated discussion. This rule came from that measured failure.)*
+   *(Why: unrecorded decisions leave later sessions unable to distinguish past and current requirements.)*
 
 ## Conditional loading
+
+- Code, scripts, comments, and docstrings: `system/code-writing.md`, when editing source files
 
 Read these only when the stated situation applies.
 
@@ -81,6 +83,7 @@ Read these only when the stated situation applies.
 
 ## Why there are seven always-on rules
 
-The number of instructions followed at once reaches a limit around k=5 to 6 (`2608.12426`). Adding more makes
-each rule less reliable. The default destination for a new rule is therefore a conditionally loaded document. To
-promote a rule into the always-on core, demote an existing one.
+Seven is the operational default for keeping important boundaries and recovery rules always available. It is
+not a universal limit on model ability. Put a new rule in a conditionally loaded document by default. To
+promote a rule into the always-on core, demote an existing one and check what failure the new rule prevents
+and whether it duplicates an existing obligation.

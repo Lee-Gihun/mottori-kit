@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-close regression pins for H1 bypasses and S2 Git egress paths."""
+"""Test fail-closed gate controls and Git egress boundaries."""
 from __future__ import annotations
 
 import contextlib
@@ -159,7 +159,7 @@ def test_S2_G1_G2_force_add_and_work_tracked_changes_are_blocked() -> None:
 
 
 def test_tracked_public_state_is_not_forbidden() -> None:
-    """Tracked public state is allowed by the original instance contract; _private/ never is."""
+    """Personal instances may track public state; the _private/ tree is always forbidden."""
     root = _repo("personal")
     try:
         (root / ".gitignore").write_text("/_private/\n", encoding="utf-8")
@@ -502,74 +502,102 @@ def test_H03_H04_stop_hook_active_never_skips_a_pending_gate() -> None:
 
 def test_sync_inventory_is_single_source_and_partial_copy_rolls_back() -> None:
     if not (HERE / "sync_engine.sh").is_file():
-        # The stamped kit-to-instance copier exists only in the kit (instance kit_sync NOT_SYNCED).
-        print("- sync inventory: not applicable here (no tools/sync_engine.sh: installed instance)")
+        print("- sync inventory: not applicable to an installed instance")
         return
+    import fresh_worker
     instance = Path(tempfile.mkdtemp(prefix="sync-rollback-"))
     tools = instance / "tools"
     tools.mkdir()
-    names = ("fresh_worker.py", "test_fresh_worker.py", "ask_codex.sh")
+    fake_bin = instance / "bin"
+    fake_bin.mkdir()
     before = {}
     try:
-        for name in names:
+        for name in fresh_worker.SYNC_FILES[::2]:
             content = f"old {name}\n"
             (tools / name).write_text(content, encoding="utf-8")
             before[name] = content
-        (tools / "memlib.py").write_text("raise RuntimeError('verification fail')\n", encoding="utf-8")
+        wrapper = fake_bin / "python3"
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            'if [ "$#" -eq 4 ] && [ "$1" = "-" ]; then\n'
+            '  echo reached > "$SYNC_VERIFY_MARKER"\n'
+            "  exit 74\n"
+            "fi\n"
+            'exec "$REAL_PYTHON" "$@"\n',
+            encoding="utf-8",
+        )
+        wrapper.chmod(0o755)
+        marker = fake_bin / "verified"
+        env = dict(os.environ, PATH=str(fake_bin) + os.pathsep + os.environ.get("PATH", ""),
+                   REAL_PYTHON=sys.executable, SYNC_VERIFY_MARKER=str(marker))
         run = subprocess.run(
             ["bash", str(HERE / "sync_engine.sh"), str(instance)], cwd=ROOT,
-            text=True, capture_output=True,
+            text=True, capture_output=True, env=env,
         )
-        assert run.returncode != 0
+        assert run.returncode != 0, run.stdout
+        assert marker.exists(), (run.stdout, run.stderr)
         assert all((tools / name).read_text(encoding="utf-8") == content
                    for name, content in before.items())
+        assert all(not (tools / name).exists() for name in fresh_worker.SYNC_FILES if name not in before)
+        assert not list(tools.glob(".sync-engine.*"))
         source = (HERE / "sync_engine.sh").read_text(encoding="utf-8")
-        assert "f.SYNC_FILES" in source
+        assert "SYNC_FILES" in source
         assert "for f in fresh_worker.py" not in source
     finally:
         shutil.rmtree(instance, ignore_errors=True)
 
 
 def test_sync_second_destination_copy_failure_rolls_back_first_copy() -> None:
-    instance = Path(tempfile.mkdtemp(prefix="sync-copy-failure-"))
-    fake_bin = Path(tempfile.mkdtemp(prefix="sync-fake-cp-"))
+    if not (HERE / "sync_engine.sh").is_file():
+        print("- sync publication: not applicable to an installed instance")
+        return
+    import fresh_worker
+    instance = Path(tempfile.mkdtemp(prefix="sync-publish-failure-"))
+    fake_bin = Path(tempfile.mkdtemp(prefix="sync-fake-python-"))
     tools = instance / "tools"
     tools.mkdir()
-    names = ("fresh_worker.py", "test_fresh_worker.py", "worker_batch.py",
-             "test_worker_batch.py", "ask_codex.sh")
     before = {}
     try:
-        for name in names:
+        for name in fresh_worker.SYNC_FILES[::2]:
             content = f"old {name}\n"
             (tools / name).write_text(content, encoding="utf-8")
             before[name] = content
-        wrapper = fake_bin / "cp"
+        wrapper = fake_bin / "python3"
         wrapper.write_text(
             "#!/bin/sh\n"
-            "dest=\nfor arg in \"$@\"; do dest=$arg; done\n"
-            "case \"$dest\" in\n"
-            "  \"$SYNC_FAIL_ROOT\"/tools/*)\n"
-            "    n=0; test ! -f \"$SYNC_FAIL_COUNT\" || n=$(cat \"$SYNC_FAIL_COUNT\")\n"
-            "    n=$((n + 1)); echo \"$n\" > \"$SYNC_FAIL_COUNT\"\n"
-            "    test \"$n\" -ne 2 || exit 73\n"
-            "    ;;\n"
-            "esac\n"
-            "exec \"$REAL_CP\" \"$@\"\n",
+            'if [ "$#" -eq 3 ] && [ "$1" = "-" ]; then\n'
+            '  case "$2" in "$SYNC_FAIL_ROOT"/tools/.sync-engine.*/new/*)\n'
+            '    n=0; test ! -f "$SYNC_FAIL_COUNT" || n=$(cat "$SYNC_FAIL_COUNT")\n'
+            '    n=$((n + 1)); echo "$n" > "$SYNC_FAIL_COUNT"\n'
+            '    if [ "$n" -eq 2 ]; then\n'
+            '      cmp "$SYNC_SOURCE_FIRST" "$SYNC_DEST_FIRST" && echo replaced > "$SYNC_FIRST_MARKER"\n'
+            "      exit 73\n"
+            "    fi\n"
+            "  esac\n"
+            "fi\n"
+            'exec "$REAL_PYTHON" "$@"\n',
             encoding="utf-8",
         )
         wrapper.chmod(0o755)
+        marker = fake_bin / "first-replaced"
         env = dict(os.environ,
                    PATH=str(fake_bin) + os.pathsep + os.environ.get("PATH", ""),
-                   REAL_CP=shutil.which("cp") or "/bin/cp",
-                   SYNC_FAIL_ROOT=str(instance),
-                   SYNC_FAIL_COUNT=str(fake_bin / "count"))
+                   REAL_PYTHON=sys.executable,
+                   SYNC_FAIL_ROOT=str(instance.resolve()),
+                   SYNC_FAIL_COUNT=str(fake_bin / "count"),
+                   SYNC_SOURCE_FIRST=str(HERE / fresh_worker.SYNC_FILES[0]),
+                   SYNC_DEST_FIRST=str(tools / fresh_worker.SYNC_FILES[0]),
+                   SYNC_FIRST_MARKER=str(marker))
         run = subprocess.run(
             ["bash", str(HERE / "sync_engine.sh"), str(instance)], cwd=ROOT,
             text=True, capture_output=True, env=env,
         )
-        assert run.returncode != 0
+        assert run.returncode != 0, run.stdout
+        assert marker.exists(), (run.stdout, run.stderr)
         assert all((tools / name).read_text(encoding="utf-8") == content
                    for name, content in before.items())
+        assert all(not (tools / name).exists() for name in fresh_worker.SYNC_FILES if name not in before)
+        assert not list(tools.glob(".sync-engine.*"))
     finally:
         shutil.rmtree(fake_bin, ignore_errors=True)
         shutil.rmtree(instance, ignore_errors=True)

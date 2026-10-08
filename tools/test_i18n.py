@@ -42,7 +42,7 @@ def run(*args, cwd=ROOT, lang="en"):
 def test_english_surfaces():
     # In an installed instance (without setup.sh), user data such as journal and track names may
     # use that language, so "zero Hangul in EN output" cannot be measured and no setup fixture can
-    # be built. Record the skip in the summary line (KIT-DR-012: judge only from receipts).
+    # be built. Report the skip explicitly in the summary.
     if not os.path.isfile(os.path.join(ROOT, "setup.sh")):
         SKIPPED.append("EN surfaces (installed instance without setup.sh: user data may be Korean; "
                        "covered by tools/test_fresh_install.sh with MOTTORI_LANG=en in the kit)")

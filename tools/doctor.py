@@ -1,17 +1,10 @@
 #!/usr/bin/env python3
-"""doctor — 설치 검증기. 이 인스턴스에서 기계장치가 실제로 살아 있는가를 잰다.
+"""Check installation, configuration, hooks, and recorded verification.
 
-왜 있나. 훅은 fail-safe라 실패해도 조용히 exit 0 한다 (PRD §10.1 — 훅이 세션을 막으면
-안 되므로 이 설계 자체는 옳다). 대가로 **설치된 것처럼 보이는데 죽어 있는 상태**가 가능하다.
-2026-08-24 이식 작업에서 실측: 경로 하드코딩 8곳 중 훅 2곳이 정확히 이 모드로 죽는다.
-doctor는 그 침묵을 깨는 쪽 계기다.
+Report unmeasured capabilities separately from automated checks. Hook declarations and successful commands do not prove delivery to a model.
 
-원칙 하나. **검사 못 하는 것을 숨기지 않는다.** 자동 검사 가능한 것만 보고하면
-"전부 PASS"가 거짓말이 된다. MANUAL 칸이 이 도구의 반증 가능 칸이다 (WORKING-WITH-AI §4).
-
-사용: python3 tools/doctor.py [--verbose] [--json] [--release]
-종료코드: FAIL이 하나라도 있으면 1.
-"""
+Usage: python3 tools/doctor.py [--verbose] [--json] [--release]
+Exit 1 when any check fails."""
 import json
 import os
 from pathlib import Path
@@ -43,7 +36,7 @@ def check(name, fn):
 
 
 def sh(*cmd, cwd=ROOT):
-    # 내부 호출 표시 — 검사기가 자기 실행 기록을 남기지 않게 (memlib.log_run 참조)
+    # Internal checks must not create explicit-run evidence.
     env = dict(os.environ, MOTTORI_INTERNAL_RUN="1")
     return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, env=env)
 
@@ -99,7 +92,7 @@ def _hook_summary(report, runtime=None):
     return " · ".join(parts) + " · " + evidence
 
 
-# ----------------------------------------------------------------- 런타임
+
 
 def c_python():
     v = sys.version_info
@@ -135,12 +128,11 @@ def c_git():
     return PASS, r.stdout.strip() + f" · {v}"
 
 
-# ------------------------------------------------------------------ 배선
+
 
 def c_memlib():
     import memlib as M
-    # 같은 디렉토리의 두 표기(심볼릭 링크 경유 vs 물리 경로)는 불일치가 아니다 (2026-09-17 실측: macOS
-    # /var → /private/var 아래 임시 클론에서 setup이 export한 논리 경로와 도구의 realpath가 달랐다).
+    # Resolve symlinks before comparing roots; /var and /private/var may name the same directory.
     if os.path.realpath(M.ROOT) != os.path.realpath(ROOT):
         return FAIL, t("doctor.root_mismatch", memlib=M.ROOT, actual=ROOT)
     return PASS, f"ROOT={M.ROOT}"
@@ -165,12 +157,7 @@ def c_config():
 
 
 def c_transcripts():
-    """전사 경로 유도 (DR-025). 여기가 조용히 틀리면 recall이 0건을 반환하고도 정상 종료한다.
-
-    부재의 의미가 인스턴스 나이에 따라 다르다. 갓 클론한 곳은 세션을 안 돌렸으니 없는 게
-    정상이고, 오래 쓴 곳에 없으면 유도가 틀린 것이다. 첫 설치마다 FAIL을 띄우면
-    사람이 FAIL을 무시하게 된다 — 계측기가 자기 신호를 죽이는 실패다.
-    """
+    """Check the derived transcript directory. Absence is normal before a first session but may indicate invalid discovery in an established instance."""
     import memlib as M
     if not os.path.isdir(M.TRANSCRIPTS):
         fresh = len(M.parse_journal()) < 5
@@ -205,7 +192,7 @@ def c_now():
             (FAIL, t("doctor.now_oversize", size=size, limit=M.NOW_MAX_BYTES)))
 
 
-# ------------------------------------------------------------------- 훅
+
 
 HOOK_FILES = {"claude": (".claude", "settings.json"), "codex": (".codex", "hooks.json")}
 
@@ -224,7 +211,7 @@ def _hook_cmds(runtime="claude"):
 
 
 def _wiring(runtime):
-    """JSON declaration만 본다. trust/firing/effect를 이 결과로 승격하지 않는다."""
+    """Inspect JSON declarations only; do not infer trust, firing, or model effect."""
     cmds = _hook_cmds(runtime)
     if cmds is None:
         return WARN, t("doctor.hook_file_missing", path="/".join(HOOK_FILES[runtime]))
@@ -272,7 +259,7 @@ def c_hook_wiring_codex():
 
 
 def c_hook_codex_armed():
-    """Official hooks/list를 통해 enabled/trustStatus/currentHash까지만 확인한다."""
+    """Read enabled, trustStatus, and currentHash through the official hooks/list API."""
     try:
         import hookdiag
         entry = hookdiag.codex_hooks_list(ROOT)
@@ -290,9 +277,7 @@ def c_hook_codex_armed():
     if entry.get("errors"):
         return FAIL, detail + f" · loader errors={entry['errors']}"
     if required:
-        # 선언·명령은 유효한데 Codex가 아직 신뢰를 안 준 상태다. 신뢰 승인은 사람이 이 디렉토리에서
-        # codex를 한 번 띄워야만 생기므로(CHECKLIST C) 기계가 못 고치는 FAIL이 된다. 안 고쳐지는
-        # FAIL은 사람이 FAIL 자체를 무시하게 만든다 (2026-08-24 교훈). 그래서 warn + 할 일.
+        # Untrusted but valid wiring needs a manual first runtime launch; report a warning with that action.
         return WARN, (detail + " · unarmed: " + ", ".join(required)
                       + t("doctor.codex_unarmed"))
     if report["guard"]["declared"] and not report["guard"]["matcher_reachable"]:
@@ -301,10 +286,7 @@ def c_hook_codex_armed():
 
 
 def c_hook_codex_run():
-    """Codex hook command만 직접 실행한다. dispatcher/trust/model effect 검사는 아니다.
-
-    Codex 훅은 CLAUDE_PROJECT_DIR을 못 받는다 — git root 폴백이 실제로 도는지 잰다.
-    서브디렉토리에서도 인스턴스 루트를 잡아야 한다 (여기가 틀리면 조용히 남의 NOW를 읽는다)."""
+    """Execute the declared Codex hook command directly. This checks root resolution, including from subdirectories, but not dispatcher firing, trust, or model effect."""
     cmds = _hook_cmds("codex") or {}
     cs = cmds.get("SessionStart") or []
     if not cs:
@@ -331,7 +313,7 @@ def c_hook_codex_run():
 
 
 def c_hook_success():
-    """SessionStart 훅의 성공 분기가 실제로 유효 JSON을 내는가 (훅 커맨드 그대로 실행)."""
+    """Execute the declared SessionStart command and validate its success-path JSON."""
     cmds = _hook_cmds() or {}
     cs = cmds.get("SessionStart") or []
     if not cs:
@@ -346,8 +328,7 @@ def c_hook_success():
     if ctx.startswith("[kit]"):
         import memlib as M
         if not os.path.exists(M.CONFIG_PATH):
-            # setup 전엔 config·NOW가 없어 fallback이 뜨는 것이 정상이다. 고장과 미초기화를 가른다
-            # (2026-09-17 독립 감사 H).
+            # Missing config or NOW before setup is uninitialized state, not a broken installed hook.
             return WARN, t("doctor.pre_setup_failure")
         tail = (r.stderr.strip().splitlines() or [""])[-1][:160]
         stderr = f" · stderr: {tail}" if tail else ""
@@ -357,7 +338,7 @@ def c_hook_success():
 
 
 def c_hook_failure():
-    """실패 분기도 유효 JSON이어야 한다. 아니면 훅이 죽을 때 두 번 죽는다."""
+    """Require valid JSON on the hook failure path as well."""
     cmds = _hook_cmds() or {}
     cs = cmds.get("SessionStart") or []
     if not cs:
@@ -490,7 +471,7 @@ def c_precompact_codex():
 
 
 def c_global_hook():
-    """UserPromptSubmit 타임스탬프 훅은 전역 설정에 산다 — 클론으로 안 따라온다."""
+    """Check the global UserPromptSubmit timestamp hook, which is not cloned with the repo."""
     p = os.path.expanduser("~/.claude/settings.json")
     if not os.path.exists(p):
         return WARN, t("doctor.global_missing")
@@ -505,7 +486,7 @@ def c_global_hook():
 
 
 def c_precommit_install():
-    """active hook path의 설치본을 tracked template과 exact 비교한다. 절대 복구하지 않는다."""
+    """Compare active installed hooks with tracked templates without repairing them."""
     script = os.path.join(ROOT, "tools", "install_hooks.sh")
     if not os.path.exists(script):
         return WARN, t("doctor.installer_missing")
@@ -527,24 +508,17 @@ def c_commands():
     return PASS, "/" + " /".join(got)
 
 
-# ---------------------------------------------------------------- 도구 동작
+
 
 def c_tools_run():
-    """도구가 import·실행되는가. render는 생성물을 덮으므로 check만 돌린다.
-
-    now.py check 는 **계약 경로(--issues)로 부른다.** 맨몸 경로는 경고 수를 종료코드로 쓰는
-    사람용 출력이라, 드리프트 경고 2건을 "도구가 안 돈다"로 오독해 FAIL이 떴다 (2026-08-26
-    실측). 종료코드는 "측정이 됐는가"만 뜻한다 — DR-039 계약 v2.
-    """
+    """Run checker entrypoints through their machine protocol. Use check, not render, to avoid overwriting generated state. A successful measurement is distinct from an issue-free result."""
     bad = []
     for args in (["tools/now.py", "check", "--issues"], ["tools/linkcheck.py"], ["tools/coherence.py", "--quiet"]):
         r = sh(sys.executable, *args)
-        if r.returncode not in (0, 1):   # coherence·linkcheck는 문제 발견 시 1을 낸다
+        if r.returncode not in (0, 1):   # These tools use exit 1 for reported findings.
             bad.append(f"{args[0]} exit={r.returncode} {r.stderr.strip()[:80]}")
         elif "--issues" in args:
-            # 종료코드만 보면 크래시를 못 잡는다 — 파이썬 미포착 예외도 1이고 그건 허용치 안이다.
-            # 계약 v2가 이미 답을 갖고 있다: `#issues N` 트레일러가 **마지막 줄**에 있어야
-            # 측정이 실제로 끝난 것이다 (DR-039). 2026-08-26 음성 시험에서 드러난 구멍.
+            # Require the final #issues trailer: exit 1 alone cannot distinguish findings from a crash.
             last = (r.stdout.strip().splitlines() or [""])[-1]
             if not re.match(r"^#issues \d+$", last):
                 bad.append(t("doctor.trailer_missing", tool=args[0], last=last[:40]))
@@ -552,8 +526,7 @@ def c_tools_run():
 
 
 def c_links():
-    """**결과를 본다.** 실행 여부만 보던 게 2026-08-24 사고의 자리다 — 킷에서 깨진 참조
-    27개가 doctor를 통과했다. 도구를 돌리는 것과 도구가 뭐라 했는지 보는 것은 다른 일이다."""
+    """Inspect linkcheck findings, not only whether its process ran."""
     r = sh(sys.executable, "tools/linkcheck.py")
     if r.returncode not in (0, 1) or "Traceback" in r.stderr:
         first = (r.stderr.strip().splitlines() or ["?"])[-1]
@@ -571,11 +544,9 @@ def c_links():
 
 
 def c_coherence():
-    """정합성 감지기의 **결과**를 본다."""
+    """Inspect coherence findings and distinguish checker failure from reported issues."""
     r = sh(sys.executable, "tools/coherence.py", "--quiet")
-    # **크래시는 경고가 아니라 실패다.** 2026-08-24 실측: 내가 coherence에 한 줄을 잘못 넣어
-    # SyntaxError를 냈는데, 이 검사가 "출력을 못 읽었다"라는 WARN을 내서 그대로 커밋·푸시했다.
-    # 도구가 죽은 것과 도구가 문제를 못 찾은 것은 완전히 다른 사건이다.
+    # A checker crash is a failure, not a warning or a zero-issue result.
     if r.returncode not in (0, 1) or "Traceback" in r.stderr or "Error" in r.stderr:
         first = (r.stderr.strip().splitlines() or ["?"])[-1]
         return FAIL, t("doctor.checker_crashed", code=r.returncode, detail=first[:100])
@@ -600,15 +571,10 @@ def _is_kit_tree(root=ROOT):
 
 
 def c_regression():
-    """회귀 픽스처가 실제로 통과하는가. **doctor가 이걸 안 돌리고 있었다** (적대 검증 V1-9).
-
-    검출기가 살아 있는지를 재는 유일한 자동 수단인데 검사 목록에 없었다.
-    계측기가 자기 옆의 계측기를 안 보고 있었던 셈이다.
-    """
+    """Run the regression suites available in this distribution or installed instance."""
     if not RELEASE_MODE:
         return SKIP, t("doctor.regression_release_only")
-    # 공용 엔진 suite: 킷과 인스턴스 양쪽에 대상이 있다. test_i18n·test_doctor_json은 doctor 자신을
-    # 돌리므로 여기 넣으면 재귀한다 (전수 실행은 test_fresh_install.sh와 스웜 계약이 맡는다).
+    # Do not call suites that invoke doctor here; doing so would recurse.
     scripts = ["test_memcheck.py", "test_memlib_journal.py", "test_state_runtime.py",
                "test_hook_runtime.py", "test_fresh_worker.py", "test_worker_batch.py",
                "test_install_checks.py",
@@ -617,8 +583,7 @@ def c_regression():
                "test_evidencecheck.py", "test_egress.py"]
     kit_sync = os.path.join(ROOT, "tools", "kit_sync.py")
     kit_tree = _is_kit_tree()
-    # kit_sync.py는 상류에만 있는 표지다. 배포 킷에서는 installer와 그 fixture가 둘 다
-    # distribution contract이므로 한쪽을 지워 4-suite green으로 축소하는 경로를 막는다.
+    # Require both distribution markers so deleting one cannot silently reduce the test set.
     if os.path.isfile(kit_sync):
         upstream_suites = ("test_recording_language.py", "test_slack_pipeline.py",
                            "test_instance_tools.py")
@@ -631,8 +596,7 @@ def c_regression():
             return FAIL, t("doctor.upstream_suites_missing", items=", ".join(missing))
         scripts.extend(upstream_suites)
     elif kit_tree:
-        # 배포 킷 전용 suite: setup.sh·review manifest·skill 문서처럼 킷 트리에만 대상이 있다
-        # (인스턴스엔 kit_sync NOT_SYNCED로 남는다). 하나라도 지우면 fail-close.
+        # Distribution-only suites require kit-specific files; missing suites fail closed.
         kit_suites = ("test_setup_migration.py", "test_portability.py", "test_manifests.py",
                       "test_skill_parity.py", "test_matrix_check.py", "test_language.py",
                       "test_devtree_gate.py")
@@ -658,7 +622,7 @@ def c_regression():
 
 
 def c_worker_receipts():
-    """최근 bounded worker run의 비용과 실패율을 영수증 원장에서 다시 계산한다."""
+    """Recompute recent worker costs and failure rates from recorded receipts."""
     import receipts as R
     records, errors = R.load_runs(os.path.join(ROOT, "_private", "work", "runs"))
     recent = R.recent_runs(records, days=7)
@@ -700,12 +664,7 @@ def c_ledger():
 
 
 def c_portrait():
-    """인물 원장이 굶고 있는가 (`system/person-ledger.md` · DR-042).
-
-    원장만 손으로 따로 써야 해서, 바쁜 구간에서 정확히 굶는다 — 그리고 바쁜 구간이 재료가
-    가장 많은 구간이라 손실이 가장 크다. 2026-08-26 실측: 3일 정지 동안 판정급 95건이
-    지나갔고, 그 사이 딥패스 6건이 낡은 원장을 근거로 돌았다. 기억에 맡긴 규칙은 안 돈다.
-    """
+    """Check whether unprocessed person-ledger candidates have accumulated since its last update."""
     import portrait as P
     if not os.path.exists(P.PORTRAIT):
         return SKIP, t("doctor.portrait_missing")
@@ -719,10 +678,10 @@ def c_portrait():
     return PASS, msg
 
 
-# --------------------------------------------------------- 단방향 밸브 (DR-026)
+
 
 def c_egress():
-    """모델 전송 정책이 최소 한 개의 deny prefix로 닫혀 있는가."""
+    """Require at least one denied path prefix in the model-send policy."""
     import memlib as M
     if M.CONFIG_ERROR == "invalid":
         key = ("doctor.egress_invalid" if "allow_prefixes" in (M.CONFIG_ERROR_DETAIL or "")
@@ -738,7 +697,7 @@ def c_egress():
     return PASS, t("doctor.egress_ok", deny=len(deny), allow=len(allow))
 
 def _remote_host(url):
-    """원격 URL에서 host를 뽑는다. scp 문법(git@host:path)과 로컬 경로도 처리."""
+    """Extract a remote host, including scp-style syntax and local paths."""
     u = url.strip()
     m = re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://(?:[^@/]+@)?([^/:]+)", u)
     if m:
@@ -750,13 +709,7 @@ def _remote_host(url):
 
 
 def _allowed(url, allowlist):
-    """**부분 문자열 비교 금지** (2026-08-24 적대 검증).
-
-    이전 판의 `any(a in url for a in allowlist)`는
-    `https://evil.invalid/https://github.com/trusted/repo`를 통과시켰다.
-    허용 항목을 URL의 **경로 안에 심으면** 그대로 뚫린다.
-    이제 host를 뽑아 host끼리 비교하고, 허용 항목에 경로가 있으면 경로도 경계까지 본다.
-    """
+    """Compare parsed hosts and path boundaries, never URL substrings. A trusted host embedded in an untrusted URL path must not pass."""
     def path_of(u):
         u = re.sub(r"^[a-zA-Z][a-zA-Z0-9+.-]*://(?:[^@/]+@)?[^/]+/?", "", u.strip())
         u = re.sub(r"^(?:[^@]+@)?[^/:@]+:", "", u)
@@ -767,14 +720,14 @@ def _allowed(url, allowlist):
         return False
     for a in allowlist:
         a = (a or "").strip().rstrip("/")
-        if not a:                       # 빈 항목이 전부 허용이 되면 안 된다
+        if not a:                       # An empty allowlist entry must not allow every remote.
             continue
         ah = _remote_host(a) or a.split("/")[0].lower()
         if ah != host:
             continue
         ap = path_of(a)
         if not ap:
-            return True                 # host만 지정 = 그 host 전체 허용
+            return True                 # A host-only entry allows that entire host.
         up = path_of(url)
         if up == ap or up.startswith(ap + "/"):
             return True
@@ -786,9 +739,7 @@ def c_valve():
     r = sh("git", "remote", "-v")
     remotes = sorted({l.split()[1] for l in r.stdout.splitlines() if len(l.split()) > 1})
     if M.INSTANCE_CONTEXT != "work":
-        # 조용한 SKIP은 "괜찮다"로 읽힌다. 무엇을 안 재는지 말하고 원격 수도 보인다.
-        # (config는 이 tree 안에 있어 스스로 고칠 수 있다 — 이 검사는 차단이 아니라 진술이다.
-        #  실제 차단은 .gitignore 기본거부와 pull-only 자격증명이다. DR-026)
+        # Report when this policy is not applicable; this check diagnoses rather than blocks egress.
         extra = t("doctor.remote_extra", count=len(remotes)) if remotes else ""
         return SKIP, t("doctor.valve_skip", context=M.INSTANCE_CONTEXT, extra=extra)
     if not remotes:
@@ -800,14 +751,8 @@ def c_valve():
 
 
 def c_symlinks():
-    """추적되는 심볼릭 링크는 밸브의 구멍이다.
-
-    2026-08-24 실측: `ln -s _private/work/secret.md leak.md` 후 `git add leak.md`가
-    통과한다. git이 저장하는 것은 내용이 아니라 대상 경로라 내용 자체는 안 나가지만,
-    경로가 구조를 드러내고 아카이브·역참조 설정에 따라 내용까지 갈 수 있다.
-    """
-    # -z로 읽는다. git은 특수문자 경로를 따옴표로 감싸므로 줄 단위 파싱은 경로를 망친다
-    # (2026-08-24 실측: 따옴표 붙은 경로를 readlink에 넘겨 33개를 "문제 없음"으로 오판했다).
+    """Find tracked symlinks that expose private targets or paths. Git stores the link target; consumers may later dereference it."""
+    # Use NUL-separated paths so Git quoting cannot change filenames.
     import memlib as M
     r = subprocess.run(["git", "ls-files", "-s", "-z"], capture_output=True, text=True, cwd=ROOT)
     if r.returncode:
@@ -840,9 +785,7 @@ def c_symlinks():
         more = t("doctor.more", count=len(into_private) - 3) if len(into_private) > 3 else ""
         head = t("doctor.private_symlinks", count=len(into_private),
                  items="\n      ".join(into_private[:3]), more=more)
-        # 심각도는 인스턴스에 달렸다. work면 회사 구조가 나가는 것이라 차단이고,
-        # personal이면 자기 프라이빗 원격에 자기 파일명이 가는 것이라 경고다.
-        # (2026-08-24: 안 고쳐질 FAIL을 계속 띄우면 사람이 FAIL을 무시하게 된다 — 오늘의 교훈.)
+        # Work instances fail on path exposure; personal instances report it as a warning.
         if M.INSTANCE_CONTEXT == "work":
             return FAIL, head
         return WARN, head + t("doctor.symlink_cleanup")
@@ -850,14 +793,17 @@ def c_symlinks():
 
 
 def _linkcheck_scope():
-    """linkcheck가 지금 읽게 될 파일들의 해시. 인증서와 같은 식이어야 한다."""
+    """Hash the same file paths and bytes that linkcheck uses for its verification record."""
     import hashlib
-    r = sh("git", "ls-files", "--cached", "--others", "--exclude-standard", "*.md")
+    r = subprocess.run(["git", "ls-files", "-z", "--cached", "--others",
+                        "--exclude-standard", "*.md"], cwd=ROOT, capture_output=True, check=True)
     d = hashlib.sha1()
-    # 줄 단위다. split()으로 나누면 공백 든 파일명이 두 조각이 나 linkcheck의 인증서와 다른 해시가
-    # 되고, 그 파일이 있는 한 "검사 기록 없음"이 영원히 뜬다 (2026-09-17 독립 감사 L).
-    for f in sorted(x for x in r.stdout.splitlines() if x.strip()):
-        d.update(f.encode())
+    # Exclude generated projections from the verification identity: rendering can change their timestamps.
+    # The link checker still reads these files; only certificate identity excludes them.
+    _GEN = ("state/NOW.md", "_private/state/NOW.md")
+    paths = [os.fsdecode(path) for path in r.stdout.split(b"\0") if path]
+    for f in sorted(path for path in paths if path not in _GEN):
+        d.update(os.fsencode(f))
         try:
             d.update(open(os.path.join(ROOT, f), "rb").read())
         except OSError:
@@ -866,33 +812,17 @@ def _linkcheck_scope():
 
 
 def c_missed_gate():
-    """**지금 이 내용 상태가 검사를 통과한 적이 있나** (DR-033).
-
-    2026-08-24의 대표 미스다. 킷을 만들고 커밋했는데 `linkcheck`를 안 돌려 깨진 참조 27개가
-    "검증 완료"로 나갔다. 그때는 **안 돌렸다는 사실 자체가 관측되지 않았다.**
-
-    자기보고가 아니다. git이 내용 상태를 해싱하고, 도구가 자기 실행을 남긴다. 둘 다 기계다.
-
-    **네 번 고쳤다. 매번 대리값을 재고 있었다** (codex 라운드 2가 마지막 둘을 잡았다).
-      1차 시각 비교 — doctor 내부 호출이 기록을 오염시켜 언제나 통과
-      2차 무기록 면죄 — 신규 인스턴스는 언제나 무기록이라 영원히 안 울림
-      3차 시각 파싱 — git은 `+09:00`, 로그는 `+0900`. 같은 초면 등호로 통과
-      4차 HEAD 해시 — **커밋 전에 제대로 검사한 것을 커밋 후 미스로 오판**했고,
-         수정만 하는 다음 커밋이 앞 미스를 가렸다
-    지금은 `git ls-files -s`의 해시다. 내용이 바뀔 때만 바뀌고 커밋 자체로는 안 바뀐다.
-    그래서 사전 검증이 인정되고, 나중 커밋이 앞 미스를 못 가린다.
-    """
+    """Check for a successful linkcheck record bound to the current file bytes. Missing evidence is a failure when new files are present and a warning otherwise."""
     import memlib as M
     if sh("git", "rev-parse", "--is-inside-work-tree").returncode:
         return SKIP, t("doctor.not_git")
     if not os.path.exists(M.TOOL_RUNS):
         return WARN, t("doctor.no_run_log")
-    # 인증서는 linkcheck가 **자기가 읽은 파일들**로 만든 해시다 (codex 라운드 3).
-    # index 해시로는 untracked 추가와 unstaged 수정을 못 잡았다.
+    # Bind evidence to the exact bytes read by linkcheck, including unstaged and untracked inputs.
     cur_scope = _linkcheck_scope()
     if M.ran_at_head("linkcheck", cur_scope, require_ok=True):
         return PASS, t("doctor.linkcheck_recorded")
-    # 미검증 상태다. 새 파일이 끼어 있을 때만 문제로 본다 — 단순 수정마다 울면 꺼진다.
+    # Warn on unverified edits; fail when new files lack verification.
     added = [x for x in sh("git", "show", "--diff-filter=A", "--name-only", "--format=",
                            "HEAD").stdout.splitlines() if x.strip()]
     untracked_new = [l[3:] for l in sh("git", "status", "--porcelain").stdout.splitlines()
@@ -904,12 +834,7 @@ def c_missed_gate():
 
 
 def c_agents_parity():
-    """두 런타임이 AGENTS.md 한 정본의 같은 규약을 읽는가 (KIT-DR-007).
-
-    2026-08-24에는 바이트 동일 사본의 실측 drift가 0이라 구조 변경을 보류했다. 8/29 첫 실제
-    drift가 발생해 반전 조건이 발화했다. Claude의 공식 import인 exact `@AGENTS.md`가 정본이며,
-    mirror는 같은 순간에도 다음 편집에서 갈라질 수 있으므로 exact import만 PASS한다.
-    """
+    """Require CLAUDE.md to import the single AGENTS.md source exactly. A copied policy can diverge after either file is edited."""
     a, b = os.path.join(ROOT, "CLAUDE.md"), os.path.join(ROOT, "AGENTS.md")
     if not os.path.exists(a):
         return FAIL, t("doctor.claude_md_missing")
@@ -922,12 +847,7 @@ def c_agents_parity():
 
 
 def c_schema():
-    """config가 엔진보다 뒤처졌나 (KIT-DR-005).
-
-    엔진은 `git pull`로 오지만 **config는 인스턴스 소유라 안 온다.** 새 엔진이 새 필드를
-    요구하면 옛 config는 그 필드가 없고, 없는 채로 조용히 다른 동작을 한다.
-    2026-08-24 실측: instance.context가 없으면 밸브 검사가 personal로 간주해 원격을 안 본다.
-    """
+    """Report config migrations required by the current engine. Instance-owned config is not replaced by an engine update."""
     import memlib as M
     if M.CONFIG_SCHEMA > M.SCHEMA_VERSION:
         return FAIL, t("doctor.schema_newer", config=M.CONFIG_SCHEMA, engine=M.SCHEMA_VERSION)
@@ -939,19 +859,14 @@ def c_schema():
 
 
 def c_upstream():
-    """엔진 파일을 로컬에서 고쳤나 · 업스트림과 몇 커밋 차이인가.
-
-    엔진은 업스트림 소유다. 로컬에서 고치면 다음 pull에서 충돌하거나 조용히 되돌아간다.
-    고칠 게 있으면 인스턴스 소유 짝(rituals.local.md 등)에 쓰거나 업스트림에 알린다.
-    """
+    """Report local engine modifications and upstream revision differences. Instance-specific changes belong in the instance extension files."""
     r = sh("git", "rev-parse", "--is-inside-work-tree")
     if r.returncode:
         return SKIP, t("doctor.not_git")
-    # 상류(엔진을 저작하는 인스턴스)에서는 엔진 수정이 정상이다. 표지는 kit_sync.py의 존재 —
-    # 내보내기 도구는 상류에만 산다 (kit_sync.py의 EXCLUDED 참조).
+    # The exporter exists only in the source workspace, where engine edits are expected.
     if os.path.exists(os.path.join(ROOT, "tools", "kit_sync.py")):
         return SKIP, t("doctor.upstream_here")
-    # 추적 파일 중 수정된 것 = 전부 엔진 (인스턴스 소유는 추적 안 되므로)
+    # Instance-owned files are untracked; tracked modifications affect the engine.
     mod = [l[3:] for l in sh("git", "status", "--porcelain").stdout.splitlines()
            if l[:2].strip() in ("M", "MM", "AM", "D")]
     up = sh("git", "rev-list", "--count", "HEAD..@{u}")
@@ -968,11 +883,7 @@ def c_upstream():
 
 
 def c_engine_drift():
-    """킷과 인스턴스의 엔진이 갈라졌는가. 예방이 아니라 **탐지**다 (DR-027).
-
-    사본 둘을 두는 대가는 드리프트인데, 자동 동기화를 만들면 "이 수정이 반출해도 되는
-    것인가"를 기계가 판정해야 한다. 그건 문자열 검사로 증명할 수 없다. 그래서 탐지만 한다.
-    """
+    """Detect differences between the source engine and kit after export normalization. This reports drift; it does not authorize or perform export."""
     kit = os.environ.get("MOTTORI_KIT") or os.path.expanduser("~/mottori-kit")
     if not os.path.isdir(os.path.join(kit, "tools")) or os.path.realpath(kit) == os.path.realpath(ROOT):
         return SKIP, t("doctor.kit_missing")
@@ -980,8 +891,7 @@ def c_engine_drift():
         import kit_sync
     except Exception as e:
         return SKIP, t("doctor.kit_sync_missing", error=e)
-    # 탈개인화 치환을 거친 뒤 비교한다. 안 그러면 **의도된 차이**가 드리프트로 잡혀
-    # 매번 warn이 뜨고, 그러면 진짜 드리프트가 났을 때 아무도 안 본다.
+    # Normalize intentional export differences before reporting drift.
     mine, theirs = os.path.join(ROOT, "tools"), os.path.join(kit, "tools")
     shared = sorted(set(os.listdir(mine)) & set(os.listdir(theirs)))
     diff = []
@@ -992,8 +902,7 @@ def c_engine_drift():
         try:
             want = kit_sync.depersonalize(open(a, encoding="utf-8").read())
             have = open(b, encoding="utf-8").read()
-            # fresh_worker.py의 동기화 각인(KIT-DR-010)은 의도된 차이다. kit_sync와 같은 정규화를
-            # 거쳐야 이 검사가 상시 warn이 되지 않는다 (2026-09-17 실측).
+            # Normalize sync stamps the same way as kit_sync.
             if f == "fresh_worker.py" and hasattr(kit_sync, "unstamp"):
                 want, have = kit_sync.unstamp(want), kit_sync.unstamp(have)
             if want != have:
@@ -1007,11 +916,7 @@ def c_engine_drift():
 
 
 def c_ignored():
-    """연료가 git에서 안 보이는가. **추적 여부가 아니라 노출 여부**를 본다.
-
-    2026-08-24 적대 검증: 이전 판은 probe가 이미 tracked일 때만 경고해서,
-    `.gitignore`를 통째로 지워 연료가 untracked로 드러난 가장 위험한 상태를 PASS로 셌다.
-    """
+    """Check whether instance data is exposed to Git, including untracked files whose ignore coverage was removed."""
     r = sh("git", "rev-parse", "--is-inside-work-tree")
     if r.returncode:
         return SKIP, t("doctor.not_git")
@@ -1024,7 +929,7 @@ def c_ignored():
     exposed = [l[3:] for l in st if l.startswith("??")]
 
     if M.INSTANCE_CONTEXT != "work":
-        # 개인 인스턴스는 트랙 문서를 일부러 추적한다. 규칙 부재는 정상이고 노출만 본다.
+        # A personal instance may intentionally track public documents; check actual data exposure.
         return (PASS, t("doctor.personal_exposure", count=len(exposed))) \
             if len(exposed) < 20 else (WARN, t("doctor.untracked_exposure", count=len(exposed)))
 
@@ -1049,7 +954,7 @@ def c_ignored():
         return FAIL, "\n      ".join(msgs)
     return PASS, t("doctor.ignore_ok", count=len(probes))
 
-# -------------------------------------------------------------------- 실행
+
 
 CHECKS = [
     (t("doctor.check.runtime_python"),        c_python),
@@ -1092,8 +997,7 @@ CHECKS = [
     (t("doctor.check.drift"),                 c_engine_drift),
 ]
 
-# 자동 검사 불가 — 이 목록이 이 도구의 반증 가능 칸이다.
-# 여기 있는 것을 "확인했다"고 말하면 거짓이다. 사람이 해야 한다.
+# These capabilities require human verification and are not automated PASS results.
 MANUAL = [
     (t("doctor.manual.session_title"), t("doctor.manual.session_how")),
     (t("doctor.manual.precompact_title"), t("doctor.manual.precompact_how")),

@@ -3,7 +3,7 @@
 # The mottori gate checks the index to be committed. Installed by tools/install_hooks.sh.
 set -euo pipefail
 
-# Dispatch probe used only by `git hook run`; an ordinary commit passes no arguments to pre-commit.
+# Installer probe; ordinary pre-commit invocation passes no arguments.
 if [[ "${1:-}" == "--mottori-probe" ]]; then
   [[ "${2:-}" == probe-* ]] || { echo "invalid mottori probe" >&2; exit 2; }
   printf '%s\n' "$2"

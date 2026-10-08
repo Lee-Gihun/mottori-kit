@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from testlib import run_test
 
@@ -38,11 +39,7 @@ KINDS = {"rule", "evidence", "tool", "hook", "template", "generated", "gate-defi
 OWNERS = {"kit", "instance"}
 
 def _runtime_names() -> set[str]:
-    """Runtime vocabulary comes from tools/harness.py, the harness registry.
-
-    It used to be a literal here, so adding a third harness meant editing this test too.
-    A new harness is one row in harness.RUNTIMES; this reads that row.
-    """
+    """Derive runtime vocabulary from harness.RUNTIMES rather than maintaining a second list."""
     spec = importlib.util.spec_from_file_location("harness", str(ROOT / "tools" / "harness.py"))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -103,11 +100,10 @@ def is_text(path: Path) -> bool:
 
 
 def test_new_files_are_within_delivery_prefixes(problems: "Problems") -> None:
-    """A new kit file outside DELIVERY_PREFIXES is tracked here but untracked in a worker clone or the
-    fresh-install fixture, where the manifest would list it as a ghost twenty minutes into a commit
-    (2026-09-18). Fail here, first, with the rule. Only staged additions are judged: they are the files
-    about to be committed, while untracked files in a fixture or scratch tree are not kit files yet. A tree
-    without HEAD (a fixture's initial commit) stages every kit file, root documents included, and is skipped."""
+    """Require staged kit additions to fall within delivery prefixes so worker and
+    fresh-install manifests see the same files. Skip a fixture's initial commit, where every
+    path is new.
+    """
     if subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD"], cwd=ROOT, capture_output=True).returncode:
         return
     staged = subprocess.run(
@@ -381,7 +377,9 @@ def test_matrix(document: dict, problems: Problems) -> None:
 
 
 def test_issues_mode_reports_stale_paths(problems: Problems) -> None:
-    """gate 프로토콜: 현재 트리는 #issues 0, manifest에서 한 행을 지운 임시 사본은 manifest-missing 한 건."""
+    """Require an issue-free current manifest and a missing-row issue after removing one entry
+    from a temporary copy.
+    """
     import shutil
     import tempfile
     builder = ROOT / "tools" / "manifest_build.py"
@@ -473,9 +471,9 @@ CONTEXT_NAME_RE = re.compile(r"(?<![\w.])([A-Za-z_][\w-]*)\.")
 
 
 def workflow_job_env_context_issues(text: str) -> list[str]:
-    """Job-level ``env`` may reference only the contexts GitHub allows there. ``runner.temp`` at that level
-    made the whole workflow file invalid, so a725859 ran no job and the remote gate was silent, not green
-    (2026-09-18). A silent remote gate is exactly what a local pin must measure."""
+    """Reject job-level environment expressions using contexts unavailable at that workflow
+    scope.
+    """
     issues: list[str] = []
     in_jobs = False
     env_indent: int | None = None
@@ -516,6 +514,21 @@ def test_workflow_job_env_uses_only_job_level_contexts() -> None:
     assert len(issues) == 1 and "`steps`" in issues[0], issues
 
 
+def test_relative_document_dependencies_preserve_design_connections() -> None:
+    import manifest_build as builder
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "system").mkdir()
+        (root / "system/prd.md").write_text(
+            "[Design](design.md#runtime) `other.md#state` "
+            "[Tool](../tools/recall.py) [Remote](https://example.org/system/remote.md) "
+            "[Outside](../../escape.md) [Self](#here) [Missing](missing.md)", encoding="utf-8")
+        candidates = {"system/prd.md", "system/design.md", "system/other.md", "tools/recall.py", "escape.md"}
+        with patch.object(builder, "ROOT", root):
+            assert builder.dependencies("system/prd.md", candidates) == [
+                "system/design.md", "system/other.md", "tools/recall.py"]
+
+
 def main() -> int:
     problems = Problems()
     review = load_yaml_subset(REVIEW, problems)
@@ -526,6 +539,7 @@ def main() -> int:
     run_test(test_gate_definition_change_requires_dispatcher_approval, __file__)
     run_test(test_gate_definition_approval_is_not_applicable_in_installed_instance, __file__)
     run_test(test_workflow_job_env_uses_only_job_level_contexts, __file__)
+    run_test(test_relative_document_dependencies_preserve_design_connections, __file__)
     run_test(test_issues_mode_reports_stale_paths, __file__, problems)
     if problems.items:
         for item in problems.items:

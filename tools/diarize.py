@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
-"""화자 분리 [추정] — 전사 세그먼트를 화자별로 묶는다.
+"""Estimate anonymous speakers from transcript segments.
 
-의존성 없이 돈다 (numpy/scipy/sklearn만). 파이프라인:
-  세그먼트별 오디오 슬라이스 → MFCC(20) 평균+표준편차 40차 임베딩
-  → 켑스트럼 평균 정규화 → L2 정규화 → k=2..6 KMeans → 실루엣 최댓값으로 k 선택
+Extract mean and standard deviation of 20 MFCC features, center and L2-normalize them, then
+choose k=2..6 by silhouette score. Requires numpy, scipy, and sklearn for the pipeline.
 
-한계 (인용 전에 반드시 기억할 것):
-  - 세그먼트 내부의 화자 전환과 겹쳐 말하기는 못 잡는다.
-  - 실루엣이 낮으면(0.25 미만) 화자 수 추정을 믿지 말 것. 헤더에 경고가 붙는다.
-  - S1/S2는 익명 라벨이다. 실명 귀속은 사람이 내용으로 판정한다.
+Cannot detect speaker changes within a segment or overlapping speech. A silhouette below
+0.25 warns that the speaker-count estimate is unreliable. S1/S2 labels do not identify
+people.
 
-사용:
-  python3 tools/diarize.py <audio> --segments <json|srt> [--out out.spk.txt] [--k N]
+Usage: python3 tools/diarize.py <audio> --segments <json|srt> [--out out.spk.txt] [--k N]
 """
 import argparse, json, os, re, subprocess, sys
 
-# The audio stack is only needed to run the pipeline. `--help`, argument errors and the entrypoint
-# regression must work without it (2026-09-18: CI has no numpy and the module-level import broke --help).
+# Load the audio stack lazily so help and argument validation work without optional
+# dependencies.
 try:
     import numpy as np
     from scipy.fftpack import dct
@@ -30,7 +27,7 @@ except ImportError as exc:  # noqa: BLE001
 SR = 16000
 NMEL, NCEP = 40, 20
 FRAME, HOP = 400, 160          # 25ms / 10ms
-MIN_SEG = 0.8                  # 이보다 짧은 세그먼트는 임베딩하지 않는다
+MIN_SEG = 0.8                  # Do not embed segments shorter than this threshold.
 KMIN, KMAX = 2, 6
 LOW_SIL = 0.25
 
@@ -93,7 +90,7 @@ def embed(seg_audio):
     m = mfcc(seg_audio)
     if m is None or len(m) < 5:
         return None
-    m = m - m.mean(axis=0, keepdims=True)                  # 켑스트럼 평균 정규화
+    m = m - m.mean(axis=0, keepdims=True)                  # Cepstral mean normalization.
     v = np.concatenate([m.mean(axis=0), m.std(axis=0)])
     if not np.all(np.isfinite(v)):
         return None
@@ -162,7 +159,7 @@ def main():
             if s > best_sil:
                 best_k, best_sil, best_lab = k, s, km.labels_
 
-    # 등장 순서대로 S1, S2... 재명명
+    # Assign S1, S2, ... in order of first appearance.
     order, seen = {}, 0
     for lab in best_lab:
         if lab not in order:

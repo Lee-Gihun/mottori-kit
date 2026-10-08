@@ -235,3 +235,31 @@ state/harness-canary.json 원장에 남긴다(`verify opencode --sweep`). 이 �
 한 항목으로 붙는다"(런타임 어휘만). 같은 감사로 `status`가 상태 파일 하나만 보고 배선됨이라 하던 것을 고쳤다.
 재판정(3주기): opencode 세션이 실제로 쓰였는지, 카나리가 회귀를 잡았는지, 네 번째 하네스가 런타임 어휘를 정말 한 항목으로
 얻었는지, 모델 원장이 라우팅 결정을 실제로 바꿨는지.
+
+### DR-016 기억 요구와 구현 설계 분리, 인스턴스 권한 미승계 (2026-10-08 · active)
+결정: 두 PRD는 원점·정정·데이터 경계와 작업 연속성·성공 조건을 정의한다. 구현 연결과 Mermaid 시각화는 `system/design-memory-runtime.md`에 둔다. Markdown 문서가 설계 정본이고 HTML 지도는 보조 관측 화면이다. 두 PRD의 `.ko.md`가 현재 정본이며 영어 `.md` 전문 번역은 원본 hash에 결속해 유지한다. §10.5 byte/capability 계약은 유지한다.
+맥락: `decision:KIT-DR-004`. 업스트림 인스턴스의 자동 적용 위임·일정·실행 결과를 일반 이름 치환으로 이식하면 킷 설치가 권한 위임처럼 읽힌다. PRD와 설계는 kit-owned로 분류해 자동 덮어쓰지 않고 변경 시 별도 정합 검토한다. 수동 gardener는 report-only이며 선택적 주기 adapter의 권한을 상속하지 않는다.
+엔진: 회상 후보의 인스턴스·역할·요약 필터와 native source identity를 먼저 적용한다. 보관 세션을 같은 규칙으로 읽고 중복을 제거한다. worker에 필요한 의존 파일은 engine inventory에 함께 둔다. 코드 배포와 개인 기록·자격증명·위임은 별개다.
+기각 대안: main 문서를 그대로 복사하거나 번역 완료인 듯 두 정본을 유지하지 않는다. 설치·fixture PASS로 실제 dispatcher 효과나 사용자 부담 감소를 주장하지 않는다.
+참조: `PRD-info-architecture.md`, `PRD-session-memory.md`, `design-memory-runtime.md`, `tools/test_recall.py`, `tools/test_fresh_worker.py`, `tools/test_memory_map.py`.
+
+DR-016 보완: 처방 전에 이미 한 일을 먼저 조회하고 남은 미지만 묻는다. 일곱 규칙은 운용 기본값이며 보편적 모델 능력 상한으로 주장하지 않는다.
+
+KIT-DR-016 verification supplement: Markdown dependency extraction now resolves relative links and inline file references against the document, preserving PRD-to-design connections. External URLs and out-of-tree paths do not become local dependencies. The new auth helper and map tests are included in the engine inventory and risk matrix; existing critical test requirements are unchanged. Source snapshot delivery, TERM cleanup, and worker-observed AGENTS provenance have dedicated worker regressions. Gate-definition approval is bound to the reviewed diff below, not inherited from the upstream instance.
+
+### DR-017 코드 안 설명의 자족성 (2026-10-08 · active)
+결정: 공통 작성 원칙은 `code-writing.md`다. 주석과 docstring은 현재 동작·인터페이스·불변 조건·필요한 이유를 간결한 영어로 설명한다. 세션 사연·리뷰 번호·완료한 실행의 측정치는 결정 또는 관측 기록에 둔다. 정확한 원문 용어·fixture·도구 지시자·라이선스·생성 각인은 보존한다. 인스턴스 권한은 바꾸지 않는다.
+이유: 코드에 발생 경위를 싣는 것은 유지보수에 무관한 맥락을 요구한다. 설명을 모두 지우면 안전한 수정에 필요한 원인 지식도 잃는다. 사건을 현재의 작동 조건으로 다시 쓰고 긴 증거는 해당 기록에 둔다.
+검증: 동결한 소스와 실행 AST·런타임 문자열·스크립트 토큰·heredoc을 비교한다. docstring 유래 CLI 도움말의 영어화는 의도된 표시 변경으로 구별한다. 동결 이력을 보존하고 옛 주석을 새로 검증한 사실로 취급하지 않는다. 주석 수나 금지어 관문 대신 새 독자의 이해와 관련 회귀로 판단한다.
+재검토: 필요한 제약을 코드 근처에서 찾을 수 없거나 주석 편집이 의도하지 않은 런타임 소비자를 바꾸면 다시 검토한다.
+
+
+### DR-018 Reviewed engine transfer and runtime isolation (2026-10-08 · active)
+Decision: distribute shared memory and bounded-worker mechanisms while preserving explicit kit variants. Instance schedules, operational records, commit delegation, recording adapters and credentials do not transfer with engine code. Lens definitions are reusable; application records are private instance data. The lens index, deep-pass and rituals are kit-owned policies.
+Context: `decision:KIT-DR-004`, `decision:KIT-DR-016`. Installation, worker-cluster upgrade and a long-lived source workspace have different dependency and authority boundaries. A successful source check cannot establish a successful fresh install. Model agreement is a review observation, not empirical independence or measured user benefit.
+Boundary: worker child environments separate provider credentials; the harness identity records that policy. Read scope is optional self-report, material hashes verify input identity, and write restrictions have their own evidence. The worker sync includes its direct runtime/test dependencies, checks existing consumers and rolls back failed publication. It does not update the full kit, instance config or schedules.
+Verification: require normal controls before mutation claims, distinguish infrastructure errors from detected defects, run fresh installation in both declared languages, and preserve instance data in update fixtures. The evidence checker accepts English and Korean context labels with the same section boundaries. Release evidence records exact code identities and command results separately.
+Rejected alternatives: blanket source overwrite; inheriting the source instance's automatic-commit authority; storing lens anecdotes in tracked definitions; calling self-reported reads enforced isolation; treating unavailable adapter output as healthy.
+Reconsider: a supported installed consumer fails after a verified upgrade, a future export rewrites a kit-owned policy, or a concrete task requires a portable opt-in application engine. That engine needs separate execution/commit/egress controls and its own installed E2E before distribution.
+
+KIT-DR-018 output-delivery supplement: collect safe ignored outputs only within explicit write prefixes; preserve bytes, hashes and replayable patches before cleanup. Failed or incomplete capture returns exit 5 and preserves the worktree. Termination during capture also preserves it. Capture failure takes precedence over strict-scope exit 4 without erasing scope metadata. Known bundled startup metadata is distinct from configured plugins; unknown or malformed plugin records still fail the canary. Temporary verification owns cleanup of its own runtime configuration side effects; the worker does not automatically clean up user configuration.

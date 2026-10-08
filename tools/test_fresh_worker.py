@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Fixture tests for the bounded fresh-worker interface (KIT-DR-007)."""
+"""Fixture tests for the bounded fresh-worker interface."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import shutil
+import signal
 import stat
 import subprocess
 import sys
 import tempfile
+import time
 
 from testlib import run_test
 
@@ -21,8 +24,16 @@ def _script(path, body):
     path.chmod(0o755)
 
 
+def _fixture_env(root):
+    env = {key: value for key, value in os.environ.items()
+           if not key.upper().startswith(("CLAUDE_", "ANTHROPIC_", "OPENAI_", "CODEX_"))}
+    env.update(HOME=str(root / ".fixture-home"), MOTTORI_INSTANCE=str(root),
+               CODEX_HOME=str(root / ".fixture-home/.codex"))
+    return env
+
+
 def _run(root, runtime, prompt, binary):
-    env = dict(os.environ, MOTTORI_INSTANCE=str(root))
+    env = _fixture_env(root)
     env[f"MOTTORI_FRESH_WORKER_{runtime.upper()}_BIN"] = str(binary)
     return subprocess.run(
         [sys.executable, str(WORKER), "--runtime", runtime, str(prompt)],
@@ -34,8 +45,10 @@ def _run(root, runtime, prompt, binary):
 
 
 def _git_ok(root, *args):
+    # An outer Git hook's index path must not select the fixture worktree's index.
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     return subprocess.run(
-        ["git", *args], cwd=root, check=True, text=True, capture_output=True,
+        ["git", *args], cwd=root, check=True, text=True, capture_output=True, env=env,
     ).stdout.strip()
 
 
@@ -68,14 +81,16 @@ def _init_worktree_repo():
     return root, prompt, fake
 
 
-def _run_worktree(root, prompt, binary, mode="head", prefixes=(), strict=False, extra_env=None):
-    env = dict(os.environ, MOTTORI_INSTANCE=str(root),
+def _run_worktree(root, prompt, binary, mode="head", prefixes=(), strict=False, extra_env=None, materials=()):
+    env = dict(_fixture_env(root),
                MOTTORI_FRESH_WORKER_CODEX_BIN=str(binary), **(extra_env or {}))
     argv = [sys.executable, str(WORKER), "--runtime", "codex", f"--worktree={mode}"]
     if strict:
         argv.append("--strict-scope")
     for prefix in prefixes:
         argv += ["--write-prefix", prefix]
+    for material in materials:
+        argv += ["--read-material", material]
     argv.append(str(prompt))
     return subprocess.run(argv, cwd=root, env=env, text=True, capture_output=True)
 
@@ -464,7 +479,7 @@ def test_fresh_worker_receipt_limit_matches_contract_boundary():
 
 
 def _run_prefixed(root, runtime, prompt, binary, prefixes, strict=False):
-    env = dict(os.environ, MOTTORI_INSTANCE=str(root))
+    env = _fixture_env(root)
     env[f"MOTTORI_FRESH_WORKER_{runtime.upper()}_BIN"] = str(binary)
     argv = [sys.executable, str(WORKER), "--runtime", runtime]
     if strict:
@@ -533,6 +548,8 @@ print(json.dumps({"type":"turn.completed"}))
         meta = json.loads((run / "meta.json").read_text(encoding="utf-8"))
         assert meta["worktree"]["mode"] == "head"
         assert len(meta["worktree"]["base_rev"]) == 40
+        for path, digest in meta["worktree"]["instance_sha256"].items():
+            assert digest == hashlib.sha256((root / path).read_bytes()).hexdigest()
         assert meta["worktree"]["files"] == []
         assert not (run / "wt").exists()
         assert str(run / "wt") not in _git_ok(root, "worktree", "list", "--porcelain")
@@ -543,9 +560,36 @@ print(json.dumps({"type":"turn.completed"}))
 
 
 
+def test_worktree_pins_observed_revision_even_when_head_moves():
+    root, prompt, fake = _init_worktree_repo()
+    fw = _fw()
+    old_root, git_require = fw.ROOT, fw._git_require
+    run = root / "run"
+    run.mkdir()
+    base = _git_ok(root, "rev-parse", "HEAD").strip()
+    before = (root / "base.txt").read_text()
+    def racing_git(args, cwd, input_bytes=None):
+        if args[:2] == ["worktree", "add"]:
+            (root / "base.txt").write_text("new head\n")
+            _git_ok(root, "add", "base.txt")
+            _git_ok(root, "commit", "-qm", "concurrent change")
+        return git_require(args, cwd, input_bytes)
+    try:
+        fw.ROOT, fw._git_require = str(root), racing_git
+        worktree, meta, copied = fw._prepare_worktree(str(run), "head")
+        assert meta["base_rev"] == base
+        assert _git_ok(Path(worktree), "rev-parse", "HEAD").strip() == base
+        assert (Path(worktree) / "base.txt").read_text() == before
+        assert _git_ok(root, "rev-parse", "HEAD").strip() != base
+        fw._remove_worktree(worktree)
+    finally:
+        fw.ROOT, fw._git_require = old_root, git_require
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_worktree_ignores_git_env_pinned_by_an_outer_hook():
     # A commit hook exports GIT_INDEX_FILE (relative). Inherited, it made `worktree add` open the outer
-    # index and fail (kit pre-commit, 2026-09-28). The worker's git must only see the cwd repository.
+    # index and fail. Worker Git commands must use only the current worktree.
     root, prompt, fake = _init_worktree_repo()
     try:
         r = _run_worktree(root, prompt, fake, extra_env={"GIT_INDEX_FILE": ".git/index"})
@@ -573,6 +617,243 @@ def test_worktree_patch_extracts_modified_new_and_deleted_files():
         assert meta["worktree"]["files"] == ["base.txt", "delete.txt", "new.txt"]
         assert len(meta["worktree"]["patch_sha256"]) == 64
     finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_worktree_ignored_output_survives_cleanup_with_hash_and_patch():
+    root, prompt, fake = _init_worktree_repo()
+    try:
+        with (root / ".gitignore").open("a") as f:
+            f.write("/research/\n")
+        material = "research/synthetic-output/input.json"
+        (root / material).parent.mkdir(parents=True)
+        (root / material).write_text('[604, 770, 305]\n')
+        writer = root / "ignored writer"
+        _script(writer, r"""
+import json, pathlib, sys
+sys.stdin.read()
+values = json.loads(pathlib.Path('research/synthetic-output/input.json').read_text())
+pathlib.Path('research/synthetic-output/totals.json').write_text(json.dumps({'count': len(values), 'total': sum(values)}) + '\n')
+pathlib.Path(sys.argv[sys.argv.index('--output-last-message') + 1]).write_text('DONE\n')
+print(json.dumps({'type': 'turn.completed'}))
+""")
+        r = _run_worktree(root, prompt, writer, mode="dirty", prefixes=("research/synthetic-output",),
+                          strict=True, materials=(material,))
+        assert r.returncode == 0, (r.stdout, r.stderr)
+        run = _run_dir(root, r.stdout)
+        rel = "research/synthetic-output/totals.json"
+        expected = b'{"count": 3, "total": 1679}\n'
+        assert (run / "untracked" / rel).read_bytes() == expected
+        assert not (run / "wt").exists()
+        assert not (root / rel).exists()
+        meta = json.loads((run / "meta.json").read_text())
+        assert meta["worktree"]["capture_status"] == "complete"
+        assert "preserved_path" not in meta["worktree"]
+        assert meta["worktree"]["ignored_captured"] == [rel]
+        assert meta["worktree"]["output_sha256"] == {rel: hashlib.sha256(expected).hexdigest()}
+        assert meta["worktree"]["material_integrity"] is True
+        assert material not in meta["worktree"]["files"]
+        assert not (run / "untracked" / material).exists()
+        assert (run / "untracked.txt").read_text() == rel + "\n"
+        patch = (run / "patch.diff").read_bytes()
+        assert rel.encode() in patch and b'+{"count": 3, "total": 1679}' in patch
+        # The existing patch consumer can restore the new output without the removed worktree.
+        replay = root / "replay"
+        replay.mkdir()
+        _git_ok(replay, "init", "-q")
+        (replay / ".gitignore").write_bytes(_git_ok(root, "show", "HEAD:.gitignore").encode() + b"\n")
+        subprocess.run(["git", "apply", "--binary", str(run / "patch.diff")], cwd=replay, check=True,
+                       capture_output=True)
+        assert (replay / rel).read_bytes() == expected
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_worktree_unsafe_ignored_outputs_are_not_exported_and_prevent_cleanup():
+    root, prompt, fake = _init_worktree_repo()
+    outside = Path(tempfile.mkdtemp(prefix="fresh-worker-artifact-outside-"))
+    try:
+        with (root / ".gitignore").open("a") as f:
+            f.write("/research/\n")
+        (outside / "source.txt").write_text("synthetic external source\n")
+        writer = root / "unsafe ignored writer"
+        _script(writer, r"""
+import json, os, pathlib, sys
+sys.stdin.read()
+base = pathlib.Path('research/output')
+for rel in ['ok.json', '.env', 'credentials.json', 'cache/a.bin', '_private/a.txt', 'node_modules/a.js']:
+    path = base / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('synthetic\n')
+pathlib.Path('research/outside').mkdir()
+pathlib.Path('research/outside/other.json').write_text('outside prefix\n')
+(base / 'link.txt').symlink_to(os.environ['FAKE_LINK_TARGET'])
+os.link(os.environ['FAKE_LINK_TARGET'], base / 'hardlink.txt')
+pathlib.Path(sys.argv[sys.argv.index('--output-last-message') + 1]).write_text('DONE\n')
+print(json.dumps({'type': 'turn.completed'}))
+""")
+        r = _run_worktree(root, prompt, writer, mode="dirty", prefixes=("research/output",), strict=True,
+                          extra_env={"FAKE_LINK_TARGET": str(outside / "source.txt")})
+        assert r.returncode == 5, (r.stdout, r.stderr)
+        run = _run_dir(root, r.stdout)
+        meta = json.loads((run / "meta.json").read_text())
+        assert meta["status"] == "artifact-capture-incomplete"
+        assert meta["scope"]["status"] == "scope_violation"
+        assert meta["worktree"]["ignored_captured"] == ["research/output/ok.json"]
+        skipped = {row["path"] for row in meta["worktree"]["capture_skipped"]}
+        assert skipped == {"research/output/" + name for name in
+                           ('.env', 'credentials.json', 'cache/a.bin', '_private/a.txt', 'node_modules/a.js',
+                            'link.txt', 'hardlink.txt')}
+        exported = sorted(str(p.relative_to(run / "untracked")) for p in (run / "untracked").rglob('*') if p.is_file())
+        assert exported == ["research/output/ok.json"]
+        patch = (run / "patch.diff").read_text()
+        assert all(path not in patch for path in skipped)
+        assert "research/outside/other.json" not in patch
+        assert (run / "wt/research/output/credentials.json").read_text() == "synthetic\n"
+        assert Path(meta["worktree"]["preserved_path"]).is_dir()
+        assert str(run / "wt") in _git_ok(root, "worktree", "list", "--porcelain")
+        assert (outside / "source.txt").read_text() == "synthetic external source\n"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+        shutil.rmtree(outside, ignore_errors=True)
+
+
+def test_worktree_capture_io_failure_preserves_recoverable_output():
+    global WORKER
+    root, prompt, fake = _init_worktree_repo()
+    original_worker = WORKER
+    try:
+        with (root / ".gitignore").open("a") as f:
+            f.write("/research/\n")
+        driver = root / "capture-failure.py"
+        _script(driver, "import sys\nsys.path.insert(0, " + repr(str(WORKER.parent)) + ")\n" + r"""
+import fresh_worker as fw
+write = fw._private_write
+def fail_copy(path, data):
+    if '/untracked/research/output/' in path:
+        raise OSError('synthetic capture failure')
+    return write(path, data)
+fw._private_write = fail_copy
+sys.exit(fw.main(sys.argv[1:]))
+""")
+        WORKER = driver
+        r = _run_worktree(root, prompt, fake, mode="dirty", prefixes=("research/output",), strict=True,
+                          extra_env={"FAKE_WRITES": "w=research/output/totals.json"})
+        assert r.returncode == 5, (r.stdout, r.stderr)
+        run = _run_dir(root, r.stdout)
+        meta = json.loads((run / "meta.json").read_text())
+        assert meta["status"] == "artifact-capture-failed"
+        assert meta["worktree"]["capture_error"] == "OSError: synthetic capture failure"
+        assert (run / "wt/research/output/totals.json").read_text() == "written\n"
+        assert Path(meta["worktree"]["preserved_path"]).is_dir()
+        assert str(run / "wt") in _git_ok(root, "worktree", "list", "--porcelain")
+    finally:
+        WORKER = original_worker
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_worktree_incomplete_ignored_listing_preserves_output():
+    global WORKER
+    original_worker = WORKER
+    for listing in [b'research/output/totals.json', b'', b'outside-prefix.json\0']:
+        root, prompt, fake = _init_worktree_repo()
+        try:
+            with (root / ".gitignore").open("a") as f:
+                f.write("/research/\n")
+            driver = root / "listing-failure.py"
+            _script(driver, "import sys, subprocess\nsys.path.insert(0, " + repr(str(original_worker.parent)) + ")\n"
+                    + "listing = " + repr(listing) + "\n" + r"""
+import fresh_worker as fw
+process = fw._git_process
+def broken_listing(args, *a, **kw):
+    if args[0] == 'check-ignore':
+        return subprocess.CompletedProcess(args, 0, stdout=listing, stderr=b'')
+    return process(args, *a, **kw)
+fw._git_process = broken_listing
+sys.exit(fw.main(sys.argv[1:]))
+""")
+            WORKER = driver
+            r = _run_worktree(root, prompt, fake, mode="dirty", prefixes=("research/output",), strict=True,
+                              extra_env={"FAKE_WRITES": "w=research/output/totals.json"})
+            assert r.returncode == 5, (listing, r.stdout, r.stderr)
+            run = _run_dir(root, r.stdout)
+            meta = json.loads((run / "meta.json").read_text())
+            assert meta["status"] == "artifact-capture-failed"
+            expected = "unexpected path" if listing.endswith(b"\0") else "incomplete listing"
+            assert expected in meta["worktree"]["capture_error"]
+            assert (run / "wt/research/output/totals.json").read_text() == "written\n"
+            assert not (run / "untracked").exists()
+        finally:
+            WORKER = original_worker
+            shutil.rmtree(root, ignore_errors=True)
+
+
+def test_worktree_final_metadata_failure_keeps_durable_artifacts():
+    global WORKER
+    root, prompt, fake = _init_worktree_repo()
+    original_worker = WORKER
+    try:
+        with (root / ".gitignore").open("a") as f:
+            f.write("/research/\n")
+        driver = root / "metadata-failure.py"
+        _script(driver, "import sys\nsys.path.insert(0, " + repr(str(WORKER.parent)) + ")\n" + r"""
+import fresh_worker as fw
+write_meta = fw._write_meta
+def fail_final_meta(path, meta):
+    if meta['status'] != 'running':
+        raise OSError('synthetic final metadata failure')
+    return write_meta(path, meta)
+fw._write_meta = fail_final_meta
+sys.exit(fw.main(sys.argv[1:]))
+""")
+        WORKER = driver
+        r = _run_worktree(root, prompt, fake, mode="dirty", prefixes=("research/output",), strict=True,
+                          extra_env={"FAKE_WRITES": "w=research/output/totals.json"})
+        assert r.returncode != 0 and 'synthetic final metadata failure' in r.stderr
+        assert 'status: success' not in r.stdout
+        run, = (root / '_private/work/runs').iterdir()
+        assert (run / 'untracked/research/output/totals.json').read_text() == 'written\n'
+        assert 'research/output/totals.json' in (run / 'patch.diff').read_text()
+        assert json.loads((run / 'meta.json').read_text())['status'] == 'running'
+        assert not (run / 'wt').exists()
+    finally:
+        WORKER = original_worker
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_sigterm_during_capture_preserves_owned_worktree_and_output():
+    global WORKER
+    root, prompt, fake = _init_worktree_repo()
+    original_worker = WORKER
+    try:
+        with (root / ".gitignore").open("a") as f:
+            f.write("/research/\n")
+        driver = root / "capture-term.py"
+        _script(driver, "import os, signal, sys\nsys.path.insert(0, " + repr(str(WORKER.parent)) + ")\n" + r"""
+from pathlib import Path
+import fresh_worker as fw
+def interrupt_capture(worktree, *args, **kwargs):
+    assert (Path(worktree) / 'research/output/totals.json').read_text() == 'written\n'
+    os.kill(os.getpid(), signal.SIGTERM)
+    raise AssertionError('SIGTERM did not interrupt capture')
+fw._capture_worktree = interrupt_capture
+sys.exit(fw.main(sys.argv[1:]))
+""")
+        WORKER = driver
+        r = _run_worktree(root, prompt, fake, mode="dirty", prefixes=("research/output",), strict=True,
+                          extra_env={"FAKE_WRITES": "w=research/output/totals.json"})
+        assert r.returncode == 143, (r.returncode, r.stdout, r.stderr)
+        assert 'status: success' not in r.stdout
+        run, = (root / '_private/work/runs').iterdir()
+        assert (run / 'wt/research/output/totals.json').is_file(), 'capture interruption deleted output'
+        assert (run / 'wt/research/output/totals.json').read_text() == 'written\n'
+        meta = json.loads((run / 'meta.json').read_text())
+        assert meta['status'] != 'success'
+        assert meta['worktree']['capture_status'] == 'in_progress'
+        assert Path(meta['worktree']['preserved_path']).resolve() == (run / 'wt').resolve()
+        assert str(run / 'wt') in _git_ok(root, 'worktree', 'list', '--porcelain')
+    finally:
+        WORKER = original_worker
         shutil.rmtree(root, ignore_errors=True)
 
 
@@ -655,7 +936,7 @@ def test_scope_violation_detected_outside_prefix_and_symlink_escape():
         why = {v["path"]: v["why"] for v in meta["scope"]["violations"]}
         assert why["README.md"] == "outside write-prefix"
         assert why[".cache/junk"] == "outside write-prefix"
-        assert why["allowed/cards/escape"] == "symlink under write-prefix escapes it"
+        assert why.get("allowed/cards/escape") == "symlink under write-prefix escapes it"
         assert "allowed/cards/ok.md" not in why
         assert (root / "README.md").read_text(encoding="utf-8") == "written\n", "no rollback"
         assert meta["usage"]["total"] == 7 and meta["read_scope"]["declared"] == "읽음: 없음"
@@ -771,7 +1052,7 @@ def test_write_prefix_boundaries_fail_closed():
         shutil.rmtree(outside, ignore_errors=True)
 
 
-def test_scope_hardlink_alias_outside_workspace_is_violation():  # review R8
+def test_scope_hardlink_alias_outside_workspace_is_violation():
     root = Path(tempfile.mkdtemp(prefix="fresh-worker-r8-"))
     outside = Path(tempfile.mkdtemp(prefix="fresh-worker-r8-out-"))
     try:
@@ -795,7 +1076,7 @@ def test_scope_hardlink_alias_outside_workspace_is_violation():  # review R8
         shutil.rmtree(outside, ignore_errors=True)
 
 
-def test_missing_nested_prefix_is_created_before_baseline():  # review R9
+def test_missing_nested_prefix_is_created_before_baseline():
     root = Path(tempfile.mkdtemp(prefix="fresh-worker-r9-"))
     try:
         prompt = root / "p.md"
@@ -813,7 +1094,7 @@ def test_missing_nested_prefix_is_created_before_baseline():  # review R9
         shutil.rmtree(root, ignore_errors=True)
 
 
-def test_prefix_case_is_not_rewritten_on_case_sensitive_fs():  # review R10 (simulated)
+def test_prefix_case_is_not_rewritten_on_case_sensitive_fs():
     fw = _fw()
     root = Path(tempfile.mkdtemp(prefix="fresh-worker-r10-"))
     try:
@@ -833,7 +1114,7 @@ def test_prefix_case_is_not_rewritten_on_case_sensitive_fs():  # review R10 (sim
         shutil.rmtree(root, ignore_errors=True)
 
 
-def test_usage_string_numbers_stay_raw_but_normalize_to_null():  # review R7
+def test_usage_string_numbers_stay_raw_but_normalize_to_null():
     fw = _fw()
     root = Path(tempfile.mkdtemp(prefix="fresh-worker-usage-str-"))
     try:
@@ -846,7 +1127,7 @@ def test_usage_string_numbers_stay_raw_but_normalize_to_null():  # review R7
         shutil.rmtree(root, ignore_errors=True)
 
 
-def test_engine_sha256_ignores_sync_stamp_lines():  # review R5
+def test_engine_sha256_ignores_sync_stamp_lines():
     fw = _fw()
     root = Path(tempfile.mkdtemp(prefix="fresh-worker-stamp-"))
     try:
@@ -879,7 +1160,7 @@ def _fake_env(**kv):
     return _Ctx()
 
 
-def test_scope_preexisting_symlink_under_prefix_is_violation():  # review R1
+def test_scope_preexisting_symlink_under_prefix_is_violation():
     root = Path(tempfile.mkdtemp(prefix="fresh-worker-r1-"))
     outside = Path(tempfile.mkdtemp(prefix="fresh-worker-r1-out-"))
     try:
@@ -901,7 +1182,7 @@ def test_scope_preexisting_symlink_under_prefix_is_violation():  # review R1
         shutil.rmtree(outside, ignore_errors=True)
 
 
-def test_scope_detects_same_size_change_with_restored_mtime_and_empty_dirs():  # review R2
+def test_scope_detects_same_size_change_with_restored_mtime_and_empty_dirs():
     root = Path(tempfile.mkdtemp(prefix="fresh-worker-r2-"))
     try:
         victim = root / "victim.txt"
@@ -924,7 +1205,7 @@ def test_scope_detects_same_size_change_with_restored_mtime_and_empty_dirs():  #
         shutil.rmtree(root, ignore_errors=True)
 
 
-def test_scope_violation_outranks_runtime_failure():  # review R3
+def test_scope_violation_outranks_runtime_failure():
     root = Path(tempfile.mkdtemp(prefix="fresh-worker-r3-"))
     try:
         prompt = root / "p.md"
@@ -967,14 +1248,14 @@ def test_prefix_spelling_follows_disk_on_case_insensitive_fs():
         shutil.rmtree(root, ignore_errors=True)
 
 
-def test_read_scope_strips_bom_and_uses_first_nonempty_line():  # review R6
+def test_read_scope_strips_bom_and_finds_first_marker():
     fw = _fw()
     assert fw._read_scope("\ufeff읽음: A\n본문\n")["declared"] == "읽음: A"
     assert fw._read_scope("\n  읽음: A  \n본문\n")["declared"] == "읽음: A"
-    assert fw._read_scope("본문\n읽음: 늦음\n") is None
+    assert fw._read_scope("본문\n읽음: 늦음\n")["declared"] == "읽음: 늦음"
 
 
-def test_git_timeout_yields_null_identity():  # review R7
+def test_git_timeout_yields_null_identity():
     fw = _fw()
     real = fw.subprocess.run
     def boom(*a, **k):
@@ -989,7 +1270,7 @@ def test_git_timeout_yields_null_identity():  # review R7
         fw.subprocess.run = real
 
 
-def test_engine_identity_prefers_embedded_kit_rev():  # review R5
+def test_engine_identity_prefers_embedded_kit_rev():
     fw = _fw()
     ident = fw._engine_identity(str(HERE), str(HERE.parent))
     assert set(ident) == {"kit_rev", "kit_rev_source", "kit_dirty", "kit_sync", "repo_rev", "engine_sha256", "agents_sha256"}
@@ -1007,7 +1288,288 @@ def test_engine_identity_prefers_embedded_kit_rev():  # review R5
         fw.KIT_REV_EMBEDDED = old
 
 
+def _allow_cycle_materials(root):
+    path = root / "system/memory-config.json"
+    config = json.loads(path.read_text())
+    config["egress"] = {"model_send": {"deny_prefixes": ["_private/"], "allow_prefixes": ["_private/work/papers/"]}}
+    path.write_text(json.dumps(config))
+
+
+def test_read_materials_actual_isolate_reproduces_missing_then_delivers_all_inputs():
+    root, prompt, _ = _init_worktree_repo()
+    try:
+        _allow_cycle_materials(root)
+        base = "_private/work/papers/2026-10-08-kit/"
+        data = {base + path: text for path, text in {
+            "PROPOSALS.md": "proposals source", "cards/card.md": "card source",
+            "apply/inputs/experiments.md": "experiments source", "apply/item.patch": "patch source",
+            "apply/item.tests.txt": "tests source", "apply/item.spec.json": "spec source",
+            "apply/attempts/old/impl-item.result.md": "original failed answer",
+            "apply/attempts/old/review-item.result.md": "original independent review",
+        }.items()}
+        for path, body in data.items():
+            dest = root / path; dest.parent.mkdir(parents=True, exist_ok=True); dest.write_text(body)
+        prompt.write_text("Read the supplied materials.\n")
+        checker = root / "material checker"
+        _script(checker, """
+import json, pathlib, sys
+args = sys.argv[1:]; sys.stdin.read()
+expected = """ + repr(data) + """
+root = pathlib.Path.cwd()
+assert '/wt' in str(root), root
+for name, body in expected.items():
+    assert (root / name).read_text() == body, name
+    assert not (root / name).is_symlink(), name
+out = pathlib.Path(args[args.index('--output-last-message') + 1])
+out.write_text('RESULT_JSON: {"verdict":"PASS","summary":"all materials read inside isolate","evidence":["material fixture"],"unknowns":[]}')
+print(json.dumps({'type':'turn.completed'}))
+""")
+        missing = _run_worktree(root, prompt, checker)
+        assert missing.returncode != 0, "the former missing-input failure was not reproduced"
+        missing_run = _run_dir(root, missing.stdout)
+        assert "FileNotFoundError" in (missing_run / "stderr.log").read_text()
+        present = _run_worktree(root, prompt, checker, materials=list(data))
+        assert present.returncode == 0, present.stdout + present.stderr
+        run = _run_dir(root, present.stdout)
+        meta = json.loads((run / "meta.json").read_text())["worktree"]
+        assert meta["material_integrity"] is True
+        assert meta["material_sha256"] == {path: hashlib.sha256(body.encode()).hexdigest() for path, body in data.items()}
+        assert meta["files"] == [] and (run / "patch.diff").read_bytes() == b""
+        assert not (run / "wt").exists()
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_read_material_rejects_denied_directory_symlink_and_source_shadow():
+    root, prompt, fake = _init_worktree_repo()
+    try:
+        _allow_cycle_materials(root)
+        private = root / "_private"; private.mkdir()
+        (private / "secret.md").write_text("not approved")
+        allowed = private / "work/papers/cycle"; allowed.mkdir(parents=True)
+        (allowed / "allowed.md").write_text("approved")
+        (allowed / "link.md").symlink_to(allowed / "allowed.md")
+        for target in ("_private/secret.md", "_private/work/papers/cycle", "_private/work/papers/cycle/link.md", "../outside.md", "base.txt"):
+            r = _run_worktree(root, prompt, fake, materials=[target])
+            assert r.returncode == 2, (target, r.stdout, r.stderr)
+        assert (root / "base.txt").read_text() == "base\n"
+        assert not list((root / "_private/work/runs").glob("*/wt"))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_read_material_mutation_overrides_runtime_pass_and_preserves_original():
+    root, prompt, _ = _init_worktree_repo()
+    try:
+        _allow_cycle_materials(root)
+        material = "_private/work/papers/cycle/source.md"
+        path = root / material; path.parent.mkdir(parents=True); path.write_text("original source")
+        worker = root / "material mutation"
+        _script(worker, """
+import json, pathlib, sys
+args = sys.argv[1:]; sys.stdin.read()
+p = pathlib.Path(""" + repr(material) + """); p.chmod(0o600); p.write_text('mutated')
+out = pathlib.Path(args[args.index('--output-last-message') + 1]); out.write_text('PASS')
+print(json.dumps({'type':'turn.completed'}))
+""")
+        r = _run_worktree(root, prompt, worker, materials=[material])
+        assert r.returncode == 4, r.stdout + r.stderr
+        meta = json.loads((_run_dir(root, r.stdout) / "meta.json").read_text())
+        assert meta["status"] == "read-material-changed" and meta["worktree"]["material_integrity"] is False
+        assert meta["worktree"]["material_changes"] == [material]
+        assert path.read_text() == "original source"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_read_material_snapshot_bytes_do_not_follow_later_source_edits():
+    root, prompt, _ = _init_worktree_repo()
+    fw = _fw(); previous_root = fw.ROOT
+    try:
+        fw.ROOT = str(root)
+        (root / "materials").mkdir(); source = root / "materials/item.md"; source.write_text("before")
+        snapshot = fw._snapshot_read_materials(["materials/item.md"])
+        source.write_text("after")
+        run = root / "read-material-snapshot-run"; run.mkdir()
+        wt, meta, _ = fw._prepare_worktree(str(run), "head", snapshot)
+        try:
+            assert (Path(wt) / "materials/item.md").read_text() == "before"
+            assert meta["material_sha256"]["materials/item.md"] == hashlib.sha256(b"before").hexdigest()
+        finally:
+            fw._remove_worktree(wt)
+    finally:
+        fw.ROOT = previous_root
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_sigterm_reaps_runtime_and_removes_only_owned_worktree_and_materials():
+    root, prompt, _ = _init_worktree_repo()
+    process = None
+    try:
+        _allow_cycle_materials(root)
+        material = "_private/work/papers/sample.md"
+        (root / material).parent.mkdir(parents=True)
+        (root / material).write_text("private approved source\n")
+        other = root / "_private/other-worktree"
+        _git_ok(root, "worktree", "add", "--detach", str(other), "HEAD")
+        marker = root / "runtime-pids.json"
+        runtime = root / "stubborn runtime"
+        _script(runtime, '''import json, os, pathlib, signal, subprocess, sys, time
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+child = subprocess.Popen([sys.executable, '-c', 'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)'])
+pathlib.Path(os.environ['PID_MARKER']).write_text(json.dumps([os.getpid(), child.pid, str(pathlib.Path.cwd())]))
+time.sleep(60)
+''')
+        process = subprocess.Popen([sys.executable, str(WORKER), "--runtime", "codex", "--worktree=head",
+                                    "--read-material", material, str(prompt)], cwd=root,
+                                   env=dict(_fixture_env(root), PID_MARKER=str(marker),
+                                            MOTTORI_FRESH_WORKER_CODEX_BIN=str(runtime)),
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        deadline = time.monotonic() + 10
+        while not marker.exists() and time.monotonic() < deadline and process.poll() is None:
+            time.sleep(.05)
+        assert marker.exists(), ("runtime did not start", process.communicate(timeout=1))
+        parent_pid, child_pid, worktree = json.loads(marker.read_text())
+        assert (Path(worktree) / material).is_file()
+        process.terminate()  # Signal just the dispatcher, not its child process group.
+        out, err = process.communicate(timeout=8)
+        assert process.returncode == 143, (process.returncode, out, err)
+        assert not Path(worktree).exists()
+        registered = _git_ok(root, "worktree", "list", "--porcelain")
+        assert worktree not in registered and str(other) in registered and other.is_dir()
+        assert (root / material).read_text() == "private approved source\n"
+        for pid in (parent_pid, child_pid):
+            # A just-killed orphan can briefly be a zombie awaiting the system reaper.
+            result = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True)
+            assert not result.stdout.strip() or result.stdout.strip().startswith("Z"), (pid, result.stdout)
+        meta = json.loads((Path(worktree).parent / "meta.json").read_text())
+        assert meta["status"] == "interrupted"
+    finally:
+        if process and process.poll() is None:
+            process.kill(); process.wait()
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_agents_identity_uses_worker_head_bytes_and_separates_dirty_root():
+    root, prompt, runtime = _init_worktree_repo()
+    try:
+        original = (root / "AGENTS.md").read_bytes()
+        (root / "AGENTS.md").write_text("uncommitted root rules\n")
+        result = _run_worktree(root, prompt, runtime)
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        meta = json.loads((_run_dir(root, result.stdout) / "meta.json").read_text())
+        assert meta["agents_sha256"] == hashlib.sha256(original).hexdigest()
+        assert meta["root_agents_sha256"] == hashlib.sha256((root / "AGENTS.md").read_bytes()).hexdigest()
+        assert meta["agents_sha256"] != meta["root_agents_sha256"]
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_runtime_credentials_are_provider_scoped_end_to_end():
+    root = Path(tempfile.mkdtemp(prefix="worker-provider-env-"))
+    try:
+        home = root / "home"
+        token = home / ".config/mottori/claude-oauth-token"
+        token.parent.mkdir(parents=True)
+        token.write_text("synthetic-saved-claude-token")
+        token.chmod(0o600)
+        prompt = root / "prompt.md"
+        prompt.write_text("Report only environment presence, never credential values.\n")
+        runtime = root / "fake runtime"
+        _script(runtime, r"""
+import json, os, pathlib, sys
+args = sys.argv[1:]
+sys.stdin.read()
+provider_keys = sorted(key for key in os.environ if key.startswith(("CLAUDE_", "ANTHROPIC_", "OPENAI_", "CODEX_")))
+result = json.dumps({"keys": provider_keys,
+                     "saved_token": os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") == "synthetic-saved-claude-token",
+                     "code_home_kept": os.environ.get("CODEX_HOME", "").endswith("synthetic-codex-home")})
+if "--output-last-message" in args:
+    pathlib.Path(args[args.index("--output-last-message") + 1]).write_text(result)
+    print(json.dumps({"type": "turn.completed"}))
+else:
+    print(json.dumps({"type": "result", "result": result}))
+""")
+        common = dict(_fixture_env(root), HOME=str(home),
+                      CLAUDE_CODE_OAUTH_TOKEN="synthetic-inherited-claude-token",
+                      ANTHROPIC_API_KEY="synthetic-anthropic-key",
+                      ANTHROPIC_BASE_URL="https://provider.example.invalid",
+                      OPENAI_API_KEY="synthetic-openai-key", CODEX_API_KEY="synthetic-codex-key",
+                      CODEX_HOME=str(home / "synthetic-codex-home"))
+        for provider in ("codex", "claude"):
+            env = dict(common)
+            env[f"MOTTORI_FRESH_WORKER_{provider.upper()}_BIN"] = str(runtime)
+            if provider == "claude":
+                env["CLAUDE_CODE_OAUTH_TOKEN"] = ""
+            result = subprocess.run([sys.executable, str(WORKER), "--runtime", provider, str(prompt)],
+                                    cwd=root, env=env, capture_output=True, text=True)
+            assert result.returncode == 0, (result.returncode, result.stderr)
+            run = _run_dir(root, result.stdout)
+            observed = json.loads((run / "result.txt").read_text())
+            if provider == "codex":
+                assert not any(key.startswith(("CLAUDE_", "ANTHROPIC_")) for key in observed["keys"]), observed
+                assert "OPENAI_API_KEY" in observed["keys"] and observed["code_home_kept"], observed
+                assert observed["saved_token"] is False
+            else:
+                assert not any(key.startswith(("OPENAI_", "CODEX_")) for key in observed["keys"]), observed
+                assert observed["saved_token"] is True and "ANTHROPIC_API_KEY" in observed["keys"], observed
+            for artifact in run.iterdir():
+                if artifact.is_file():
+                    payload = artifact.read_bytes()
+                    for secret in (b"synthetic-saved-claude-token", b"synthetic-inherited-claude-token",
+                                   b"synthetic-anthropic-key", b"synthetic-openai-key", b"synthetic-codex-key"):
+                        assert secret not in payload, artifact.name
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_codex_environment_never_reads_claude_token_and_hash_binds_policy():
+    fw = _fw()
+    old_env, old_policy = fw._claude_auth.env, fw.ENV_POLICY_VERSION
+    try:
+        def forbidden(*args, **kwargs):
+            raise AssertionError("Codex must not load a saved Claude token")
+        fw._claude_auth.env = forbidden
+        env = fw._runtime_env("codex", "/synthetic/workspace")
+        assert env["MOTTORI_INSTANCE"] == "/synthetic/workspace"
+        first = fw._harness_sha256("codex", fw._codex_command("/result"), ("/result",))
+        fw.ENV_POLICY_VERSION = old_policy + "-changed"
+        assert fw._harness_sha256("codex", fw._codex_command("/result"), ("/result",)) != first
+    finally:
+        fw._claude_auth.env, fw.ENV_POLICY_VERSION = old_env, old_policy
+
+
+def test_read_scope_english_markers_anywhere_are_optional_self_reports():
+    fw = _fw()
+    result = "# Review\nREAD_SCOPE: tools/a.py\nREAD_SCOPE: ignored\nUNREAD: old\nUNREAD: tools/b.py\nRESULT_JSON: {}\n"
+    assert fw._read_scope(result) == {"declared": "READ_SCOPE: tools/a.py", "unread": "UNREAD: tools/b.py"}
+    assert fw._read_scope("UNREAD: missing\n") == {"declared": None, "unread": "UNREAD: missing"}
+    for provider in ("claude", "codex"):
+        prefix = fw._effective_prompt(provider, "")
+        assert "READ_SCOPE:" in prefix and "UNREAD:" in prefix and "self-reports" in prefix
+    valid = fw._result_contract('RESULT_JSON: {"verdict":"PASS","summary":"ok","evidence":["x.py:1"],"unknowns":[]}')
+    assert valid["valid"] and fw._read_scope("No declaration.\n") is None
+
+
+def test_sync_cluster_contains_runtime_and_test_dependencies():
+    fw = _fw()
+    assert set(fw.ENGINE_FILES) <= set(fw.SYNC_FILES)
+    assert "testlib.py" in fw.SYNC_FILES
+    assert len(fw.SYNC_FILES) == len(set(fw.SYNC_FILES))
+
+
 TESTS = [
+    test_runtime_credentials_are_provider_scoped_end_to_end,
+    test_codex_environment_never_reads_claude_token_and_hash_binds_policy,
+    test_read_scope_english_markers_anywhere_are_optional_self_reports,
+    test_sync_cluster_contains_runtime_and_test_dependencies,
+    test_sigterm_reaps_runtime_and_removes_only_owned_worktree_and_materials,
+    test_agents_identity_uses_worker_head_bytes_and_separates_dirty_root,
+    test_read_materials_actual_isolate_reproduces_missing_then_delivers_all_inputs,
+    test_read_material_rejects_denied_directory_symlink_and_source_shadow,
+    test_read_material_mutation_overrides_runtime_pass_and_preserves_original,
+    test_read_material_snapshot_bytes_do_not_follow_later_source_edits,
+
     test_claude_trace_cap_and_capability,
     test_codex_prompt_is_data_not_shell_and_workspace_capability,
     test_prompt_boundaries_fail_closed,
@@ -1034,7 +1596,7 @@ TESTS = [
     test_scope_detects_same_size_change_with_restored_mtime_and_empty_dirs,
     test_scope_violation_outranks_runtime_failure,
     test_prefix_spelling_follows_disk_on_case_insensitive_fs,
-    test_read_scope_strips_bom_and_uses_first_nonempty_line,
+    test_read_scope_strips_bom_and_finds_first_marker,
     test_git_timeout_yields_null_identity,
     test_engine_identity_prefers_embedded_kit_rev,
     test_scope_hardlink_alias_outside_workspace_is_violation,
@@ -1043,8 +1605,15 @@ TESTS = [
     test_usage_string_numbers_stay_raw_but_normalize_to_null,
     test_engine_sha256_ignores_sync_stamp_lines,
     test_worktree_is_created_with_minimum_instance_state_and_cleaned,
+    test_worktree_pins_observed_revision_even_when_head_moves,
     test_worktree_ignores_git_env_pinned_by_an_outer_hook,
     test_worktree_patch_extracts_modified_new_and_deleted_files,
+    test_worktree_ignored_output_survives_cleanup_with_hash_and_patch,
+    test_worktree_unsafe_ignored_outputs_are_not_exported_and_prevent_cleanup,
+    test_worktree_capture_io_failure_preserves_recoverable_output,
+    test_worktree_incomplete_ignored_listing_preserves_output,
+    test_worktree_final_metadata_failure_keeps_durable_artifacts,
+    test_sigterm_during_capture_preserves_owned_worktree_and_output,
     test_worktree_scope_uses_isolate_and_original_tree_is_unchanged,
     test_worktree_dirty_mode_applies_original_tracked_diff,
 ]

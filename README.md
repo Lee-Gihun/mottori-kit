@@ -92,8 +92,9 @@ Change the ledger, then regenerate the view. This prevents the picture and the i
 copy whole rules from papers or other harnesses (`2609.09134`). A rule without a reason is a candidate for
 deletion. Context files grow without limit because reasons decay before instructions do.
 
-**There are seven always-on rules.** The number of instructions followed at once reaches a limit around k=5 to
-6. Adding more makes each rule less reliable. Everything else goes into conditionally loaded documents.
+**Seven rules are the operating default.** This is a local design choice, not a universal model capacity limit.
+Keep important boundaries and recovery steps always available; load the rest when relevant. Revisit the split
+when actual missed instructions or unnecessary overhead provide evidence for a change.
 
 ## No data is included
 

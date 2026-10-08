@@ -1,18 +1,11 @@
 #!/usr/bin/env python3
-"""정합성 감지기 — 이 인스턴스의 문서 드리프트를 결정론으로 잡는다.
+"""Report document consistency issues without changing files.
 
-LLM 없이 결정론으로 드리프트를 감지한다 (수리는 안 한다 — 감지와 보고까지가 소관).
-PRD-info-architecture §4.3(다중 방어)·§6.5(비용은 스캔에 있다 → 스캔을 공짜로)의 구현.
+Checks links, an optional fact ledger, unindexed files newer than their hub, and stale document headers.
+These checks do not establish that a response or action succeeded.
 
-검사 4종:
-  A. 링크 무결성        — linkcheck.py 위임
-  B. 원장 정합성        — rec.py check 위임 (원장이 있을 때만)
-  C. 허브 신선도        — 허브 README보다 새로운 파일이 디렉토리에 있는데 README에 미기재면 경고
-  D. 상태 문서 유통기한  — 헤더의 갱신일이 문서별 허용 일수를 넘으면 경고
-
-사용: python3 tools/coherence.py [--quiet]   (--quiet: 한 줄 요약만 — 훅용)
-종료코드: 문제 있으면 1, 없으면 0.
-"""
+Usage: python3 tools/coherence.py [--quiet]
+Exit 1 for issues, 0 otherwise. --quiet prints a one-line summary."""
 import os, re, subprocess, sys, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -22,12 +15,11 @@ ROOT = M.ROOT
 QUIET = "--quiet" in sys.argv
 TODAY = datetime.date.today()
 
-# 검사 대상 목록은 전부 인스턴스 고유값이라 config에 산다 (DR-025).
-# 허브 신선도: [디렉토리, 그 디렉토리의 인덱스 파일]
+# Checker inventories are instance data from config: directory/index pairs.
 HUBS = [tuple(x) for x in M.check_config("hubs", [])]
 HUB_IGNORE_EXT = set(M.check_config("hub_ignore_ext", [".pyc", ".DS_Store"]))
 
-# 상태 문서 유통기한: [파일, 허용 일수] — 헤더의 첫 날짜(YYYY-MM-DD)를 갱신일로 간주
+# Status limits pair each path with the permitted age of its first header date.
 STATUS_DOCS = [tuple(x) for x in M.check_config("status_docs", [])]
 DATE_PAT = re.compile(r"(20\d{2})-(\d{2})-(\d{2})")
 
@@ -37,8 +29,7 @@ def run(cmd):
 
 
 def check_links():
-    """(깨진 수 또는 None, 상세). None은 검사기 자체가 결과를 못 낸 것이다 — 0도 -1도 아니다
-    (2026-09-17 독립 리뷰: -1을 깨진 링크 수로 보고하면 crash와 정상 broken을 구분 못 한다)."""
+    """Return (broken count or None, details). None means the checker could not produce a measurement."""
     r = run(["python3", "tools/linkcheck.py"])
     m = re.search(r"broken: (\d+)", r.stdout)
     n = int(m.group(1)) if m else None
@@ -74,7 +65,7 @@ def check_hubs():
                 continue
             if os.path.splitext(f)[1] in HUB_IGNORE_EXT:
                 continue
-            # 인덱스보다 새로운 파일인데 인덱스 본문에 이름이 없다 → 미기재 신입
+            # Report a newer file only when the index does not mention it.
             if os.path.getmtime(fp) > imtime and f not in itext:
                 missing.append(f)
         if missing:
