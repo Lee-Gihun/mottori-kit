@@ -24,9 +24,13 @@ boundaries unambiguous.
 - `decision:KIT-DR-nnn` resolves to the `### DR-nnn` heading in `system/kit-decisions.md`.
 - `decision:DR-nnn` resolves to the heading in `system/decisions.md` at the local root.
 - `test:tools/test_x.py::name` requires the file, the named Python function, and a matching
-  `RAN tools/test_x.py::name` line in the recent log selected by `MOTTORI_TEST_LOG`. A missing, older-than-24-hours,
-  or incomplete log is a blocking issue, not a review item. Every Python regression suite records through
-  `tools/testlib.py`; fresh-install, CI, and `tools/gate.py` create the log.
+  `RAN <run-id> <timestamp-ns> tools/test_x.py::name` line in the log selected by `MOTTORI_TEST_LOG`.
+  The run ID must match `MOTTORI_TEST_RUN_ID` and the timestamp must pass the checker's freshness window.
+  Missing, expired, or incomplete execution evidence is a blocking issue, not a review item.
+  `tools/testlib.py` records entry before a test body runs; RAN does not certify assertion or suite success.
+  Each top-level gate attempt executes cited suites under a fresh run ID and requires successful exits.
+  The internal recursion guard prevents a suite from recursively launching itself; it does not turn a previous
+  failed attempt into passing evidence. Fresh-install and CI also create real execution logs.
 - `run:<run id>` requires `_private/work/runs/<run id>/` at the local root.
 - `paper:` and `experiment:` may have sources outside this repository, so only syntax is checked. They are
   reported as `REVIEW external existence not checked`, which is not a blocking issue.

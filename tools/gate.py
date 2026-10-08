@@ -118,6 +118,15 @@ def _lock(timeout=150):
         f.close()
 
 
+def _measurement_failure(reason, *outputs):
+    """Keep the failure cause and bounded subprocess tails on stderr."""
+    print("[gate] " + reason[:1000], file=sys.stderr)
+    for output in outputs:
+        if output:
+            text = output.decode("utf-8", errors="replace") if isinstance(output, bytes) else output
+            print(" | ".join(text.strip().splitlines()[-12:])[-4000:], file=sys.stderr)
+
+
 def _issues(cmd, cwd=None, instance=None, extra_env=None):
     """Return one checker's gated issue IDs, or None when measurement fails."""
     env = dict(os.environ, MOTTORI_INTERNAL_RUN="1")
@@ -127,23 +136,34 @@ def _issues(cmd, cwd=None, instance=None, extra_env=None):
         env["MOTTORI_INSTANCE"] = instance
     if extra_env:
         env.update(extra_env)
+    label = "<checker>"
     try:
+        label = os.path.basename(cmd[1] if len(cmd) > 1 else cmd[0])
         r = subprocess.run(cmd, capture_output=True, text=True,
                            cwd=cwd or M.ROOT, env=env, timeout=120)
-    except Exception:
+    except subprocess.TimeoutExpired as error:
+        _measurement_failure(f"checker timed out: {label}: {error.timeout}s", error.stdout, error.stderr)
+        return None
+    except Exception as error:
+        _measurement_failure(f"checker could not run: {label}: {type(error).__name__}: {error}")
         return None
     if r.returncode != 0:
+        _measurement_failure(f"checker exited nonzero: {label}: exit={r.returncode}", r.stdout, r.stderr)
         return None                      # Findings still exit zero in machine-protocol mode.
     lines = [l for l in r.stdout.splitlines() if l.strip()]
     if not lines or not lines[-1].startswith("#issues "):
+        _measurement_failure(f"checker missing final issue trailer: {label}", r.stdout, r.stderr)
         return None                      # The trailer must be the final output line.
     try:
         declared = int(lines[-1].split()[1])
     except (IndexError, ValueError):
+        _measurement_failure(f"checker malformed issue trailer: {label}", r.stdout, r.stderr)
         return None
     ids = {l.split("\t", 1)[0] for l in lines[:-1]}
     gated = {i for i in ids if not i.startswith("~")}
     if declared != len(gated):
+        _measurement_failure(f"checker issue count mismatch: {label}: declared={declared} actual={len(gated)}",
+                             r.stdout, r.stderr)
         return None
     return gated
 
@@ -152,9 +172,13 @@ def _ensure_git_tree(tree):
     """Give an extracted staged tree local Git metadata before support files are created."""
     # Give the extracted tree its own Git metadata before tests can resolve the parent
     # repository.
-    git_probe = subprocess.run(
-        ["git", "-C", tree, "rev-parse", "--show-toplevel"], capture_output=True, text=True,
-    )
+    try:
+        git_probe = subprocess.run(
+            ["git", "-C", tree, "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+        )
+    except Exception as error:
+        _measurement_failure(f"evidence Git probe could not run: {type(error).__name__}: {error}")
+        raise
     if git_probe.returncode == 0 and os.path.realpath(git_probe.stdout.strip()) == os.path.realpath(tree):
         return True
     fixture_commands = (
@@ -165,10 +189,16 @@ def _ensure_git_tree(tree):
          "commit", "-qm", "staged test evidence fixture"],
     )
     for command in fixture_commands:
-        initialized = subprocess.run(
-            command, cwd=tree, env=os.environ, capture_output=True, text=True
-        )
+        try:
+            initialized = subprocess.run(
+                command, cwd=tree, env=os.environ, capture_output=True, text=True
+            )
+        except Exception as error:
+            _measurement_failure(f"evidence Git setup could not run: {type(error).__name__}: {error}")
+            raise
         if initialized.returncode != 0:
+            _measurement_failure(f"evidence Git setup failed: {command[1]}: exit={initialized.returncode}",
+                                 initialized.stdout, initialized.stderr)
             return False
     return True
 
@@ -186,44 +216,26 @@ def _cited_test_ids(tree):
     return suites, ids
 
 
-def _log_covers(log_path, run_id, ids):
-    """True when the inherited log already holds a fresh RAN record of this run for every cited ID."""
-    import evidencecheck as EC
-    ran, _now = EC._load_test_runs(log_path, run_id)
-    return ran is not None and ids <= ran
-
-
 def _refresh_test_evidence(tree):
-    """Ensure each cited suite has fresh evidence for the current run ID. Reuse an inherited
-    log only when it already covers every required test; otherwise run the cited suites.
-    Fixtures needing a real execution use an empty log or a different run ID.
-    """
+    """Run cited suites under a fresh ID; RAN records prove invocation, not success."""
     if not _ensure_git_tree(tree):
         return os.environ.get(TEST_LOG_ENV), False
     if os.environ.get(TEST_EVIDENCE_ACTIVE) == "1":
         return os.environ.get(TEST_LOG_ENV), True
-    suites, cited_ids = _cited_test_ids(tree)
-    inherited_log = os.environ.get(TEST_LOG_ENV)
-    inherited_run = os.environ.get(TEST_RUN_ID_ENV, "")
-    if (inherited_log and re.fullmatch(r"[A-Za-z0-9._+-]{1,128}", inherited_run)
-            and _log_covers(inherited_log, inherited_run, cited_ids)):
-        return inherited_log, True
+    suites, _cited_ids = _cited_test_ids(tree)
     # evidencecheck's own end-to-end gate fixture must run after every other
     # cited suite has written its records, otherwise its nested gate sees a
     # legitimately incomplete in-progress log.
     ordered = sorted(suites, key=lambda rel: (rel == "tools/test_evidencecheck.py", rel))
     raw_log = os.environ.get(TEST_LOG_ENV)
     log_path = raw_log or _ephem("mottori-test-runs.log")
-    inherited_run_id = os.environ.get(TEST_RUN_ID_ENV, "")
-    run_id = (inherited_run_id if re.fullmatch(r"[A-Za-z0-9._+-]{1,128}", inherited_run_id)
-              else "gate-" + secrets.token_hex(16))
+    # Isolate this attempt from failed runs and late records from timed-out children.
+    run_id = "gate-" + secrets.token_hex(16)
     try:
         os.makedirs(os.path.dirname(os.path.abspath(log_path)), exist_ok=True)
-        if raw_log:
-            open(log_path, "a", encoding="utf-8").close()
-        else:
-            open(log_path, "w", encoding="utf-8").close()
-    except OSError:
+        open(log_path, "a", encoding="utf-8").close()
+    except OSError as error:
+        _measurement_failure(f"test evidence log unavailable: {type(error).__name__}: {error}")
         return log_path, False
     env = dict(os.environ, **{
         TEST_LOG_ENV: log_path,
@@ -233,13 +245,20 @@ def _refresh_test_evidence(tree):
     })
     for rel in ordered:
         if not os.path.isfile(os.path.join(tree, rel)):
+            print(f"[gate] test evidence suite missing: {rel}", file=sys.stderr)
             return log_path, False
         try:
             result = subprocess.run(
                 [sys.executable, rel], cwd=tree, env=env,
                 capture_output=True, text=True, timeout=120,
             )
-        except Exception:
+        except subprocess.TimeoutExpired as error:
+            _measurement_failure(f"test evidence suite timed out: {rel}: {error.timeout}s",
+                                 error.stdout, error.stderr)
+            return log_path, False
+        except Exception as error:
+            print(f"[gate] test evidence suite could not run: {rel}: "
+                  f"{type(error).__name__}: {error}", file=sys.stderr)
             return log_path, False
         if result.returncode != 0:
             tail = (result.stdout + result.stderr).strip().splitlines()[-12:]

@@ -3000,7 +3000,15 @@
       "consumers": [
         "tool"
       ],
-      "depends_on": [],
+      "depends_on": [
+        ".gitignore",
+        "CHANGELOG.md",
+        "README.md",
+        "system/enforcement-matrix.md",
+        "system/kit-decisions.md",
+        "templates/memory-config.json",
+        "tools/gate.py"
+      ],
       "reviewed_at": null
     },
     {
@@ -3059,7 +3067,8 @@
         "tools/gate.py",
         "tools/install_hooks.sh",
         "tools/manifest_build.py",
-        "tools/test_manifests.py"
+        "tools/test_manifests.py",
+        "tools/testlib.py"
       ],
       "reviewed_at": null
     },

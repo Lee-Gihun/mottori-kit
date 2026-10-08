@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regression tests for the public evidencecheck CLI."""
 
+import contextlib
 import os
 import pathlib
 import re
@@ -307,39 +308,259 @@ evidence: none
         tmp.cleanup()
 
 
-def test_refresh_reuses_fresh_evidence_for_the_same_run():
-    """Re-run cited suites only when the inherited log lacks a fresh record for the same run ID."""
+@contextlib.contextmanager
+def _refresh_fixture():
+    from unittest import mock
+    import gate as G
+
+    tmp, tree = _fixture()
+    try:
+        shutil.copy2(ROOT / "tools/testlib.py", tree / "tools/testlib.py")
+        marker = "`test:tools/test_probe.py::test_probe`"
+        _write(tree / "system/kit-decisions.md", "### DR-001 fixture\nEvidence: " + marker + ".\n")
+        _write(tree / "CHANGELOG.md", "## v0\n\n### [Note] fixture\nEvidence: " + marker + ".\n")
+        _write(tree / "system/enforcement-matrix.md",
+               "| Contract | Status | Evidence |\n|---|---|---|\n| fixture | ENFORCED | " + marker + " |\n")
+        log = tree / "runs.log"
+        log.write_text("", encoding="utf-8")
+        with mock.patch.dict(os.environ, {
+                "MOTTORI_TEST_LOG": str(log), "MOTTORI_TEST_RUN_ID": "caller-run"}):
+            os.environ.pop("MOTTORI_TEST_EVIDENCE_ACTIVE", None)
+            yield G, tree, log
+    finally:
+        tmp.cleanup()
+
+
+def _probe(body):
+    return ("import os, pathlib\nfrom testlib import run_test\n"
+            "def test_probe():\n"
+            "    with pathlib.Path('attempts.txt').open('a') as out:\n"
+            "        out.write(os.environ['MOTTORI_TEST_RUN_ID'] + '\\n')\n"
+            + body + "\nrun_test(test_probe, __file__)\n")
+
+
+def test_refresh_reruns_inherited_evidence_with_new_ids():
+    """Inherited invocation records cannot replace a completed current suite."""
+    with _refresh_fixture() as (G, tree, log):
+        historical = _run_line("tools/test_probe.py::test_probe", run_id="caller-run")
+        log.write_text(historical, encoding="utf-8")
+        _write(tree / "tools/test_probe.py", _probe("    assert True"))
+        for caller in ("caller-run", "caller-run", "another-caller"):
+            os.environ["MOTTORI_TEST_RUN_ID"] = caller
+            path, ok = G._refresh_test_evidence(str(tree))
+            assert ok and path == str(log), (path, ok)
+        attempts = (tree / "attempts.txt").read_text().splitlines()
+        assert len(attempts) == len(set(attempts)) == 3, attempts
+        assert all(run.startswith("gate-") for run in attempts), attempts
+        assert log.read_text().startswith(historical), "preserve inherited execution history"
+        # A nested evidence fixture uses its outer attempt, without starting another suite.
+        os.environ["MOTTORI_TEST_EVIDENCE_ACTIVE"] = "1"
+        run_id = os.environ["MOTTORI_TEST_RUN_ID"]
+        assert G._refresh_test_evidence(str(tree)) == (str(log), True)
+        assert os.environ["MOTTORI_TEST_RUN_ID"] == run_id
+        assert (tree / "attempts.txt").read_text().splitlines() == attempts
+        from unittest import mock
+        os.environ.pop("MOTTORI_TEST_EVIDENCE_ACTIVE")
+        os.environ.pop("MOTTORI_TEST_LOG")
+        with mock.patch.object(G, "_ephem", return_value=str(log)):
+            assert G._refresh_test_evidence(str(tree)) == (str(log), True)
+        assert len(log.read_text().splitlines()) == 5, "default logs must preserve history too"
+
+
+def test_refresh_retries_after_later_test_failure():
+    with _refresh_fixture() as (G, tree, log):
+        source = _probe("    assert True") + (
+            "def test_later():\n    raise AssertionError('later failure')\n"
+            "run_test(test_later, __file__)\n")
+        _write(tree / "tools/test_probe.py", source)
+        for _ in range(2):
+            os.environ["MOTTORI_TEST_RUN_ID"] = "caller-run"
+            assert G._refresh_test_evidence(str(tree)) == (str(log), False)
+        attempts = (tree / "attempts.txt").read_text().splitlines()
+        assert len(attempts) == len(set(attempts)) == 2, attempts
+        assert len(log.read_text().splitlines()) == 4, "retain both failed suite histories"
+
+
+def test_refresh_rechecks_imports_and_rejects_old_test_coverage():
+    import evidencecheck as EC
+
+    with _refresh_fixture() as (G, tree, log):
+        _write(tree / "tools/fixture_dependency.py", "READY = True\n")
+        _write(tree / "tools/test_probe.py", _probe(
+            "    from fixture_dependency import READY\n    assert READY"))
+        assert G._refresh_test_evidence(str(tree)) == (str(log), True)
+        first_id = os.environ["MOTTORI_TEST_RUN_ID"]
+        _write(tree / "tools/fixture_dependency.py", "READY = False\n")
+        os.environ["MOTTORI_TEST_RUN_ID"] = first_id
+        assert G._refresh_test_evidence(str(tree)) == (str(log), False)
+        # The cited function still exists but no longer runs in this source version.
+        _write(tree / "tools/test_probe.py", "from testlib import run_test\n"
+               "def test_probe():\n    pass\n"
+               "def test_other():\n    pass\nrun_test(test_other, __file__)\n")
+        os.environ["MOTTORI_TEST_RUN_ID"] = first_id
+        assert G._refresh_test_evidence(str(tree)) == (str(log), True)
+        issues, _reviews, _markers = EC.check(str(tree), str(tree), str(log))
+        assert any("not-run|" in issue[0] and "::test_probe" in issue[0] for issue in issues), issues
+        assert os.environ["MOTTORI_TEST_RUN_ID"] != first_id
+
+
+def test_refresh_timeout_late_records_cannot_cover_retry():
+    from unittest import mock
+    import evidencecheck as EC
+
+    with _refresh_fixture() as (G, tree, log):
+        _write(tree / "tools/late_record.py", "import pathlib, time\n"
+               "from testlib import run_test\n"
+               "deadline = time.monotonic() + 5\n"
+               "while not pathlib.Path('release-late').exists() and time.monotonic() < deadline:\n"
+               "    time.sleep(0.02)\n"
+               "if not pathlib.Path('release-late').exists():\n    raise SystemExit(1)\n"
+               "def test_probe():\n    pass\n"
+               "run_test(test_probe, pathlib.Path(__file__).with_name('test_probe.py'))\n"
+               "pathlib.Path('late.done').write_text('finished')\n")
+        _write(tree / "tools/test_probe.py", _probe(
+            "    import subprocess, sys, time\n"
+            "    subprocess.Popen([sys.executable, 'tools/late_record.py'],\n"
+            "                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+            "    time.sleep(10)"))
+        launch = subprocess.run
+
+        def short_timeout(command, **kwargs):
+            if command == [sys.executable, "tools/test_probe.py"]:
+                kwargs["timeout"] = 1
+            return launch(command, **kwargs)
+
+        with mock.patch.object(G.subprocess, "run", side_effect=short_timeout):
+            assert G._refresh_test_evidence(str(tree)) == (str(log), False)
+        (tree / "release-late").touch()
+        deadline = time.monotonic() + 5
+        while not (tree / "late.done").exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert (tree / "late.done").exists(), "timed-out descendant did not finish its late record"
+        historical = log.read_text()
+        assert len(historical.splitlines()) == 2, historical
+        _write(tree / "tools/test_probe.py", "from testlib import run_test\n"
+               "def test_probe():\n    pass\n"
+               "def test_other():\n    pass\nrun_test(test_other, __file__)\n")
+        os.environ["MOTTORI_TEST_RUN_ID"] = "caller-run"
+        assert G._refresh_test_evidence(str(tree)) == (str(log), True)
+        assert log.read_text().startswith(historical), "late execution history must not be erased"
+        issues, _reviews, _markers = EC.check(str(tree), str(tree), str(log))
+        assert any("not-run|" in issue[0] and "::test_probe" in issue[0] for issue in issues), issues
+
+
+def test_refresh_reports_timeout_and_launch_error_without_evidence():
     sys.path.insert(0, str(ROOT / "tools"))
     import gate as G
-    tmp = tempfile.TemporaryDirectory(prefix="evidence-reuse-")
-    keys = ("MOTTORI_TEST_LOG", "MOTTORI_TEST_RUN_ID", "MOTTORI_TEST_EVIDENCE_ACTIVE")
-    saved = {key: os.environ.get(key) for key in keys}
-    try:
-        tree = pathlib.Path(tmp.name) / "tree"
-        sentinel = tree / "probe-ran.txt"
-        _write(tree / "tools" / "test_probe.py",
-               "import pathlib, sys\n"
-               "pathlib.Path(sys.argv[0]).resolve().parent.parent.joinpath('probe-ran.txt').write_text('ran')\n")
-        _write(tree / "CHANGELOG.md", "## v0\n\nEvidence: `test:tools/test_probe.py::test_probe`.\n")
-        log = pathlib.Path(tmp.name) / "runs.log"
-        log.write_text(_run_line("tools/test_probe.py::test_probe", run_id="reuse-1"), encoding="utf-8")
-        os.environ.pop("MOTTORI_TEST_EVIDENCE_ACTIVE", None)
-        os.environ["MOTTORI_TEST_LOG"] = str(log)
-        os.environ["MOTTORI_TEST_RUN_ID"] = "reuse-1"
-        path, ok = G._refresh_test_evidence(str(tree))
-        assert ok and path == str(log), (path, ok)
-        assert not sentinel.exists(), "a covered marker must not re-run its suite"
-        os.environ["MOTTORI_TEST_RUN_ID"] = "reuse-2"
-        path, ok = G._refresh_test_evidence(str(tree))
-        assert ok, (path, ok)
-        assert sentinel.exists(), "another run ID is not evidence: the suite must run"
-    finally:
-        for key, value in saved.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
-        tmp.cleanup()
+    import contextlib
+    import io
+    from unittest import mock
+
+    with tempfile.TemporaryDirectory(prefix="evidence-errors-") as temporary:
+        tree = pathlib.Path(temporary)
+        rel = "tools/test_probe.py"
+        _write(tree / rel, "def test_probe():\n    pass\n")
+        _write(tree / "CHANGELOG.md", "Evidence: `test:tools/test_probe.py::test_probe`.\n")
+        log = tree / "runs.log"
+        cases = (
+            (subprocess.TimeoutExpired([sys.executable, rel], 120,
+                                       output=b"partial output\n", stderr=b"nested detail\n"),
+             ("timed out", rel, "120s", "partial output", "nested detail")),
+            (OSError("synthetic launch failure"), ("could not run", rel, "OSError", "synthetic launch failure")),
+        )
+        for error, expected in cases:
+            log.write_text("", encoding="utf-8")
+            stderr = io.StringIO()
+            with mock.patch.dict(os.environ, {
+                "MOTTORI_TEST_LOG": str(log), "MOTTORI_TEST_RUN_ID": "unavailable-fixture",
+            }):
+                os.environ.pop("MOTTORI_TEST_EVIDENCE_ACTIVE", None)
+                with mock.patch.object(G, "_ensure_git_tree", return_value=True), \
+                        mock.patch.object(G.subprocess, "run", side_effect=error) as launch, \
+                        contextlib.redirect_stderr(stderr):
+                    path, ok = G._refresh_test_evidence(str(tree))
+            assert path == str(log) and ok is False, (path, ok)
+            assert log.read_text(encoding="utf-8") == "", "this pre-execution fixture must leave its empty log unchanged"
+            assert launch.call_args.kwargs["timeout"] == 120
+            assert all(part in stderr.getvalue() for part in expected), stderr.getvalue()
+
+
+def test_checker_failure_diagnostics_keep_unavailable_verdict():
+    sys.path.insert(0, str(ROOT / "tools"))
+    import gate as G
+    import contextlib
+    import io
+    from unittest import mock
+
+    command = [sys.executable, "tools/evidencecheck.py", "--issues"]
+    cases = (
+        (subprocess.TimeoutExpired(command, 120, output=b"partial output", stderr=b"nested detail"),
+         ("checker timed out", "evidencecheck.py", "120s", "nested detail")),
+        (OSError("synthetic launch failure"), ("checker could not run", "OSError")),
+        (subprocess.CompletedProcess(command, 2, "", "synthetic checker failure"),
+         ("checker exited nonzero", "exit=2", "synthetic checker failure")),
+        (subprocess.CompletedProcess(command, 0, "not a trailer\n", ""),
+         ("checker missing final issue trailer", "not a trailer")),
+        (subprocess.CompletedProcess(command, 0, "#issues invalid\n", ""),
+         ("checker malformed issue trailer",)),
+        (subprocess.CompletedProcess(command, 0, "issue\tmessage\n#issues 0\n", ""),
+         ("checker issue count mismatch", "declared=0 actual=1")),
+    )
+    for outcome, expected in cases:
+        stderr = io.StringIO()
+        options = {"side_effect": outcome} if isinstance(outcome, Exception) else {"return_value": outcome}
+        with mock.patch.object(G.subprocess, "run", **options) as launch, contextlib.redirect_stderr(stderr):
+            issues = G._issues(command)
+        assert issues is None, issues
+        assert launch.call_args.kwargs["timeout"] == 120
+        assert all(part in stderr.getvalue() for part in expected), stderr.getvalue()
+    noisy = "discarded-prefix\n" + ("x" * 1000 + "\n") * 20
+    stderr = io.StringIO()
+    with mock.patch.object(G.subprocess, "run", side_effect=subprocess.TimeoutExpired(
+            command, 120, output=noisy, stderr=noisy)), contextlib.redirect_stderr(stderr):
+        assert G._issues(command) is None
+    assert "discarded-prefix" not in stderr.getvalue()
+    assert len(stderr.getvalue()) < 8500, "subprocess diagnostics must remain bounded"
+
+
+def test_evidence_git_and_log_failures_report_their_source():
+    sys.path.insert(0, str(ROOT / "tools"))
+    import gate as G
+    import contextlib
+    import io
+    from unittest import mock
+
+    stderr = io.StringIO()
+    results = [subprocess.CompletedProcess(["git"], 1, "", "not a repository"),
+               subprocess.CompletedProcess(["git"], 2, "", "synthetic git init failure")]
+    with mock.patch.object(G.subprocess, "run", side_effect=results), contextlib.redirect_stderr(stderr):
+        assert G._ensure_git_tree("/synthetic-tree") is False
+    assert "evidence Git setup failed: init: exit=2" in stderr.getvalue(), stderr.getvalue()
+    assert "synthetic git init failure" in stderr.getvalue()
+    stderr = io.StringIO()
+    with mock.patch.object(G.subprocess, "run", side_effect=OSError("synthetic git launch")), \
+            contextlib.redirect_stderr(stderr):
+        try:
+            G._ensure_git_tree("/synthetic-tree")
+        except OSError:
+            pass
+        else:
+            raise AssertionError("Git launch errors must still propagate")
+    assert "evidence Git probe could not run" in stderr.getvalue(), stderr.getvalue()
+    with tempfile.TemporaryDirectory(prefix="evidence-log-error-") as temporary:
+        root = pathlib.Path(temporary)
+        blocker = root / "not-a-directory"
+        blocker.write_text("fixture", encoding="utf-8")
+        log = blocker / "runs.log"
+        stderr = io.StringIO()
+        with mock.patch.dict(os.environ, {
+                "MOTTORI_TEST_LOG": str(log), "MOTTORI_TEST_RUN_ID": "log-error-fixture"}):
+            os.environ.pop("MOTTORI_TEST_EVIDENCE_ACTIVE", None)
+            with mock.patch.object(G, "_ensure_git_tree", return_value=True), \
+                    contextlib.redirect_stderr(stderr):
+                path, ok = G._refresh_test_evidence(str(root))
+        assert path == str(log) and ok is False, (path, ok)
+        assert "test evidence log unavailable" in stderr.getvalue(), stderr.getvalue()
 
 
 def test_gate_consumes_evidencecheck_issues_end_to_end():
@@ -433,6 +654,13 @@ def test_gate_consumes_evidencecheck_issues_end_to_end():
                 + manifest_diagnostic.stdout + manifest_diagnostic.stderr
             )
         assert "evidencecheck 0건" in baseline.stdout, baseline.stdout
+        if env.get("MOTTORI_TEST_EVIDENCE_ACTIVE") != "1":
+            records = pathlib.Path(env["MOTTORI_TEST_LOG"]).read_text().splitlines()
+            run_ids = {line.split()[1] for line in records if line.startswith("RAN ")}
+            assert len(run_ids) == 1, run_ids
+            env["MOTTORI_TEST_RUN_ID"] = run_ids.pop()
+        # The baseline above ran the real outer suite. Subsequent fixture operations consume
+        # that completed attempt while checking staged-document rejection below.
         env["MOTTORI_TEST_EVIDENCE_ACTIVE"] = "1"
         status = subprocess.run(
             [sys.executable, "tools/gate.py", "status"],
@@ -536,7 +764,13 @@ TESTS = [
     test_required_locations_without_markers_fail,
     test_changelog_evidence_none_is_explicit_pass,
     test_legacy_dr_evidence_none_is_explicit_pass,
-    test_refresh_reuses_fresh_evidence_for_the_same_run,
+    test_refresh_reruns_inherited_evidence_with_new_ids,
+    test_refresh_retries_after_later_test_failure,
+    test_refresh_rechecks_imports_and_rejects_old_test_coverage,
+    test_refresh_timeout_late_records_cannot_cover_retry,
+    test_refresh_reports_timeout_and_launch_error_without_evidence,
+    test_checker_failure_diagnostics_keep_unavailable_verdict,
+    test_evidence_git_and_log_failures_report_their_source,
     test_gate_consumes_evidencecheck_issues_end_to_end,
 ]
 

@@ -452,8 +452,8 @@ STRINGS = {
         "ko": "공유 {shared}개 중 {different}개 갈라짐: {items}\n      `python3 tools/kit_sync.py` 로 차이를 보고 `--apply`로 내보낸다",
     },
     "doctor.kit_same": {
-        "en": "{count} shared tools byte-identical ({kit})",
-        "ko": "공유 도구 {count}개 바이트 동일 ({kit})",
+        "en": "{count} shared tools match after export normalization ({kit})",
+        "ko": "공유 도구 {count}개 내보내기 정규화 후 일치 ({kit})",
     },
     "doctor.personal_exposure": {
         "en": "context=personal; {count} exposed paths (tracking track documents is normal)",

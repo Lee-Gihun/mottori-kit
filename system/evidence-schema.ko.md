@@ -1,4 +1,4 @@
-<!-- source: evidence-schema.md sha256:2c4ae7045a7859acbc13e2aeef5d72ea56cc067b841598a27dc7e56759381312 source-of-truth: en -->
+<!-- source: evidence-schema.md sha256:6140270a893ef031882e82c64d0d06968c24ec355b38dfd01fc3c4e3c1c38c9e source-of-truth: en -->
 # 근거 표지 스키마
 
 근거 표지는 결정이나 변경의 근거를 기계가 찾을 수 있게 하는 포인터다. 검사기는 모든 표지의
@@ -25,9 +25,13 @@ DOI는 `10.` 접두와 registrant 번호, `/` 뒤 suffix가 모두 있어야 한
 - `decision:KIT-DR-nnn`은 `system/kit-decisions.md`의 `### DR-nnn` 제목으로 해석한다.
 - `decision:DR-nnn`은 로컬 루트의 `system/decisions.md` 제목으로 해석한다.
 - `test:tools/test_x.py::name`은 검사 트리의 파일과 Python 함수 이름뿐 아니라
-  `MOTTORI_TEST_LOG`가 가리키는 최근 로그의 `RAN tools/test_x.py::name` 행도 있어야 한다. 로그가 없거나,
-  24시간보다 오래됐거나 해당 행이 없으면 REVIEW가 아니라 차단 이슈다.
-  모든 Python 회귀 suite는 `tools/testlib.py`로 기록하고 fresh-install, CI, `tools/gate.py`가 로그를 만든다.
+  `MOTTORI_TEST_LOG`가 가리키는 로그의 `RAN <run-id> <timestamp-ns> tools/test_x.py::name` 행도 있어야 한다.
+  실행 ID는 `MOTTORI_TEST_RUN_ID`와 같아야 하고 시각은 검사기의 신선도 범위 안이어야 한다.
+  실행 근거가 없거나 오래됐거나 불완전하면 REVIEW가 아니라 차단 이슈다.
+  `tools/testlib.py`는 테스트 본문에 진입하기 전에 기록한다. RAN은 assertion이나 suite 성공 증명이 아니다.
+  게이트의 각 최상위 시도는 새 실행 ID로 인용된 suite를 실제 실행하고 정상 종료를 요구한다.
+  내부 재귀 방지는 suite가 자신을 다시 시작하지 않게 하며 이전 실패 시도를 통과 근거로 바꾸지 않는다.
+  fresh-install과 CI도 실제 실행 로그를 만든다.
 - `run:<run id>`는 로컬 루트의 `_private/work/runs/<run id>/` 디렉터리가 있어야 한다.
 - `paper:`와 `experiment:`은 이 저장소 밖에 원본이 있을 수 있으므로 문법만 검사하고
   `REVIEW 외부 존재 미판정`으로 표시한다. 이 표시는 차단 이슈가 아니다.

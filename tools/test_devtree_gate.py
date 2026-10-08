@@ -15,12 +15,19 @@ from testlib import run_test
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def fixture_env(root):
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    for key in ("MOTTORI_INSTANCE", "CLAUDE_PROJECT_DIR", "MOTTORI_TEST_EVIDENCE_ACTIVE"):
+        env.pop(key, None)
+    env.update(MOTTORI_LANG="ko", MOTTORI_TEST_LOG=str(root / ".git" / "devtree-runs.log"),
+               MOTTORI_TEST_RUN_ID=root.parent.name)
+    return env
+
+
 def run(root, *args, check=False):
-    env = dict(os.environ, MOTTORI_LANG="ko")
-    env.pop("MOTTORI_INSTANCE", None)
-    env.pop("CLAUDE_PROJECT_DIR", None)
     result = subprocess.run(
-        [sys.executable, *args], cwd=root, env=env, capture_output=True, text=True
+        [sys.executable, *args], cwd=root, env=fixture_env(root),
+        capture_output=True, text=True,
     )
     if check and result.returncode:
         raise AssertionError(
@@ -30,41 +37,45 @@ def run(root, *args, check=False):
     return result
 
 
-def clone_current_tree():
-    """Clone HEAD, then stage current delivery bytes so the fixture tests this checkout."""
+def fixture_tree():
+    """Stage current gate/state tools with a small, independently executed evidence probe."""
     outer = Path(tempfile.mkdtemp(prefix="devtree-gate-"))
-    clone = outer / "clone"
-    subprocess.run(
-        ["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(clone)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    listed = subprocess.run(
-        ["git", "-C", str(ROOT), "ls-files", "-z"],
-        check=True,
-        capture_output=True,
-    ).stdout
-    paths = {raw.decode("utf-8") for raw in listed.split(b"\0") if raw}
-    # A fresh-install test stages this newly delivered fixture before invoking it, while a
-    # worker checkout may not. Include the fixture in both cases so nested direct/index
-    # evidence measurements see the same tree.
-    paths.add(Path(__file__).relative_to(ROOT).as_posix())
-    for rel in sorted(paths):
-        source = ROOT / rel
-        target = clone / rel
-        if source.is_file():
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, target)
-        elif target.exists():
-            target.unlink()
-    subprocess.run(
-        ["git", "-C", str(clone), "add", "-A"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return outer, clone
+    root = outer / "repo"
+    root.mkdir()
+    paths = ("templates/memory-config.json", *("tools/" + name for name in (
+        "gate.py", "enforce.py", "memlib.py", "i18n.py", "now.py", "linkcheck.py",
+        "evidencecheck.py", "manifest_build.py", "testlib.py")))
+    for rel in paths:
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / rel, target)
+    marker = "`test:tools/test_devtree_probe.py::test_probe`"
+    files = {
+        ".gitignore": "_private/\nstate/\nsystem/memory-config.json\n",
+        "README.md": "# Synthetic gate fixture\n",
+        "system/kit-decisions.md": "### DR-001 fixture\nContext: " + marker + ".\n",
+        "CHANGELOG.md": "## v0\n\n### [Note] fixture\nEvidence: " + marker + ".\n",
+        "system/enforcement-matrix.md": (
+            "| Contract | Status | Evidence |\n|---|---|---|\n"
+            "| fixture | ENFORCED | " + marker + " |\n"),
+        "tools/test_devtree_probe.py": (
+            "from pathlib import Path\nfrom testlib import run_test\n"
+            "def test_probe():\n"
+            "    root = Path(__file__).resolve().parents[1]\n"
+            "    assert (root / 'README.md').read_text() == '# Synthetic gate fixture\\n'\n"
+            "if __name__ == '__main__':\n    run_test(test_probe, __file__)\n"),
+    }
+    for rel, content in files.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    (root / "state").mkdir()
+    env = fixture_env(root)
+    for command in (["git", "init", "-q"], ["git", "add", "-A"],
+                    ["git", "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+                     "commit", "-qm", "synthetic gate fixture"]):
+        subprocess.run(command, cwd=root, env=env, check=True, capture_output=True, text=True)
+    return outer, root
 
 
 def check_output(root, *extra):
@@ -72,7 +83,7 @@ def check_output(root, *extra):
 
 
 def test_unconfigured_devtree_precommit_is_not_applicable():
-    outer, root = clone_current_tree()
+    outer, root = fixture_tree()
     try:
         assert not (root / "system" / "memory-config.json").exists()
         assert not (root / "state" / "NOW.md").exists()
@@ -100,7 +111,7 @@ def test_unconfigured_devtree_precommit_is_not_applicable():
 
 
 def test_partial_install_without_config_fails_closed():
-    outer, root = clone_current_tree()
+    outer, root = fixture_tree()
     try:
         baseline = run(root, str(root / "tools" / "gate.py"), "baseline")
         assert baseline.returncode == 0, baseline.stdout + baseline.stderr
@@ -145,7 +156,7 @@ def test_private_only_partial_install_without_config_fails_closed():
         ("threads.json", "[]\n"),
     )
     for name, content in residues:
-        outer, root = clone_current_tree()
+        outer, root = fixture_tree()
         try:
             baseline = run(root, str(root / "tools" / "gate.py"), "baseline")
             assert baseline.returncode == 0, baseline.stdout + baseline.stderr
@@ -171,7 +182,7 @@ def test_private_only_partial_install_without_config_fails_closed():
 
 
 def test_selfcheck_warns_with_both_different_issue_sets():
-    outer, root = clone_current_tree()
+    outer, root = fixture_tree()
     try:
         config = json.loads((root / "templates" / "memory-config.json").read_text(encoding="utf-8"))
         config["instance"].update({"name": "fixture", "context": "personal"})
@@ -200,7 +211,34 @@ def test_selfcheck_warns_with_both_different_issue_sets():
         shutil.rmtree(outer, ignore_errors=True)
 
 
+def test_fixture_evidence_is_isolated_and_fail_closed():
+    outer, root = fixture_tree()
+    try:
+        log = root / ".git" / "devtree-runs.log"
+        assert not log.exists()
+        baseline = run(root, str(root / "tools/gate.py"), "baseline")
+        assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+        assert "evidencecheck 0건" in baseline.stdout, baseline.stdout
+        records = log.read_text(encoding="utf-8").splitlines()
+        assert records and all(line.endswith(" tools/test_devtree_probe.py::test_probe")
+                               for line in records), records
+        probe = root / "tools/test_devtree_probe.py"
+        log.write_text("", encoding="utf-8")
+        probe.write_text("raise RuntimeError('synthetic probe failure')\n", encoding="utf-8")
+        failed = run(root, str(root / "tools/gate.py"), "baseline")
+        assert failed.returncode != 0, failed.stdout + failed.stderr
+        assert "test evidence suite failed: tools/test_devtree_probe.py" in failed.stderr, failed.stderr
+        assert "synthetic probe failure" in failed.stderr, failed.stderr
+        probe.unlink()
+        missing = run(root, str(root / "tools/gate.py"), "baseline")
+        assert missing.returncode != 0, missing.stdout + missing.stderr
+        assert "test evidence suite missing: tools/test_devtree_probe.py" in missing.stderr, missing.stderr
+    finally:
+        shutil.rmtree(outer, ignore_errors=True)
+
+
 TESTS = [
+    test_fixture_evidence_is_isolated_and_fail_closed,
     test_unconfigured_devtree_precommit_is_not_applicable,
     test_partial_install_without_config_fails_closed,
     test_private_only_partial_install_without_config_fails_closed,

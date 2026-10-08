@@ -883,36 +883,42 @@ def c_upstream():
 
 
 def c_engine_drift():
-    """Detect differences between the source engine and kit after export normalization. This reports drift; it does not authorize or perform export."""
+    """Compare shared tools through the exporter's read-only policy, not directory overlap."""
     kit = os.environ.get("MOTTORI_KIT") or os.path.expanduser("~/mottori-kit")
     if not os.path.isdir(os.path.join(kit, "tools")) or os.path.realpath(kit) == os.path.realpath(ROOT):
         return SKIP, t("doctor.kit_missing")
+    path = os.path.join(ROOT, "tools", "kit_sync.py")
+    if not os.path.isfile(path):
+        return SKIP, t("doctor.kit_sync_missing", error="not installed")
     try:
-        import kit_sync
-    except Exception as e:
-        return SKIP, t("doctor.kit_sync_missing", error=e)
-    # Normalize intentional export differences before reporting drift.
-    mine, theirs = os.path.join(ROOT, "tools"), os.path.join(kit, "tools")
-    shared = sorted(set(os.listdir(mine)) & set(os.listdir(theirs)))
-    diff = []
-    for f in shared:
-        a, b = os.path.join(mine, f), os.path.join(theirs, f)
-        if not os.path.isfile(a):
-            continue
-        try:
-            want = kit_sync.depersonalize(open(a, encoding="utf-8").read())
-            have = open(b, encoding="utf-8").read()
-            # Normalize sync stamps the same way as kit_sync.
-            if f == "fresh_worker.py" and hasattr(kit_sync, "unstamp"):
-                want, have = kit_sync.unstamp(want), kit_sync.unstamp(have)
-            if want != have:
-                diff.append(f)
-        except UnicodeDecodeError:
-            pass
-    if diff:
-        return WARN, t("doctor.kit_diverged", shared=len(shared), different=len(diff),
-                       items=", ".join(diff))
-    return PASS, t("doctor.kit_same", count=len(shared), kit=kit)
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("_doctor_kit_sync", path)
+        exporter = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(exporter)
+        if os.path.realpath(exporter.KIT) != os.path.realpath(kit):
+            raise ValueError("export destination mismatch")
+        expected = {name for name in exporter.ENGINE if name not in exporter.PRESERVED_VARIANTS}
+        if not expected:
+            raise ValueError("empty export scope")
+        plan = exporter.plan_export({"tools/" + name for name in expected})
+        same, changed, missing, leaks = (
+            plan[key] for key in ("same", "changed", "missing", "leaks"))
+        if not all(isinstance(items, list) and all(isinstance(item, str) for item in items)
+                   for items in (same, changed, missing, leaks)):
+            raise ValueError("invalid export plan")
+        if missing or leaks:
+            return FAIL, t("doctor.check_crashed", error_type="kit_sync",
+                           error="Export validation failed; inspect python3 tools/kit_sync.py locally.")
+        if set(same + changed) != expected or len(same) + len(changed) != len(expected):
+            raise ValueError("incomplete export plan")
+    except Exception as error:
+        # Export errors can contain private rule matches. Report only the failure class.
+        return FAIL, t("doctor.check_crashed", error_type="kit_sync",
+                       error=f"Read-only export plan failed ({type(error).__name__}).")
+    if changed:
+        return WARN, t("doctor.kit_diverged", shared=len(expected), different=len(changed),
+                       items=", ".join(changed))
+    return PASS, t("doctor.kit_same", count=len(expected), kit=kit)
 
 
 def c_ignored():

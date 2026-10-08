@@ -50,7 +50,7 @@ jobs:
       - name: static gates
         run: |
           python3 tools/linkcheck.py
-          python3 tools/evidencecheck.py --issues
+          python3 tools/evidencecheck.py
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             approval_base="${{ github.event.pull_request.base.sha }}"
           else
