@@ -604,6 +604,11 @@ STRINGS = {
         "en": "PENDING {rel} -> {target}  (created by setup.sh; upstream copy before setup)",
         "ko": "PENDING {rel} -> {target}  (setup.sh가 만든다 · setup 전 상류 사본)",
     },
+    "linkcheck.optional": {
+        "en": "OPTIONAL {rel} -> {target}  (ignored instance destination; created on first use)",
+        "ko": "OPTIONAL {rel} -> {target}  (ignore된 인스턴스 목적지 · 처음 사용할 때 생성)",
+    },
+    "linkcheck.optional_count": {"en": "[linkcheck] optional(first use): {count}", "ko": "[linkcheck] optional(첫 사용): {count}"},
     "linkcheck.summary": {"en": "[linkcheck] broken: {count}", "ko": "[linkcheck] broken: {count}"},
     "linkcheck.pending_count": {"en": " · pending(before setup): {count}", "ko": " · pending(setup 전): {count}"},
     "gate.checker_dead": {

@@ -23,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/tools/now.py\" precompact 2>/dev/null || date \"+%FT%T codex precompact 훅 실패\" >> \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/state/.hook-errors.log\""
+            "command": "python3 \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/tools/now.py\" precompact --runtime codex 2>/dev/null || date \"+%FT%T codex precompact 훅 실패\" >> \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/state/.hook-errors.log\""
           }
         ]
       }

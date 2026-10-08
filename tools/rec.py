@@ -1,23 +1,17 @@
 #!/usr/bin/env python3
-"""원장 조회기 — 정보 아키텍처 PRD §6.2 구현.
+"""Query the untracked fact ledger without embedding domain content in this tool.
 
-기록 본체는 `_private/ledger/facts/` (비추적, PRD §11 D2). 이 스크립트는 도메인 내용을
-담지 않으므로 추적 공간에 둔다.
+Usage:
+  python3 tools/rec.py hot                  Render the hotset and snapshot
+  python3 tools/rec.py find QUERY           Search claims, text, tags, and speakers
+      [--status=STATUS] [--tag=TAG] [--speaker=NAME] [--domain=DOMAIN] [--since=YYYY-MM-DD]
+  python3 tools/rec.py show ID              Show one record
+  python3 tools/rec.py audit ID             Follow provenance and verify paths
+  python3 tools/rec.py check                Validate fields, links, limits, status, and supersession
+  python3 tools/rec.py new ID [--claim= --status= --speaker= --tags=a,b --origin= --domain=]
+  python3 tools/rec.py snapshot             Snapshot changes, retaining the latest 20
 
-사용:
-  python3 tools/rec.py hot                 핫셋 렌더 → _private/ledger/hotset.md (스냅샷 자동 동반)
-  python3 tools/rec.py find <말>           전문 검색 (claim·본문·태그·인물)
-      --status=결정됨  --tag=레벨  --speaker=<이름>  --domain=<도메인>  --since=2026-08-01
-      (speaker는 부분 일치 — "A"는 "A·B"도 잡는다. 복합 발화자 침묵 미스 방지)
-  python3 tools/rec.py show <id>           레코드 하나 출력
-  python3 tools/rec.py audit <id>          감사 사슬 (사실 → 파생 → 원점) + 파일 실재 검증
-  python3 tools/rec.py check               정합성 검증 (필수 필드·경로·링크·상한·상태·대체 관계)
-  python3 tools/rec.py new <id> [--claim= --status= --speaker= --tags=a,b --origin= --domain=]
-                                           신규 레코드 스캐폴드 — 남긴 TODO는 check가 잡는다
-  python3 tools/rec.py snapshot            원장 스냅샷 (내용 변경 시에만, 최근 20개 링 보존)
-
-설계 메모: 태그에만 의존하지 않는다(PRD §6.2, A-2 대비). find는 본문 전문을 함께 훑는다.
-"""
+Search includes full text rather than relying only on tags. Speaker matching is partial so composite speaker fields are not silently missed. Scaffold TODOs remain check failures."""
 import os, re, sys, glob
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -29,7 +23,7 @@ HOT_CAP = 60  # PRD §11 D7
 STATUSES = {"확정", "전언", "추론", "미해결", "결정됨", "대체됨", "철회됨"}
 REQUIRED = ["id", "claim", "status", "hot", "domain", "speaker", "date",
             "origin_kind", "origin"]
-# 표시 순서: 위반 위험이 큰 것부터 (PRD §6.4)
+# Display statuses in order of violation risk.
 ORDER = ["결정됨", "철회됨", "확정", "추론", "전언", "미해결", "대체됨"]
 HEAD = {
     "결정됨": ("A. 결정됨 — 재제안 금지", "이 항목을 다시 제안하면 버그다 (I-1)."),
@@ -42,7 +36,7 @@ HEAD = {
 }
 
 
-# ---- frontmatter 파서 (의존성 없음, 스키마가 고정이라 최소 구현) --------
+
 def parse(path):
     text = open(path, encoding="utf-8").read()
     if not text.startswith("---"):
@@ -85,7 +79,7 @@ def load():
 
 
 def resolve(p):
-    """원장이 가리키는 경로를 실제 파일로 해석. 리포 상대경로와 절대경로 모두 허용."""
+    """Resolve ledger references as repository-relative or absolute file paths."""
     if os.path.isabs(p):
         return p
     return os.path.join(ROOT, p)
@@ -95,7 +89,7 @@ def exists(p):
     return os.path.exists(resolve(p))
 
 
-# ---- 명령 --------------------------------------------------------------
+
 def cmd_hot():
     recs = [r for r in load() if r["hot"]]
     lines = [
@@ -147,7 +141,7 @@ def cmd_find(args):
         elif k == "tag":
             recs = [r for r in recs if v in r.get("tags", [])]
         elif k == "speaker":
-            # 부분 일치 — "A·B"·"A·HR" 같은 복합 발화자가 정확 일치에서 빠지는 침묵 미스 방지
+            # Use partial matching so composite speaker fields are not silently excluded.
             recs = [r for r in recs if v in r.get("speaker", "")]
         else:
             recs = [r for r in recs if r.get(k) == v]
@@ -193,7 +187,7 @@ def cmd_audit(rid):
     for i, step in enumerate(chain):
         mark = "✓" if exists(step) else "✗ 없음"
         if i == 0:
-            # 원점이 유실된 레코드의 첫 항목은 원점이 아니다 — 등급 인플레이션 방지
+            # A derived reference does not become an original when the origin is missing.
             arrow = "  원점 " if not gap else "최선가용"
         else:
             arrow = "   ↓   "
@@ -228,14 +222,14 @@ def cmd_check():
         for link in re.findall(r"\[\[([^\]]+)\]\]", r.get("_body", "")):
             if link not in ids:
                 problems.append(f"{rid}: 끊긴 링크 → [[{link}]]")
-        # 대체/철회 관계 (PRD §6.1) — 참조 대상이 실재해야 한다
+        # Supersession and withdrawal references must resolve.
         for fld in ("supersedes", "superseded_by"):
             val = r.get(fld)
             if val:
                 for t in (val if isinstance(val, list) else [val]):
                     if t not in ids:
                         problems.append(f"{rid}: {fld} 대상 없음 → {t}")
-        # 대체됨 상태인데 관계 필드가 없으면 어디로 대체됐는지 추적 불가
+        # Superseded records need an explicit replacement link.
         if r.get("status") == "대체됨" and not r.get("superseded_by"):
             problems.append(f"{rid}: 상태가 `대체됨`인데 `superseded_by` 없음")
     hot = sum(1 for r in recs if r["hot"])
@@ -255,7 +249,7 @@ def cmd_check():
 
 
 def ledger_hash():
-    """원장 내용 해시 — 스냅샷 중복 방지용."""
+    """Hash ledger content to avoid duplicate snapshots."""
     import hashlib
     h = hashlib.sha256()
     paths = sorted(glob.glob(os.path.join(FACTS, "*.md")))
@@ -268,9 +262,7 @@ def ledger_hash():
 
 
 def cmd_snapshot(quiet=False):
-    """원장은 비추적(D2)이라 git 이력이 없다 — 유일본 보호는 스냅샷 링(최근 20)이 담당한다.
-
-    내용이 안 변했으면 만들지 않는다. 자동 실행은 hot에 편승할 뿐, 매 턴 돌지 않는다(§6.9)."""
+    """Snapshot the untracked ledger only when content changes, retaining the newest 20 snapshots. hot invokes this automatically; it is not a per-turn task."""
     import shutil, datetime
     snaps = os.path.join(LEDGER, ".snapshots")
     os.makedirs(snaps, exist_ok=True)
@@ -320,7 +312,7 @@ def cmd_new(args):
     origin = opts.get("origin", "TODO-원점-경로")
     claim = opts.get("claim", "TODO-한-문장-주장")
     os.makedirs(FACTS, exist_ok=True)
-    # 남긴 TODO는 check가 잡는다 (미지 상태·없는 경로) — 빈칸으로 통과되는 스캐폴드는 스키마 드리프트만 만든다
+    # Leave unresolved fields as TODOs so check cannot accept an incomplete scaffold.
     lines = [
         "---",
         f"id: {rid}",
@@ -358,12 +350,12 @@ def main():
         return 0
     cmd, rest = sys.argv[1], sys.argv[2:]
     if cmd == "new":
-        return cmd_new(rest)  # new는 원장 부재 시에도 첫 레코드를 만들 수 있어야 한다
+        return cmd_new(rest)  # Allow creation of the first record when the ledger directory is absent.
     if not os.path.isdir(FACTS):
         print(f"[rec] 원장이 없다: {os.path.relpath(FACTS, ROOT)}")
         return 1
     if cmd == "hot":
-        cmd_snapshot(quiet=True)  # 렌더 트리거에 편승 — 원장이 변한 시점마다 자동 보호
+        cmd_snapshot(quiet=True)  # Snapshot content changes when rendering the hotset.
         return cmd_hot() or 0
     if cmd == "find":
         return cmd_find(rest)

@@ -328,8 +328,9 @@ def _run_config_case(case):
 
 
 def _visibility_contract_on_fixture():
-    """public/private 판정은 config allowlist에서 나온다. 설치 전 킷(system/memory-config.json 없음)에서
-    돌려도 같은 계약을 재야 하므로 template(킷) 또는 현재 config(인스턴스)로 임시 인스턴스를 만들어 잰다."""
+    """Test visibility from the configured allowlist in a temporary instance.
+
+    Use template configuration in the kit and current configuration in an installed instance."""
     import json
     import subprocess
     import sys

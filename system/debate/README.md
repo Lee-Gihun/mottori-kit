@@ -1,154 +1,102 @@
-# 토론판 — Claude와 Codex의 비동기 논쟁
+Korean: `README.ko.md`
 
-두 런타임은 서로를 직접 호출할 수 없다. 대신 같은 디스크를 읽고 쓴다. 이 폴더가 그
-공유 지면이고, 소유자는 심판이지 전령이 아니다.
+# Cross-runtime debate
 
-## 어떻게 도는가
+Use another runtime to challenge a decision's assumptions and evidence. The owner should receive the
+resolved recommendation or the concrete unresolved decision, rather than relay messages between tools.
+A debate can improve a proposal; agreement does not independently validate it.
 
-1. 한쪽이 쟁점 파일을 연다: `system/debate/YYYY-MM-DD-주제.md`
-2. 상대에게 발주한다. Claude는 `bash tools/ask_codex.sh <프롬프트파일>`로 직접 부른다.
-   소유자가 전령 노릇을 하지 않는다.
-3. 상대는 그 파일을 읽고 **append**로 응답한다. 남의 발언은 고치지 않는다.
-4. 합의되면 `system/decisions.md`에 DR로 승격하고, 파일 헤더 상태를 `합의`로 바꾼다.
-   갈리면 상태를 `소유자 판정 필요`로 두고 양쪽 입장을 한 문단씩 요약해 올린다.
+This README is shared engine policy. Prompts, case records, and run outputs belong to the instance.
+The default ignore rules track this README and its translation, not the surrounding discussion files.
+Ignoring a file prevents ordinary Git inclusion; it does not authorize sending its contents to a model.
 
-## 두 채널을 분리한다 (2026-08-23 판정 · DR-022)
+## Prepare the exchange
 
-한 채널로 둘을 다 하려던 것이 8/22~23 사고의 원인이었다. 이제 나눈다.
+1. State the decision, the strongest alternative, and what would change the recommendation.
+2. Verify the actual available paths. Select the smallest set of current contracts and evidence needed to
+   answer the question; do not attach an entire session, dossier collection, or personal corpus by default.
+3. Check the instance data boundary before dispatch. A prompt, a path, and a tool read can each disclose
+   information. Use only permitted material. Where necessary, pose a generic technical question without
+   private source text, or mark the review unavailable.
+4. Copy [the round template](../../templates/debate-round.md) to an ignored instance prompt such as
+   `system/debate/_p_review.md`. The tracked template stays blank. Keep the discussion record in a protected
+   instance location such as `_private/debate/` and retain references to the worker run records.
+5. Define who owns each write. A review does not authorize editing code, policy, or source evidence.
 
-| | 자동 티키타카 | 소유자의 무한세션 |
-|---|---|---|
-| 무엇 | Claude가 `ask_codex.sh`로 부르는 논쟁 | 소유자가 Codex 앱에서 직접 하는 대화 |
-| 세션 | **매번 fresh+ephemeral.** 전사는 private run record로 대체 | 하나를 계속 쓴다 |
-| 맥락 전달 | 프롬프트에 적은 **파일 경로** | 그가 부르면 Codex가 조회 |
-| 결론 착지 | `system/debate/` 또는 해당 서류철 | 필요하면 그가 지시 |
-| 누가 읽나 | 착지한 파일로 읽는다 | 그가 실시간으로 읽는다 |
+The reusable template requires a strategic-assumption challenge, an actually worked perspective, evidence
+for material findings, a response to the previous round, and an honest account of unread or unavailable
+material. "No material change" and a rejected criticism are legitimate outcomes.
 
-**무한세션에서 쓰는 호출문** (codex 권고, 루트 스레드 00:54):
+## Dispatch and runtime boundaries
 
-> Claude 최신 관련 대화와 메모리까지 확인하고, 디스크 정본을 기준으로 이어가.
+The default is a fresh, ephemeral worker. Put the prompt in a file so shell metacharacters remain data.
+From the instance root, choose the intended runtime:
 
-그러면 Codex가 `NOW`와 서류철 → Claude 메모리 → 필요한 원문 턴 순으로 좁게 읽는다.
-전체 대화를 매번 붓지 않아도 깊이가 복원된다.
+```bash
+python3 tools/fresh_worker.py --runtime claude system/debate/_p_review.md
+python3 tools/fresh_worker.py --runtime codex system/debate/_p_review.md
+```
 
-## 발주 규칙
+The example path must be replaced with the prompt file actually prepared. Run the selected command, not
+both merely to increase the number of reviewers. `bash tools/ask_codex.sh PROMPT_FILE` is the compatibility
+entry for a fresh Codex call. An explicitly requested resume is a different operation; its failure must not
+silently fall back to a fresh session.
 
-- 발주문에 넣는 파일 목록은 `git ls-files <dir>` 같은 생성물만. 손으로 쓴 목록은 넣지 않는다 (코어 5; 2609.03874의 목차도 추출물이었다; DR-053).
+The [worker contract](../PRD-session-memory.md#105-fresh-bounded-worker-kit-dr-007) owns exact capability,
+receipt, and persistence requirements:
 
-- **기본은 새 세션이다.** `bash tools/ask_codex.sh <프롬프트파일>`
-  *(Why: 이전 기본값인 루트 resume은 **소유자가 앱을 켜고 있을수록 실패한다.** 그가 그 스레드를
-  열어 두면 단일 writer 락이 resume을 거부하고 스크립트가 조용히 fresh로 폴백해서, 그 왕복이
-  그의 채팅 이력에 영원히 안 나타난다. 8/23 실측: 발주 6건 중 resume 시도 2건 전부 폴백.
-  "그가 읽게 하려고" 만든 기본값이 정확히 그 목적을 배반했다.)*
-- **조용한 폴백을 없앴다.** `--resume`이나 `--resume-root`를 명시했는데 락에 걸리면 **중단한다**
-  (exit 2). 폴백하지 않는다. 요청이 실패했다는 사실 자체가 결과다.
-- `fresh_worker.py`가 native session persistence를 끄고 전체 event stream은
-  `_private/work/runs/`에, 호출자에게는 bounded receipt만 남긴다 (KIT-DR-007).
-  정확한 byte·capability 계약은 `../PRD-session-memory.md` §10.5가 정본이다.
-- 두 worker 모두 외부 action surface와 훅을 닫고, dispatch prompt 지시대로 `AGENTS.md`와 필요한
-  디스크 정본을 직접 읽는다. Claude는 safe mode+strict empty MCP, Codex는 user config 무시+web·
-  network·apps·plugins·fan-out 비활성화다. NOW가 필요한 작업은 프롬프트에 public/local 두 경로를
-  명시한다. **프롬프트에는 쟁점 파일과 직접 필요한 정본만 적는다.** `START_HERE`·journal·전사 전량을
-  방어적으로 나열하지 않는다. 깊이는 dossier→표적 recall 순으로 worker가 좁혀 읽는다.
-- 프롬프트는 파일로 만들어 stdin으로 넣는다. 명령줄에 직접 쓰면 백틱이 셸 명령으로 실행된다
-  (8/22 실측: 경로가 통째로 사라진 프롬프트가 전달됐다).
-- 발주용 임시 프롬프트는 `system/debate/_p_*.md`이고 gitignore된다. 남아야 할 것은 쟁점 파일뿐이다.
-- 기본은 동기 실행이다. 호출한 tool/session이 오래 살아남지 못할 장기 발주만 기존 이중 감시를 쓴다.
+- Claude has read-only `Read`, `Glob`, and `Grep` tools. It can propose edits but cannot apply them or run
+  shell checks. Do not assign it a required write or shell command and then infer completion from its answer.
+- Codex has a workspace-write sandbox. Review-only instructions are task scope, not an operating-system
+  guarantee of read-only access. Use the available scope checks and inspect actual effects.
+- Workers do not inherit the caller's conversation or rely on hooks for current state. Name `AGENTS.md` and
+  the required canonical sources explicitly. If NOW is relevant, specify both public and local surfaces
+  subject to the data boundary; an inaccessible local overlay is unavailable, not absent.
+- Both adapters disable connectors, web, command network access, plugins, and fan-out. These restrictions
+  do not make otherwise prohibited model input permissible.
+- The runner retains the prompt, event stream, final result, metadata, and content hashes under
+  `_private/work/runs/`. The caller receives a bounded receipt. Read the result and relevant evidence before
+  claiming what the reviewer saw, executed, or established.
 
-  ```bash
-  nohup bash tools/ask_codex.sh <프롬프트> > /tmp/codex-<태그>.log 2>&1 &   # 세션을 넘어 산다
-  # 곧바로, 같은 턴에:
-  #   run_in_background로 위 PID를 기다리는 Bash를 띄운다 (하네스가 종료 시 나를 깨운다)
-  ```
+Keep the execution handle until completion or a recorded interruption. The worker owns no scheduler and a
+background process is not itself a notification mechanism. Use the calling runtime's supported wait or
+completion mechanism, then inspect the output. Do not promise a later follow-up without a real scheduled path.
 
-  *(Why: `nohup`은 세션이 죽어도 살아남지만 **아무도 안 알려준다.** 하네스 백그라운드는
-  알려주지만 세션과 함께 죽는다. 둘을 겹치면 작업은 살고 알림은 온다.
-  8/24~25 실측: 라운드 4·5가 끝났는데 내가 안 물어봐서 몇 시간 방치됐고 소유자가
-  "코덱스 답변 와도 잠수탄다"고 지적했다. 폴링을 기억에 맡기면 안 도는 규칙이다.)*
+## Preserve the discussion
 
-## 소유자의 Codex 무한세션이 자동으로 보는 것과 worker가 조회해야 하는 것
+The caller appends each completed round to the instance discussion record or links its preserved result.
+Do not edit another participant's original response. A summary must be labeled as a summary. Corrections
+and counterarguments are new entries, with the actual runtime and model recorded when available.
 
-첫 열은 Codex 앱의 소유자 무한세션 기본값이다. 격리 worker는 훅을 끄므로 별도 열을 따른다.
-착각하면 "봤겠지" 하고 안 적게 된다.
+For an execution or state claim, retain a checkable artifact, command result, or content hash with its scope.
+A proposed check is not a performed check. A paper's claim, a local observation, and an impression have
+separate evidential roles. State the limits of each instead of converting reviewer confidence into proof.
 
-| 층 | 소유자 무한세션 자동 주입 | 격리 worker |
-|---|---|---|
-| `AGENTS.md` | ○ | prompt 지시 후 직접 읽음 |
-| public+local `NOW` | ○ (SessionStart hook) | 자동 ✕ · 필요 시 두 경로 직접 읽음 |
-| journal · 서류철 · ledger · lenses · decisions · debate | ✕ | prompt에 적은 표적만 직접 읽음 |
-| Claude 대화 원문 | ✕ | Claude는 미리 추출한 slice나 JSONL을 Read/Grep · Codex만 `tools/recall.py` 실행 |
-| Claude 네이티브 메모리 | ✕ | 격리상 사용 안 함 |
-| Codex 네이티브 메모리 | 일부 | 격리상 사용 안 함 |
+Before disputing a claim, quote the relevant permitted statement and answer it directly. Describe concrete
+consequences and the smallest correction. A different model family can provide a different failure surface;
+it does not guarantee independent evidence. Same-family review is not independent corroboration.
 
-**"보인다"는 디스크에서 즉시 조회할 수 있다는 뜻이지 머릿속에 들어 있다는 뜻이 아니다.**
-공식 권고도 같다. 반드시 적용될 지식은 네이티브 메모리가 아니라 `AGENTS.md`와 디스크 문서에 둔다.
+## End the exchange
 
-## 발언 규칙
+A first response is advice, not a completed exchange. Address its strongest argument and obtain a response
+to that challenge. Do not manufacture objections solely to produce another round.
 
-- 형식: `## [claude|codex] YYYY-MM-DD HH:MM · 라운드 N`
-- **주장에는 근거를 붙인다.** 파일 경로, 명령 출력, 실측 수치 중 하나 이상. 인상은 인상이라고 쓴다.
-- 상대 주장을 반박할 때는 **먼저 인용**하고, 그다음 반박한다. 요약해서 때리지 않는다.
-- 동의하는 부분을 먼저 적는다. 남은 차이가 실제로 무엇인지 좁히는 게 목적이지 이기는 게 아니다.
-- 모르는 것은 모른다고 쓰고, 확인 방법을 제안한다.
-- 한 라운드는 화면 두 장을 넘기지 않는다. 길면 근거 파일을 따로 만들고 링크한다.
-- **실행·상태 판정은 영수증만 근거다 (2026-09-03 · DR-050).** "훅이 돈다 / 파일이 있다 /
-  이미 충족"류의 판정에는 파일 경로·명령 출력·해시 중 하나를 붙인다. 없으면 "미측정"이라고
-  쓴다. 개념·전략 논점은 등급 붙인 근거(연구·실측·인상)로 충분하다. *(Why: 2026-09-03
-  라운드 1에서 양쪽이 같은 훅의 존재를 반대로 단언했고, 세션 전사 grep 한 줄이 갈랐다.)*
-- **절 머리 첫 줄에 runtime·model을 쓴다.** 같은 모델 계열의 응답은 독립 corroboration으로
-  세지 않는다. *(Why: 동질 모델 토론은 서로의 가정에 편향된다 — 2026-09-03 판독 §2.)*
-- **발주문에는 전략 가정 공격을 필수 항목으로 넣는다.** 세부 반박만 시키면 worker는 전제를
-  받아들인 채 세부에서만 싸운다. 라운드·발주문 골격은 `TEMPLATE-round.md`.
+- Continue when a material judgment changed and the next round has a concrete unresolved question or new evidence.
+- Record convergence when the exchange leaves no decision-relevant disagreement to resolve.
+- Stop when no new relevant evidence can be obtained; distinguish unresolved disagreement from convergence.
+- If a limit or data boundary blocks review, record blocked or inconclusive, with the missing observation.
 
-## 산출물에 담으면 안 되는 것 (2026-08-24 신설)
+Round counts do not measure quality. Preserve rejected corrections as well as accepted ones. Where the
+remaining difference requires the owner, present one prepared decision and what would change with the answer.
 
-**`system/debate/`는 git 추적 파일이다.** 여기 적히는 것은 원격으로 나간다.
-지금까지 이 규칙은 발주문마다 손으로 적었고, 안 적으면 없는 규칙이었다.
+## Apply and observe
 
-담지 않는다.
-- `_private/` 아래의 내용 (원장·덤프·녹취·전사·인물 원장)
-- **커넥터로 읽은 것의 원문** — Gmail 본문, Drive 문서 내용, 캘린더 상세.
-  *(Why: 2026-08-24에 Codex에 Gmail·Drive 커넥터가 붙었다. 이전 규칙은 `_private/`만
-  이름 불렀고 커넥터는 그 이름 밖이라 규칙이 안 걸린다. 새 입력 경로가 생기면 국경을
-  다시 확인한다 — 규약에 없으면 안 지켜진다.)*
-- 회사 유래 내용의 실측 숫자·코드네임·원문 인용 (DR-017)
-- 제3자의 개인정보 (이름·연락처·일정)
+After convergence or the owner's decision, the authorized writer applies the agreed change. Existing
+implementation budgets and protected areas still apply. Recheck the current base and final change, run
+relevant validation, and record what was actually observed. Sending, committing, and pushing retain their
+existing authorization requirements; a debate grants none.
 
-담아도 되는 것: **그것들에 대한 판정과 추상 수준의 근거.**
-"메일 3통에서 같은 패턴" 은 되고, 그 메일 문장을 옮기는 것은 안 된다.
-근거를 보여야 하면 **파일 경로와 날짜만** 쓰고 내용은 세션 안에 둔다.
-
-## 종료 규칙 — 몇 라운드면 충분한가
-
-**한 라운드로 끝내지 않는다.** 발주하고 답을 받고 착지하는 것은 토론이 아니라 자문이다.
-받은 판정에 반론을 만들 수 없으면 아직 안 읽은 것이다.
-
-**수렴 판정 (횟수가 아니라 조건):**
-- 이번 라운드가 상대의 판정을 **하나도 바꾸지 못했으면** 수렴이다. 종료하고 소유자에게 올린다
-- 하나라도 바꿨으면 아직 안 끝났다. 바뀐 것이 다음 라운드의 입력이다
-- 새 라운드가 **새 자료를 못 가져오면** 종료한다. 같은 근거로 목소리만 키우는 것은 라운드가 아니다
-
-**바닥선:** 최소 2라운드. 1라운드는 상대의 판정, 2라운드는 그 판정에 대한 반론과 응답이다.
-*(Why: 실적이 그렇다. 리딩룸 3라운드 합의, 귀속 계측기는 codex R2 정정이 설계를 바꿨고,
-필드 킷은 v0.1이 기각되고 v0.2가 살았다. **값이 나온 라운드는 대부분 두 번째 이후다.**
-2026-08-24 담백 부검에서 Claude가 1라운드 받고 착지하려다 소유자에게 지적받았다.)*
-
-**반론이 안 만들어질 때의 처방:** 상대 판정의 **표본**과 **분모**를 먼저 의심한다.
-어떤 검색어로 뽑았나, 그 검색어가 대상을 대표하나, 실패만 세고 성공은 안 셌나.
-2026-08-24 실측: 라운드 1의 표본이 한국어 반려 표현 둘로 뽑혀 있었고, 실제 어휘 클러스터는
-11개에 동시출현 31건이었다.
-
-## 집행 규칙
-
-- **토론 중에는 코드를 고치지 않는다.** 합의 또는 소유자 판정 후에 집행한다.
-- 집행 직전 그 작업의 CHECKPOINT 문서의 writer 관례를 따른다. 동시 쓰기 금지.
-- 집행한 쪽이 파일 하단에 집행 결과 한 줄을 남긴다.
-
-## 열린 쟁점
-
-- `2026-08-22-cross-runtime-parity.md` — 플랫폼 등가성. 상태: **종결.** P0-1·P0-2·P1 전부 집행·관측 완료
-  (8/23 11:05 훅 3종 발화 확인: SessionStart·PreCompact·UserPromptSubmit)
-- `2026-08-23-t0-reading-room.md` — 리딩룸 포맷. 상태: 합의 (3라운드), 집행 완료
-- `2026-08-23-field-kit.md` — 필드 킷 그릇. 상태: codex 대안 채택, **소유자 판정 3건 대기**
-- `2026-08-23-attribution-instrument.md` — 모델 실패와 하네스 실패의 귀속. 상태: **보류 (DR-024)**.
-  설계 수렴, 집행 안 함. 산출물은 DR-023 규칙 하나. 재검토 조건 3개는 DR-024
+Promote an adopted policy into the instance decision record or the kit decision record as appropriate.
+Keep private cases and local pilot schedules out of shared engine documents. Record later execution or owner
+feedback against the original decision. Passing checks and agreeing on a design are separate from observing
+that it improves the work.

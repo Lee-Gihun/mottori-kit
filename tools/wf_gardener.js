@@ -4,12 +4,12 @@ export const meta = {
   phases: [{ title: 'Garden', detail: 'one auditor over state/, memory/, dossiers' }],
 }
 
-// PRD: system/PRD-session-memory.md §3.5. Report-only by contract: the gardener
-// proposes, the session + the owner adjudicate. This mirrors the radar's
+// Contract: system/design-memory-runtime.md#manual-garden. This manual gardener is report-only;
+// it proposes, the session + the owner adjudicate. This mirrors the radar's
 // flag->adjudicate split, which kept 2 false alarms from becoming false fixes.
-const ROOT = require('path').resolve(__dirname, '..')   // DR-025
-// auto-memory 디렉토리는 인스턴스 경로에서 유도한다 (DR-025).
-// 맹글링 규칙은 tools/memlib.py transcript_dir()과 같아야 한다: 영숫자·하이픈 외 전부 '-'.
+const ROOT = require('path').resolve(__dirname, '..')   // Resolve configuration from the current instance.
+// Derive the auto-memory path from the instance root.
+// Match memlib.transcript_dir(): replace every non-alphanumeric, non-hyphen character with '-'.
 const MEMDIR = require('path').join(
   require('os').homedir(), '.claude', 'projects',
   ROOT.replace(/[^A-Za-z0-9-]/g, '-'), 'memory')
@@ -51,7 +51,7 @@ const REPORT_SCHEMA = {
 phase('Garden')
 const result = await agent(`You are the memory gardener for the workspace at ${ROOT}.
 Contract: you PROPOSE, you never edit. Every proposal needs evidence and a risk statement.
-Full spec: ${ROOT}/system/PRD-session-memory.md §3.5.
+Full spec: ${ROOT}/system/design-memory-runtime.md#manual-garden.
 
 DO, IN ORDER:
 

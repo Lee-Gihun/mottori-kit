@@ -56,6 +56,7 @@ def test_repair_then_check_installs_exact_executable():
         assert checked.returncode == 0 and "현재(current):" in checked.stdout
         checked_en = run(root, "--check", lang="en")
         assert checked_en.returncode == 0 and "current:" in checked_en.stdout
+        assert os.path.isfile(hook), f"expected installed hook: {hook}"
         assert open(hook, "rb").read() == open(
             os.path.join(root, "tools", "precommit-hook.sh"), "rb").read()
         assert os.stat(hook).st_mode & stat.S_IXUSR
@@ -68,13 +69,14 @@ def test_check_reports_owned_drift_and_repair_backs_it_up():
     try:
         assert run(root, "--repair").returncode == 0
         hook = hook_path(root)
+        assert os.path.isfile(hook), f"expected installed hook: {hook}"
         text = open(hook, encoding="utf-8").read().replace(
             "# MOTTORI_PRECOMMIT_HOOK_V1\n", "")
         with open(hook, "w", encoding="utf-8") as f:
             f.write(text)
         drifted_hash = hashlib.sha256(open(hook, "rb").read()).hexdigest()
-        # This fixture imitates the canonical pre-sentinel hook. Its hash changes with every template edit,
-        # so the contract (a legacy hash is owned-drift) is pinned through the env, not the in-file list (2026-09-18).
+        # Pin legacy ownership with an explicit fixture hash so template edits do not change the
+        # migration test.
         legacy = {"MOTTORI_LEGACY_HOOK_HASHES": drifted_hash}
 
         checked = run(root, "--check", env_extra=legacy)
@@ -119,6 +121,8 @@ def test_failed_repair_restores_current_hook_and_preserves_missing_hook():
         assert run(root, "--repair").returncode == 0
         hook = hook_path(root)
         push_hook = os.path.join(os.path.dirname(hook), "pre-push")
+        assert os.path.isfile(hook), f"expected installed hook: {hook}"
+        assert os.path.isfile(push_hook), f"expected installed hook: {push_hook}"
         os.remove(push_hook)
         before = open(hook, "rb").read()
         before_mode = stat.S_IMODE(os.stat(hook).st_mode)
@@ -138,8 +142,7 @@ def test_failed_repair_restores_current_hook_and_preserves_missing_hook():
 
 
 def test_template_change_after_install_is_owned_drift_not_foreign():
-    """2026-09-18 실측 2회: 템플릿 주석 한 줄이 바뀌면 설치본 전부가 foreign이 돼 --repair도 커밋도 막혔다.
-    설치 시 스탬프로 소유권을 기록해 템플릿이 바뀌어도 owned-drift → --repair 가능해야 한다."""
+    """Ownership stamps keep an installed hook repairable after its template changes."""
     root = fixture()
     try:
         repaired = run(root, "--repair")

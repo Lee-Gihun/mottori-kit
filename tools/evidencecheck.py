@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""근거 표지의 문법, 로컬 대상, 필수 배치를 검사한다."""
+"""Check evidence-marker syntax, local targets, and required placement."""
 
 import argparse
 import ast
@@ -39,7 +39,7 @@ def _args():
 
 
 def _markers(text):
-    """(namespace, payload, line) 표지를 원문 순서로 낸다."""
+    """Yield (namespace, payload, line) markers in source order."""
     for match in MARKER_START.finditer(text):
         end = match.end()
         token = re.match(r"[^\s`<>]+", text[end:])
@@ -142,6 +142,8 @@ def _required_issues(rel, text, tree, local_root):
         stop_labels = (
             "결정:", "기각 대안:", "부수 결정:", "검증:", "안전성·마이그레이션:",
             "경계:", "재검토:", "참조:", "후보였던 문장들:",
+            "Decision:", "Alternatives:", "Rejected alternatives:", "Verification:",
+            "Safety and migration:", "Boundary:", "Reconsider:", "References:",
         )
         for idx, start in enumerate(starts):
             end = starts[idx + 1].start() if idx + 1 < len(starts) else len(text)
@@ -149,7 +151,7 @@ def _required_issues(rel, text, tree, local_root):
             context = []
             collecting = False
             for line in lines:
-                if line.startswith("맥락:"):
+                if line.startswith(("맥락:", "Context:", "Reason:")):
                     collecting = True
                     context.append(line)
                     continue
@@ -170,7 +172,7 @@ def _required_issues(rel, text, tree, local_root):
         starts = list(re.finditer(r"^###\s+(.+)$", text, re.M))
         for idx, start in enumerate(starts):
             heading = start.group(1).strip().replace("`", "")
-            # v0.8 English canonical headings use [Required] / [Note]; the Korean pair keeps [해야 함] / [알아둘 것].
+            # Accept English [Required]/[Note] headings and their Korean locale counterparts.
             if not any(tag in heading for tag in ("[해야 함]", "[알아둘 것]", "[Required]", "[Action required]", "[Note]")):
                 continue
             end_candidates = [len(text)]
@@ -200,8 +202,7 @@ def _required_issues(rel, text, tree, local_root):
 
 
 def applicable(tree):
-    """대상 파일이 하나도 없는 트리(설치된 인스턴스 등)는 검사 대상이 아니다.
-    하나라도 있으면 나머지 부재는 missing-file 이슈다 (킷 안에서의 삭제는 fail-close)."""
+    """Skip trees without any evidence-target documents. If at least one exists, report missing required companions."""
     return any(os.path.isfile(os.path.join(tree, rel)) for rel in TARGETS)
 
 

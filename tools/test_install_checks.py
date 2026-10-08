@@ -1,18 +1,8 @@
 #!/usr/bin/env python3
-"""설치 검사기 회귀 — linkcheck·doctor·gate가 낯선 설치에서 늑대소년이 되지 않는가.
+"""Installation checks in isolated repositories with fixture configuration.
 
-2026-09-17 독립 감사(Codex)가 잡은 결함을 닫는 픽스처다. 각 테스트는 임시 git 리포를 만들고
-그 리포를 인스턴스로 삼아(MOTTORI_INSTANCE) 도구를 서브프로세스로 돌리거나, 검사 함수를
-가짜 입력으로 직접 부른다.
-
-  J  linkcheck normal mode는 broken이 있으면 exit 1, 없으면 0 (--issues는 언제나 0)
-  F  setup 전 상류 사본: setup이 만드는 경로로 가는 참조는 PENDING, 오타는 BROKEN
-     setup 뒤(config 존재): 같은 참조가 없으면 BROKEN (삭제를 숨기지 않는다)
-  E  doctor codex armed: 미신뢰만이면 WARN, command invalid·loader error는 FAIL
-  git c_git: 2.35 → FAIL, 2.36 → PASS, 버전 문자열 해석 불가 → WARN
-  K  gate cmd_check: measure()가 터지면 무출력 0이 아니라 block + pending
-  L  공백 든 md 파일명: linkcheck 인증서와 doctor scope 해시가 같다
-"""
+Cover broken versus pending links, runtime readiness, Git version support,
+checker failures, and path names containing spaces."""
 import json
 import os
 import shutil
@@ -35,7 +25,7 @@ def ok(name, cond, detail=""):
 
 
 def make_repo(with_config=True):
-    """엔진 파일 몇 개와 md 문서를 가진 임시 git 리포. tools/는 실제 엔진을 복사한다."""
+    """Create a temporary repository with engine tools and Markdown files."""
     root = tempfile.mkdtemp(prefix="install-checks.")
     os.makedirs(os.path.join(root, "tools"))
     for name in ("memlib.py", "i18n.py", "linkcheck.py", "doctor.py", "gate.py", "now.py", "hookdiag.py",
@@ -56,7 +46,7 @@ def make_repo(with_config=True):
         cfg["instance"]["context"] = "personal"
         cfg["tracks"] = []
         cfg["threads"] = []
-        cfg["personal_pointer"] = None      # 새 인스턴스 계약: template 값 그대로(null)
+        cfg["personal_pointer"] = None      # A new instance retains the null template value.
         json.dump(cfg, open(os.path.join(root, "system", "memory-config.json"), "w", encoding="utf-8"))
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     subprocess.run(["git", "-c", "user.email=fixture@example.invalid", "-c", "user.name=fixture",
@@ -80,7 +70,7 @@ def write(root, rel, text):
 
 
 def run_fresh_judge(kind, subprocess_rc, output):
-    """첫 설치 게이트의 판정 함수만 실행한다."""
+    """Run only the deployment kit's initial-install check."""
     with tempfile.TemporaryDirectory(prefix="fresh-judge.") as tmp:
         output_path = os.path.join(tmp, f"{kind}.out")
         write(tmp, f"{kind}.out", output)
@@ -94,7 +84,7 @@ def run_fresh_judge(kind, subprocess_rc, output):
 # ------------------------------------------------------------ X12  fresh gate parsing
 def test_fresh_install_rejects_malformed_summaries():
     if not os.path.isfile(os.path.join(ROOT, "tools", "test_fresh_install.sh")):
-        # 첫 설치 게이트는 배포 킷 전용이다 (KIT-DR-011); 설치된 인스턴스엔 판정 함수가 없다.
+        # The initial-install gate belongs to the deployment kit, not installed instances.
         print("- X12: not applicable here (no tools/test_fresh_install.sh: installed instance)")
         return
     valid_doctor = json.dumps({
@@ -143,13 +133,13 @@ def test_linkcheck_exit_codes_and_pending():
            r.stdout[-200:])
         os.remove(os.path.join(root, "system", "typo.md"))
         subprocess.run(["git", "rm", "-q", "--cached", "system/typo.md"], cwd=root, check=True)
-        # 게이트 기준선도 setup 산출물이다: setup 전 PENDING, setup 뒤 없으면 BROKEN (양방향)
+        # Before setup a generated baseline is pending; after setup its absence is broken.
         write(root, "SETUP.md", "baseline lives at `state/.gate-baseline.json`\n")
         subprocess.run(["git", "add", "SETUP.md"], cwd=root, check=True)
         r = run(root, "tools/linkcheck.py")
         ok("F pre-setup: gate baseline reference is PENDING",
            r.returncode == 0 and "PENDING SETUP.md -> state/.gate-baseline.json" in r.stdout, r.stdout[-300:])
-        # setup 뒤: config가 생기면 같은 참조가 없을 때 BROKEN이어야 한다 (삭제를 숨기지 않는다)
+        # Once configuration exists, a missing baseline must be reported as broken.
         write(root, "system/memory-config.json", "{}")
         r = run(root, "tools/linkcheck.py")
         ok("F post-setup: missing instance-rules is BROKEN, exit 1",
@@ -161,6 +151,99 @@ def test_linkcheck_exit_codes_and_pending():
 
 
 # ------------------------------------------------------------ L  scope hash with spaces
+def test_linkcheck_optional_destinations_are_exact_and_instance_owned():
+    for configured in (False, True):
+        root = make_repo(with_config=configured)
+        phase = "post-setup" if configured else "pre-setup"
+        destinations = ("_private/deep-pass/ledger.md", "system/debate/_p_review.md")
+        try:
+            with open(os.path.join(root, ".gitignore"), "a") as stream:
+                stream.write("system/debate/_p_review.md\n")
+            write(root, "README.md", "[ledger](_private/deep-pass/ledger.md)\n"
+                  "[prompt](system/debate/_p_review.md)\n")
+            result = run(root, "tools/linkcheck.py")
+            ok(f"optional destinations remain distinct from setup pending ({phase})",
+               result.returncode == 0 and result.stdout.count("OPTIONAL README.md ->") == 2
+               and "PENDING" not in result.stdout, result.stdout)
+            if os.path.isfile(os.path.join(ROOT, "tools", "test_fresh_install.sh")):
+                judged = run_fresh_judge("linkcheck", result.returncode, result.stdout)
+                ok(f"fresh-install parser accepts actual optional output ({phase})",
+                   judged.returncode == 0, judged.stdout + judged.stderr)
+
+            for destination in destinations:
+                write(root, destination, "# synthetic instance record\n")
+            result = run(root, "tools/linkcheck.py")
+            ok(f"existing optional destinations are ordinary valid references ({phase})",
+               result.returncode == 0 and "OPTIONAL" not in result.stdout, result.stdout)
+            for destination in destinations:
+                os.remove(os.path.join(root, destination))
+            result = run(root, "tools/linkcheck.py")
+            ok(f"first use does not make later absence a required-file failure ({phase})",
+               result.returncode == 0 and result.stdout.count("OPTIONAL README.md ->") == 2,
+               result.stdout)
+
+            with open(os.path.join(root, "README.md"), "a") as stream:
+                stream.write("[typo](_private/deep-pass/ledger-typo.md)\n"
+                             "[other prompt](system/debate/_p_typo.md)\n")
+            result = run(root, "tools/linkcheck.py")
+            ok(f"neighboring private paths and prompt typos remain broken ({phase})",
+               result.returncode == 1
+               and "BROKEN README.md -> _private/deep-pass/ledger-typo.md" in result.stdout
+               and "BROKEN README.md -> system/debate/_p_typo.md" in result.stdout,
+               result.stdout)
+
+            write(root, destinations[0], "# synthetic tracked fixture\n")
+            subprocess.run(["git", "add", "-f", destinations[0]], cwd=root, check=True)
+            os.remove(os.path.join(root, destinations[0]))
+            result = run(root, "tools/linkcheck.py")
+            ok(f"a tracked missing destination cannot use the instance exception ({phase})",
+               result.returncode == 1
+               and "BROKEN README.md -> _private/deep-pass/ledger.md" in result.stdout,
+               result.stdout)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+
+def test_linkcheck_measures_non_ascii_spaced_filenames():
+    root = make_repo(with_config=True)
+    try:
+        name = "system/\ud55c\uae00 \uacf5\ubc31.md"
+        write(root, name, "[missing](missing-unicode-fixture.md)\n")
+        subprocess.run(["git", "config", "core.quotePath", "true"], cwd=root, check=True)
+        subprocess.run(["git", "add", name], cwd=root, check=True)
+        normal = run(root, "tools/linkcheck.py")
+        issues = run(root, "tools/linkcheck.py", "--issues")
+        ok("non-ASCII spaced Markdown is measured with Git quotePath enabled",
+           normal.returncode == 1
+           and f"BROKEN {name} -> missing-unicode-fixture.md" in normal.stdout
+           and "broken: 1" in normal.stdout, normal.stdout + normal.stderr)
+        ok("machine issues include the same non-ASCII spaced Markdown",
+           issues.returncode == 0
+           and f"{name} -> missing-unicode-fixture.md\t" in issues.stdout
+           and issues.stdout.rstrip().endswith("#issues 1"), issues.stdout + issues.stderr)
+
+        write(root, name, "# valid document\n")
+        normal = run(root, "tools/linkcheck.py")
+        code = ("import sys; sys.path.insert(0,'tools'); import doctor; "
+                "print(doctor.c_missed_gate()[0])")
+        certificate = run(root, "-c", code)
+        ok("doctor recognizes a successful check of non-ASCII Markdown",
+           normal.returncode == 0 and certificate.stdout.strip().endswith("PASS"),
+           normal.stdout + certificate.stdout + certificate.stderr)
+        write(root, name, "# revised document\n")
+        stale = run(root, "-c", code)
+        ok("editing non-ASCII Markdown invalidates the earlier certificate",
+           stale.returncode == 0 and not stale.stdout.strip().endswith("PASS"),
+           stale.stdout + stale.stderr)
+        refreshed = run(root, "tools/linkcheck.py")
+        certificate = run(root, "-c", code)
+        ok("rerunning linkcheck refreshes the non-ASCII document certificate",
+           refreshed.returncode == 0 and certificate.stdout.strip().endswith("PASS"),
+           refreshed.stdout + certificate.stdout + certificate.stderr)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_scope_hash_matches_with_spaced_filename():
     root = make_repo(with_config=True)
     try:
@@ -410,7 +493,7 @@ except Exception as e:
 
 
 def test_gate_verdict_checker_key_growth_and_shrink():
-    """검사기 목록: 사라지면 차단(우회 경로), 늘어나면 빈 기준선(숨길 수 없음). 2026-09-18 교착 실측으로 계약 변경."""
+    """Removing a checker blocks validation; adding one starts with an empty baseline."""
     import gate
     reason, pull = gate._verdict({"linkcheck": set(), "new-checker": set()}, {"linkcheck": set()}, "ok")
     ok("gate key-set growth with zero issues passes and records the new key",
@@ -439,7 +522,10 @@ def test_now_renders_unspecified_personal_pointer():
 
 if __name__ == "__main__":
     for fn in (test_fresh_install_rejects_malformed_summaries,
-               test_linkcheck_exit_codes_and_pending, test_scope_hash_matches_with_spaced_filename,
+               test_linkcheck_exit_codes_and_pending,
+               test_linkcheck_optional_destinations_are_exact_and_instance_owned,
+               test_linkcheck_measures_non_ascii_spaced_filenames,
+               test_scope_hash_matches_with_spaced_filename,
                test_linkcheck_extracted_tree_uses_only_ignored_root_fallback,
                test_linkcheck_exclude_config_applies_only_without_all,
                test_doctor_codex_armed_and_git_version,

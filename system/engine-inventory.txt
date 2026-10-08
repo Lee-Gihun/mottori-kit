@@ -54,3 +54,7 @@ test_receipts.py
 testlib.py
 triggers.py
 test_triggers.py
+claude_auth.py
+test_claude_auth.py
+test_memory_map.py
+test_memory_subindex.py

@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
 """Run one bounded, non-resumable Claude or Codex worker.
 
-The master session should receive a small receipt, not the worker's broad read/tool trace.
-Every run is ephemeral at the native runtime and has a self-contained private record instead:
+Return a small receipt to the caller and retain full traces in a private run record. Claude is read-only; Codex may write within its workspace sandbox. Runtime fallback and write-capable Claude execution are not supported.
 
-    python3 tools/fresh_worker.py --runtime claude PROMPT_FILE
-    python3 tools/fresh_worker.py --runtime codex  PROMPT_FILE
-
-Claude v1 is a read-only reviewer. Codex v1 may write inside the workspace sandbox. There is no
-runtime fallback and no write-capable Claude mode. Design decision: KIT-DR-007.
-"""
+Usage: python3 tools/fresh_worker.py --runtime claude|codex PROMPT_FILE"""
 import argparse
 import datetime
 import hashlib
@@ -17,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -25,6 +20,7 @@ import time
 import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import claude_auth as _claude_auth  # noqa: E402
 import memlib as M
 import worker_batch as B
 
@@ -33,21 +29,19 @@ ROOT = M.ROOT
 RUN_ROOT = os.path.join(ROOT, "_private", "work", "runs")
 RECEIPT_MAX_BYTES = 4096
 WRAPPER_RESULT_MISSING = 3
+WRAPPER_CAPTURE_FAILED = 5
 RESULT_CONTRACT_PREFIX = "RESULT_JSON: "
 RESULT_VERDICTS = {"PASS", "FAIL", "INCONCLUSIVE"}
 ENGINE_DIR = os.path.dirname(os.path.abspath(__file__))
-META_SCHEMA_VERSION = 2  # v2 (2026-09-16): kit_rev · kit_dirty · harness_sha256 · usage · read_scope · scope
-# The kit revision this copy was synced from. The kit repo itself leaves it None (git HEAD is used);
-# the instance sync step stamps the kit HEAD here so an instance copy never reports its own repo
-# HEAD as the kit revision (independent review 2026-09-16, R5).
+META_SCHEMA_VERSION = 2  # Run metadata schema version.
+# Sync stamps identify the source kit revision; unstamped kit copies use their own HEAD.
 KIT_REV_EMBEDDED = None
-# Stamped alongside KIT_REV_EMBEDDED by the sync: whether the kit engine dir was dirty at sync time and
-# the normalized engine sha256 of the files that were copied (review R5). None in the kit itself.
+# Record whether the source engine was dirty and the normalized hash of the copied files.
 KIT_SYNC_DIRTY = None
 KIT_SYNC_ENGINE_SHA256 = None   # destination baseline: normalized engine sha of the copy right after sync
-KIT_SYNC_SOURCE_SHA256 = None   # source manifest: sha over the kit files that were copied (review R5, 3rd pass)
-ENGINE_FILES = ("fresh_worker.py", "memlib.py", "worker_batch.py")
-SYNC_FILES = ("fresh_worker.py", "test_fresh_worker.py", "worker_batch.py",
+KIT_SYNC_SOURCE_SHA256 = None   # Manifest hash of the copied source files.
+ENGINE_FILES = ("fresh_worker.py", "memlib.py", "worker_batch.py", "claude_auth.py")
+SYNC_FILES = ("fresh_worker.py", "memlib.py", "testlib.py", "test_fresh_worker.py", "claude_auth.py", "test_claude_auth.py", "worker_batch.py",
               "test_worker_batch.py", "ask_codex.sh")
 STAMP_PREFIXES = ("KIT_REV_EMBEDDED =", "KIT_SYNC_DIRTY =", "KIT_SYNC_ENGINE_SHA256 =", "KIT_SYNC_SOURCE_SHA256 =")
 WORKTREE_INSTANCE_FILES = (
@@ -56,6 +50,8 @@ WORKTREE_INSTANCE_FILES = (
     "system/decisions.md",
     "system/rituals.local.md",
 )
+
+ENV_POLICY_VERSION = "provider-scoped-v1"
 
 CAPABILITIES = {
     "claude": "read-only",
@@ -313,6 +309,8 @@ def _effective_prompt(runtime, body):
         "- This is a fresh, non-resumable worker. Read AGENTS.md and the named disk sources.\n"
         "- Do not commit, push, send, pay, submit, or change state journals/NOW; the dispatcher owns state.\n"
         "- Put durable work in the exact artifact paths authorized by the request.\n"
+        "- Include READ_SCOPE: with the files actually read, and UNREAD: with requested material not read. "
+        "These optional declarations are self-reports, not proof of access or use.\n"
         "- End with a concise result that lists evidence, changed artifact paths, tests, and remaining unknowns.\n"
         "- Every factual claim in the result names the file path (and line or section) it came from; "
         "a claim without a source goes under remaining unknowns.\n"
@@ -326,6 +324,17 @@ def _effective_prompt(runtime, body):
             "- Report executable verification that the dispatcher should run; do not claim you ran it.\n\n"
         )
     return common + body
+
+
+def _runtime_env(runtime, workspace):
+    """Pass provider settings only to their runtime; never load Claude tokens for Codex."""
+    env = dict(os.environ, MOTTORI_INSTANCE=workspace)
+    if runtime == "claude":
+        return _claude_auth.env(env)
+    if runtime == "codex":
+        return {key: value for key, value in env.items()
+                if not key.upper().startswith(("CLAUDE_", "ANTHROPIC_"))}
+    raise InputError("unsupported runtime")
 
 
 def _new_run(runtime):
@@ -343,14 +352,12 @@ def _claude_command():
     return [
         binary,
         "-p",
-        # Safe mode disables user/project plugins, hooks, skills, MCP servers, and browser control.
-        # The prompt explicitly tells the reviewer to Read AGENTS.md; strict empty MCP closes managed
-        # connector surfaces that `--tools` alone does not remove (live canary, 2026-08-29).
+        # Safe mode and an empty MCP config disable ambient plugins, hooks, connectors, and browser tools.
         "--safe-mode",
         "--strict-mcp-config",
         "--mcp-config", '{"mcpServers":{}}',
         "--disable-slash-commands",
-        "--model", os.environ.get("MOTTORI_FRESH_WORKER_CLAUDE_MODEL", "fable"),
+        "--model", os.environ.get("MOTTORI_FRESH_WORKER_CLAUDE_MODEL", "opus"),
         "--effort", "high",
         "--permission-mode", "dontAsk",
         "--tools", "Read", "Glob", "Grep",
@@ -401,9 +408,7 @@ def _claude_result(stream_path):
     return result
 
 
-# git은 훅을 부를 때 GIT_INDEX_FILE·GIT_DIR 같은 저장소 고정 변수를 내보낸다. 그대로 물려받으면 이 파일이
-# 다른 저장소(워크트리, 테스트 저장소)에 부르는 git이 바깥 커밋의 인덱스를 연다(2026-09-28 킷 pre-commit 실측:
-# worktree add가 ".git/index: Not a directory"로 실패). 여기서 부르는 git은 항상 cwd의 저장소를 보게 지운다.
+# Clear inherited Git control variables so nested Git commands use the repository at their cwd.
 _GIT_PINNING_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
                     "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "GIT_PREFIX")
 
@@ -440,8 +445,7 @@ def _kit_identity(engine_dir=None):
 
 
 def _engine_sha256(engine_dir=None):
-    """sha256 over the engine files with the sync stamp lines removed, so the kit file and a stamped
-    instance copy of the same code hash the same (review R5)."""
+    """Hash engine files after removing sync-stamp lines, so equivalent source and stamped copies share an identity."""
     engine_dir = engine_dir or ENGINE_DIR
     h = hashlib.sha256()
     for name in ENGINE_FILES:
@@ -510,11 +514,12 @@ def _harness_sha256(runtime, command, run_specific=()):
     """Identity of the adapter contract, independent of prompt body and run paths.
 
     Inputs: runtime, capability, the common contract prefix, the command options in order (binary
-    and run-specific paths removed), and the disabled-feature list. Canonical JSON, sha256.
+    and run-specific paths removed), the environment policy, and disabled features. Canonical JSON, sha256.
     """
     opts = [arg for arg in command[1:] if arg not in set(run_specific)]
     payload = {
         "runtime": runtime,
+        "env_policy": ENV_POLICY_VERSION,
         "capability": CAPABILITIES[runtime],
         "contract_prefix": _effective_prompt(runtime, ""),
         "command_opts": opts,
@@ -571,26 +576,24 @@ def _usage(runtime, stream_path):
 
 
 def _read_scope(result):
-    """First line (starts with 읽음 or 읽기 범위) and last UNREAD line of the result, preserved as strings."""
+    """Keep the first read declaration and last unread marker; accept legacy Korean labels.
+
+    Declarations are optional self-reports and never validate actual reading.
+    """
     if not result:
         return None
-    lines = result.lstrip("﻿").splitlines()
     declared = None
     unread = None
-    for line in lines:
-        s = line.strip()
-        if s:  # first non-empty line, stripped; a leading BOM is removed (review R6)
-            if s.startswith(("읽음", "읽기 범위")):
-                declared = s
-            break
-    for line in reversed(lines):
-        s = line.strip()
-        if s.startswith(("UNREAD:", "끝까지 못 읽은 것:")):
-            unread = s
-            break
+    for line in result.splitlines():
+        text = line.strip().lstrip("\ufeff").strip()
+        if declared is None and text.startswith(("READ_SCOPE:", "읽음", "읽기 범위")):
+            declared = text
+        if text.startswith(("UNREAD:", "끝까지 못 읽은 것:")):
+            unread = text
     if declared is None and unread is None:
         return None
     return {"declared": declared, "unread": unread}
+
 
 
 WRAPPER_SCOPE_VIOLATION = 4
@@ -619,8 +622,7 @@ def _normalize_prefix(prefix, root=None):
             entries = []
         if part not in entries:
             same = [e for e in entries if e.lower() == part.lower()]
-            # Only when the filesystem itself resolves the typed spelling to that entry (i.e. it is
-            # case-insensitive here); on a case-sensitive volume OUT and out are different paths (R10).
+            # Normalize spelling only when the filesystem resolves it to the same entry.
             if len(same) == 1 and os.path.exists(os.path.join(current, part)) \
                     and os.path.samefile(os.path.join(current, part), os.path.join(current, same[0])):
                 part = same[0]
@@ -636,18 +638,11 @@ def _normalize_prefix(prefix, root=None):
 
 
 def _workspace_snapshot(exclude_rel, root=None, include_git=False, include_parent=False):
-    """Return metadata fingerprints for the worker's observable write boundary.
+    """Return metadata fingerprints for the observable write boundary.
 
-    Normal report-only runs omit .git and the parent. Strict runs include .git and the immediate
-    parent entries so writes to the two control surfaces cannot disappear from the write-set. The
-    parent scan is deliberately one level: recursive observation would cross into unrelated
-    workspaces and still would not be confinement. The runtime sandbox remains the outer boundary.
+    Report-only runs omit .git and the parent. Strict runs include .git and immediate parent entries; recursively scanning the parent would cross into unrelated workspaces. The runtime sandbox remains the outer boundary.
 
-    Only lstat is used (no hashing), so a snapshot of a large tree costs well under a second.
-    ctime_ns is included because a writer can restore mtime with utime but cannot restore ctime,
-    and mode catches chmod (review R2). Symlinks are recorded as their own entries (kind 'link');
-    their targets are not followed.
-    """
+    Use lstat without following symlinks. ctime_ns detects writes that restore mtime, and mode detects permission changes."""
     root = os.path.abspath(root or ROOT)
     runs_rel = os.path.relpath(RUN_ROOT, root).replace(os.sep, "/")
     if runs_rel == ".." or runs_rel.startswith("../"):
@@ -692,9 +687,8 @@ def _workspace_snapshot(exclude_rel, root=None, include_git=False, include_paren
             snap[rel] = fingerprint(st, kind)
     if include_parent:
         parent = os.path.dirname(root)
-        # The OS temp root is a shared high-churn namespace. Treating every unrelated mktemp as a
-        # worker write makes strict mode unusable and still proves no confinement. Real workspaces
-        # and nested attack fixtures have a dedicated immediate parent and are measured below.
+        # Do not attribute unrelated OS-temp churn to the worker.
+        # Measure the dedicated parent of real workspaces and nested fixtures.
         if os.path.realpath(parent) == os.path.realpath(tempfile.gettempdir()):
             return snap
         try:
@@ -737,11 +731,8 @@ def _scope_report(prefixes, before, after, seconds, root=None):
         if prefixes and not inside:
             violations.append({"path": path, "why": "outside write-prefix"})
     if prefixes:
-        # Every symlink that lives under a prefix, changed or not, is a door: a write through a
-        # pre-existing link lands outside the snapshot and would otherwise be invisible (review R1).
-        # Fail closed: such a link is a violation whenever it points outside the allowed prefixes.
-        # A hardlink is the same door without a name: if a file under a prefix has more links than the
-        # snapshot can see for its inode, some alias lives outside the workspace (review R8).
+        # Reject symlink targets outside allowed prefixes, including pre-existing links.
+        # Reject hardlinks whose link count shows aliases outside the workspace snapshot.
         seen = {}
         for entry in after.values():
             if entry[0] == "file":
@@ -798,19 +789,84 @@ def _remove_worktree(worktree):
         raise RuntimeError(f"worktree 정리 실패: {detail or proc.returncode}")
 
 
-def _prepare_worktree(run_dir, mode):
+def _snapshot_read_materials(paths):
+    """Explicit per-file copies only. No directory expansion, private-root mount, or symlink."""
+    if len(paths) > 128:
+        raise InputError("read materials exceed 128 files")
+    snapshots, total = {}, 0
+    for path in paths:
+        if (not isinstance(path, str) or not path or os.path.isabs(path) or "\\" in path or
+                any(part in ("", ".", "..") for part in path.split("/")) or
+                any(ord(c) < 32 for c in path)):
+            raise InputError("read material must be a canonical ROOT-relative file")
+        source, body = read_prompt(path)  # UTF-8 regular file, ROOT boundary and symlink checks.
+        denied = _private_refs(source, "")
+        if denied:
+            raise InputError("read material denied by model-send policy: " + path)
+        if path in WORKTREE_INSTANCE_FILES:
+            raise InputError("read material cannot override instance policy: " + path)
+        raw = body.encode("utf-8")
+        total += len(raw)
+        if len(raw) > 2 * 1024 * 1024 or total > 16 * 1024 * 1024:
+            raise InputError("read material byte budget exceeded (2 MiB/file, 16 MiB total)")
+        if path in snapshots and snapshots[path] != raw:
+            raise InputError("read material changed between duplicate references: " + path)
+        snapshots[path] = raw
+    return snapshots
+
+
+def _copy_read_materials(worktree, snapshots):
+    hashes = {}
+    for rel, raw in snapshots.items():
+        current = worktree
+        for part in rel.split("/")[:-1]:
+            current = os.path.join(current, part)
+            if os.path.lexists(current):
+                if os.path.islink(current) or not os.path.isdir(current):
+                    raise InputError("read material destination has a non-directory component: " + rel)
+            else:
+                os.mkdir(current, 0o700)
+        target = os.path.join(worktree, rel)
+        if os.path.lexists(target):
+            raise InputError("read material cannot shadow a worktree source file: " + rel)
+        _private_write(target, raw)
+        os.chmod(target, 0o400)
+        hashes[rel] = hashlib.sha256(raw).hexdigest()
+    return hashes
+
+
+def _read_material_violations(workspace, hashes):
+    changed = []
+    for rel, expected in hashes.items():
+        current = workspace
+        linked = False
+        for part in rel.split("/"):
+            current = os.path.join(current, part)
+            if os.path.islink(current):
+                linked = True
+                break
+        path = os.path.join(workspace, rel)
+        if linked or not os.path.isfile(path) or _sha256(path) != expected:
+            changed.append(rel)
+    return changed
+
+
+def _prepare_worktree(run_dir, mode, read_materials=None):
     base_raw = _git_require(["rev-parse", "HEAD"], ROOT)
     base_rev = base_raw.decode("ascii", errors="strict").strip()
     worktree = os.path.join(run_dir, "wt")
     added = False
     try:
-        _git_require(["worktree", "add", "--detach", worktree, "HEAD"], ROOT)
+        # HEAD can move between rev-parse and worktree creation. Use the revision
+        # recorded in the receipt, rather than resolving HEAD a second time.
+        _git_require(["worktree", "add", "--detach", worktree, base_rev], ROOT)
         added = True
         if mode == "dirty":
             dirty = _git_require(["diff", "HEAD", "--binary"], ROOT)
             if dirty:
                 _git_require(["apply", "-"], worktree, input_bytes=dirty)
         copied = []
+        instance_sha256 = {rel: None for rel in WORKTREE_INSTANCE_FILES}
         for rel in WORKTREE_INSTANCE_FILES:
             source = os.path.join(ROOT, rel)
             if not os.path.isfile(source):
@@ -819,10 +875,16 @@ def _prepare_worktree(run_dir, mode):
             os.makedirs(os.path.dirname(destination), exist_ok=True)
             shutil.copy2(source, destination)
             copied.append(rel)
+            instance_sha256[rel] = _sha256(destination)
         os.makedirs(os.path.join(worktree, "state"), exist_ok=True)
+        material_sha256 = _copy_read_materials(worktree, read_materials or {})
+        copied.extend(material_sha256)
         return os.path.realpath(worktree), {
             "mode": mode,
             "base_rev": base_rev,
+            "instance_sha256": instance_sha256,
+            "material_sha256": material_sha256,
+            "material_integrity": True,
             "patch_sha256": None,
             "files": [],
             "added": 0,
@@ -838,7 +900,78 @@ def _worktree_pathspec(copied):
     return [".", *[f":(exclude){rel}" for rel in copied]]
 
 
-def _capture_worktree(worktree, run_dir, copied):
+def _capture_exclusion(rel, entry):
+    """Conservative artifact export policy; this is not a filesystem sandbox."""
+    parts = rel.split("/")
+    reserved = {"_private", "cache", "caches", "node_modules", "__pycache__", "credentials",
+                "credential", "secrets", "secret", "keys"}
+    if any(p.startswith(".") or p.lower() in reserved for p in parts):
+        return "private, hidden, credential, or cache path"
+    name = parts[-1].lower()
+    if (name.startswith(("credentials.", "credential.", "secrets.", "secret.", "id_rsa", "id_ed25519"))
+            or name.endswith((".pem", ".key", ".p12", ".pfx", ".keychain"))):
+        return "credential-shaped filename"
+    if any(ord(c) < 32 for c in rel):
+        return "filename is not representable in the line-delimited artifact list"
+    if entry[0] != "file" or entry[7] != 1:
+        return "output is not a single-link regular file"
+    return None
+
+
+def _read_capture_output(worktree, rel):
+    current = worktree
+    for part in rel.split("/"):
+        current = os.path.join(current, part)
+        if stat.S_ISLNK(os.lstat(current).st_mode):
+            raise InputError("symlink encountered during output capture")
+    fd = os.open(current, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise InputError("output capture requires a single-link regular file")
+        return stream.read()
+
+
+def _capture_worktree(worktree, run_dir, copied, prefixes=(), before=None, after=None):
+    """Capture Git changes and explicitly scoped ignored outputs before cleanup."""
+    before, after = before or {}, after or {}
+    candidates = sorted(path for path, entry in after.items()
+                        if entry[0] != "dir" and before.get(path) != entry
+                        and path not in copied and any(_under(path, p) for p in prefixes))
+    ignored = []
+    if candidates:
+        result = _git_process(["check-ignore", "--stdin", "-z"], worktree,
+                              input_bytes=b"\0".join(os.fsencode(p) for p in candidates) + b"\0")
+        if result.returncode not in (0, 1):
+            raise InputError("ignored output discovery failed")
+        if ((result.returncode == 0 and (not result.stdout or not result.stdout.endswith(b"\0")))
+                or (result.returncode == 1 and result.stdout)):
+            raise InputError("ignored output discovery returned an incomplete listing")
+        ignored = sorted(os.fsdecode(p) for p in result.stdout.split(b"\0") if p)
+        if not set(ignored).issubset(candidates):
+            raise InputError("ignored output discovery returned an unexpected path")
+    captured, skipped, output_hashes = [], [], {}
+    for rel in ignored:
+        reason = _capture_exclusion(rel, after[rel])
+        if reason:
+            skipped.append({"path": rel, "why": reason})
+            continue
+        raw = _read_capture_output(worktree, rel)
+        parent = run_dir
+        for part in ("untracked", *rel.split("/")[:-1]):
+            parent = os.path.join(parent, part)
+            try:
+                os.mkdir(parent, 0o700)
+            except FileExistsError:
+                if not stat.S_ISDIR(os.lstat(parent).st_mode):
+                    raise InputError("artifact destination has a non-directory component")
+        destination = os.path.join(parent, rel.split("/")[-1])
+        _private_write(destination, raw)
+        digest = hashlib.sha256(raw).hexdigest()
+        if _sha256(destination) != digest:
+            raise InputError("captured output hash mismatch")
+        captured.append(rel)
+        output_hashes[rel] = digest
     pathspec = _worktree_pathspec(copied)
     raw_untracked = _git_require(
         ["ls-files", "--others", "--exclude-standard", "-z", "--", *pathspec], worktree,
@@ -848,6 +981,10 @@ def _capture_worktree(worktree, run_dir, copied):
     )
     if untracked:
         _git_require(["add", "-N", "--", *untracked], worktree)
+    if captured:
+        # Intent-to-add affects only the disposable worktree index, not the source repository.
+        _git_require(["add", "-N", "-f", "--", *captured], worktree)
+        untracked = sorted(set(untracked) | set(captured))
     patch = _git_require(["diff", "HEAD", "--binary", "--", *pathspec], worktree)
     raw_files = _git_require(["diff", "HEAD", "--name-only", "-z", "--", *pathspec], worktree)
     files = sorted(
@@ -869,7 +1006,14 @@ def _capture_worktree(worktree, run_dir, copied):
     untracked_path = os.path.join(run_dir, "untracked.txt")
     _private_write(patch_path, patch)
     _private_write(untracked_path, "".join(f"{path}\n" for path in untracked))
+    for rel, digest in output_hashes.items():
+        if hashlib.sha256(_read_capture_output(worktree, rel)).hexdigest() != digest:
+            raise InputError("output changed during capture")
     return {
+        "capture_status": "incomplete" if skipped else "complete",
+        "ignored_captured": captured,
+        "capture_skipped": skipped,
+        "output_sha256": output_hashes,
         "patch_sha256": _sha256(patch_path),
         "files": files,
         "added": added,
@@ -924,8 +1068,7 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
     prefixes = [_normalize_prefix(p, root=workspace) for p in write_prefixes]
     rel_run = os.path.relpath(run_dir, ROOT).replace(os.sep, "/")
     for prefix in prefixes:
-        # A prefix may not exist yet; create it before the baseline so its own creation is not a
-        # change outside itself (review R9). Creating it is the dispatcher's act, not the worker's.
+        # Create the write prefix before the baseline so dispatcher setup is not counted as worker output.
         os.makedirs(os.path.join(workspace, prefix), exist_ok=True)
     t_scope = time.monotonic()
     exclude_rel = rel_run if os.path.realpath(workspace) == os.path.realpath(ROOT) else "__outside__"
@@ -950,6 +1093,9 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
     capability = CAPABILITIES[runtime]
     command = _claude_command() if runtime == "claude" else _codex_command(runtime_result_path)
     identity = _engine_identity()
+    # The engine runs from ROOT, while the worker reads AGENTS.md in its actual cwd.
+    identity["root_agents_sha256"] = identity["agents_sha256"]
+    identity["agents_sha256"] = _sha256(os.path.join(workspace, "AGENTS.md"))
     meta = {
         "schema_version": META_SCHEMA_VERSION,
         "run": rel_run,
@@ -997,16 +1143,20 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
     try:
         with os.fdopen(stream_fd, "wb") as stream, os.fdopen(stderr_fd, "wb") as err:
             try:
-                proc = subprocess.run(
+                proc = subprocess.Popen(
                     command,
-                    input=effective.encode("utf-8"),
+                    stdin=subprocess.PIPE,
                     stdout=stream,
                     stderr=err,
                     cwd=workspace,
-                    env=dict(os.environ, MOTTORI_INSTANCE=workspace),
-                    check=False,
+                    env=_runtime_env(runtime, workspace),
+                    start_new_session=True,
                 )
-                process_exit = proc.returncode
+                try:
+                    proc.communicate(effective.encode("utf-8"))
+                    process_exit = proc.returncode
+                finally:
+                    _stop_runtime_group(proc)
             except FileNotFoundError as e:
                 launch_error = f"runtime binary not found: {e.filename}"
                 err.write((launch_error + "\n").encode("utf-8"))
@@ -1055,13 +1205,27 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
     scope = _scope_report(prefixes, before, after, scope_seconds + (time.monotonic() - t_scope),
                           root=workspace)
     if worktree_meta["mode"] is not None:
-        worktree_meta.update(_capture_worktree(workspace, run_dir, copied))
+        material_changes = _read_material_violations(workspace, worktree_meta.get("material_sha256", {}))
+        worktree_meta["material_integrity"] = not material_changes
+        worktree_meta["material_changes"] = material_changes
+        # Persist recovery ownership before capture; TERM can interrupt any artifact write.
+        worktree_meta.update(capture_status="in_progress", preserved_path=workspace)
+        _write_meta(meta_path, meta)
+        try:
+            worktree_meta.update(_capture_worktree(workspace, run_dir, copied, prefixes, before, after))
+        except Exception as error:
+            worktree_meta.update(capture_status="failed", capture_error=f"{type(error).__name__}: {error}")
+        if worktree_meta.get("capture_status") == "complete":
+            worktree_meta.pop("preserved_path", None)
 
-    if strict_scope and scope["status"] == "scope_violation":
-        # Post-run detection only: nothing is deleted or rolled back; the paths are on record.
-        # A violation outranks the runtime's own exit code (review R3): process_exit stays in meta.
-        # Strict mode makes the declared write-prefix an enforcement boundary. Without it the same
-        # scope report remains observable but does not replace the runtime result (PRD §10.5).
+    if worktree_meta.get("capture_status") in ("failed", "incomplete"):
+        wrapper_exit = WRAPPER_CAPTURE_FAILED
+        status_name = "artifact-capture-" + worktree_meta["capture_status"]
+    elif worktree_meta.get("material_integrity") is False:
+        wrapper_exit = WRAPPER_SCOPE_VIOLATION
+        status_name = "read-material-changed"
+    elif strict_scope and scope["status"] == "scope_violation":
+        # Record post-run violations without rollback. Strict violations override the reported runtime status; retain the original process exit separately.
         wrapper_exit = WRAPPER_SCOPE_VIOLATION
         status_name = "scope_violation"
         if process_exit == 0 and (result is None or not result.strip()):
@@ -1123,12 +1287,51 @@ def _batch_identity(batch_manifest, slot, source, body):
     }
 
 
-def run(runtime, prompt_file, write_prefixes=(), strict_scope=False, strict_egress=False,
-        worktree_mode=None, batch_manifest=None, slot=None):
+def _stop_runtime_group(proc):
+    """Reap only this runtime group, including descendants left after its leader exits."""
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(proc.pid, sig)
+        except ProcessLookupError:
+            break
+        if sig == signal.SIGTERM:
+            try:
+                proc.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                pass
+    try:
+        proc.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def _interrupt_run(signum, frame):
+    # A second TERM must not interrupt the owned child/worktree cleanup.
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    raise SystemExit(128 + signum)
+
+
+def run(*args, **kwargs):
+    """TERM/INT run the same cleanup as exceptions. SIGKILL cannot run Python cleanup."""
+    old = {sig: signal.getsignal(sig) for sig in (signal.SIGTERM, signal.SIGINT)}
+    try:
+        for sig in old:
+            signal.signal(sig, _interrupt_run)
+        return _run(*args, **kwargs)
+    finally:
+        for sig, handler in old.items():
+            signal.signal(sig, handler)
+
+
+def _run(runtime, prompt_file, write_prefixes=(), strict_scope=False, strict_egress=False,
+        worktree_mode=None, batch_manifest=None, slot=None, read_materials=()):
     if M.CONFIG_ERROR == "invalid":
         raise InputError("memory config validation failed: " + (M.CONFIG_ERROR_DETAIL or "unknown"))
     if strict_scope and not write_prefixes:
         raise InputError("--strict-scope에는 하나 이상의 --write-prefix가 필요하다")
+    if read_materials and worktree_mode is None:
+        raise InputError("--read-material requires an isolated --worktree")
     source, body = read_prompt(prompt_file)
     egress_refs = _private_refs(source, body)
     if egress_refs:
@@ -1136,6 +1339,7 @@ def run(runtime, prompt_file, write_prefixes=(), strict_scope=False, strict_egre
             "model-send deny ref를 기본 경로에서 거부했다: " + ", ".join(egress_refs))
     egress_source_texts = _private_source_texts(egress_refs)
     batch = _batch_identity(batch_manifest, slot, source, body)
+    material_snapshots = _snapshot_read_materials(read_materials)
     run_id, run_dir, started = _new_run(runtime)
     workspace = ROOT
     copied = []
@@ -1148,7 +1352,7 @@ def run(runtime, prompt_file, write_prefixes=(), strict_scope=False, strict_egre
         "deleted": 0,
     }
     if worktree_mode is not None:
-        workspace, worktree_meta, copied = _prepare_worktree(run_dir, worktree_mode)
+        workspace, worktree_meta, copied = _prepare_worktree(run_dir, worktree_mode, material_snapshots)
     try:
         receipt, wrapper_exit = _run_workspace(
             runtime, source, body, run_id, run_dir, started, workspace, worktree_meta, copied,
@@ -1156,7 +1360,8 @@ def run(runtime, prompt_file, write_prefixes=(), strict_scope=False, strict_egre
             strict_scope=strict_scope, strict_egress=strict_egress, batch=batch,
         )
     finally:
-        if worktree_mode is not None:
+        if worktree_mode is not None and worktree_meta.get("capture_status") not in (
+                "in_progress", "failed", "incomplete"):
             _remove_worktree(workspace)
     sys.stdout.write(receipt)
     return wrapper_exit
@@ -1168,7 +1373,7 @@ def main(argv=None):
     ap.add_argument("--write-prefix", action="append", default=[], metavar="DIR",
                     help="ROOT-relative directory the worker may write under (repeatable). Changes "
                          "outside every prefix are reported after the run. With --strict-scope they "
-                         "fail with wrapper exit 4; without a prefix the write-set is unchecked.")
+                         "normally fail with exit 4; artifact capture failure takes precedence with exit 5. Without a prefix the write-set is unchecked.")
     ap.add_argument("--strict-scope", action="store_true",
                     help="Require at least one --write-prefix and fail on prefix violations. In "
                          "worktree mode scope is measured inside the isolate and the original tree "
@@ -1180,6 +1385,10 @@ def main(argv=None):
                     help="Run in <run>/wt and extract patch.diff plus untracked.txt. 'head' starts "
                          "from HEAD; 'dirty' first applies the original tree's tracked git diff. "
                          "A bare --worktree means dirty.")
+    ap.add_argument("--read-material", action="append", default=[], metavar="FILE",
+                    help="Snapshot one policy-approved UTF-8 file into the worktree at the same "
+                         "ROOT-relative path. Repeat per file; no directories or symlinks. "
+                         "Hashes and post-run integrity are recorded in worktree metadata.")
     ap.add_argument("--batch-manifest",
                     help="Manifest created by worker_batch.py. Must be paired with --slot; the "
                          "manifest and source prompt hashes are recorded in meta.json v2.")
@@ -1191,7 +1400,7 @@ def main(argv=None):
         return run(args.runtime, args.prompt_file, write_prefixes=args.write_prefix,
                    strict_scope=args.strict_scope, strict_egress=args.strict_egress,
                    worktree_mode=args.worktree,
-                   batch_manifest=args.batch_manifest, slot=args.slot)
+                   batch_manifest=args.batch_manifest, slot=args.slot, read_materials=args.read_material)
     except InputError as e:
         print(f"fresh-worker input rejected: {e}", file=sys.stderr)
         return 2

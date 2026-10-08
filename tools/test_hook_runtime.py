@@ -32,8 +32,9 @@ def test_capability_roles_do_not_collapse():
 
 
 def test_gate_unit_rejects_current_only_checker_key():
-    """이름은 유지(근거 표지 호환), 계약은 2026-09-18에 바뀌었다: 검사기 추가는 빈 기준선(이슈 0이면 통과·기록),
-    검사기 제거는 차단. 옛 계약(추가도 차단)은 검사기 추가 커밋을 교착시켰다."""
+    """Keep the test name for evidence-marker compatibility.
+
+    New checkers start with an empty baseline; removing a checker blocks validation."""
     import gate
     reason, pull = gate._verdict({"linkcheck": set(), "new-checker": set()}, {"linkcheck": set()}, "ok")
     assert reason is None and pull is True, (reason, pull)
@@ -170,22 +171,23 @@ def test_installer_refuses_foreign_and_outside_hookspath():
 
 def test_installer_uses_common_hooks_in_linked_worktree():
     root = _fixture_repo()
+    git_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     linked = tempfile.mkdtemp(prefix="linked-worktree-")
     shutil.rmtree(linked)
     try:
-        subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True)
-        subprocess.run(["git", "config", "user.name", "Fixture"], cwd=root, check=True)
-        subprocess.run(["git", "add", "."], cwd=root, check=True)
-        subprocess.run(["git", "commit", "-qm", "fixture"], cwd=root, check=True)
+        subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True, env=git_env)
+        subprocess.run(["git", "config", "user.name", "Fixture"], cwd=root, check=True, env=git_env)
+        subprocess.run(["git", "add", "."], cwd=root, check=True, env=git_env)
+        subprocess.run(["git", "commit", "-qm", "fixture"], cwd=root, check=True, env=git_env)
         subprocess.run(["git", "worktree", "add", "-q", "-b", "fixture-linked", linked],
-                       cwd=root, check=True)
+                       cwd=root, check=True, env=git_env)
 
         r = _installer(linked, "--repair")
         assert r.returncode == 0, r.stdout + r.stderr
         assert os.path.isfile(_hook_path(linked))
     finally:
         subprocess.run(["git", "worktree", "remove", "--force", linked],
-                       cwd=root, capture_output=True)
+                       cwd=root, capture_output=True, env=git_env)
         shutil.rmtree(linked, ignore_errors=True)
         shutil.rmtree(root, ignore_errors=True)
 
@@ -248,6 +250,46 @@ def test_all_canary_persists_runtime_results_without_nonce():
         hook_canary.secrets.token_hex = old_token_hex
         sys.argv = old_argv
         shutil.rmtree(root, ignore_errors=True)
+
+
+def test_staged_python_syntax_checks_unicode_spaces_and_index_bytes():
+    """Quoted filenames and clean worktree bytes must not hide broken staged code."""
+    import gate
+    with tempfile.TemporaryDirectory(prefix="staged-python-") as directory:
+        root = os.path.join(directory, "repo")
+        extracted = os.path.join(directory, "index")
+        os.makedirs(os.path.join(root, "tools"))
+        os.makedirs(extracted)
+        subprocess.run(["git", "init", "-q", root], check=True)
+        subprocess.run(["git", "-C", root, "config", "core.quotePath", "true"], check=True)
+        names = ("tools/한글 파일.py", "tools/space name.py")
+        for name in names:
+            with open(os.path.join(root, name), "w", encoding="utf-8") as source:
+                source.write("def broken(:\n")
+        subprocess.run(["git", "-C", root, "add", "--", *names], check=True)
+        for name in names:
+            with open(os.path.join(root, name), "w", encoding="utf-8") as source:
+                source.write("value = 1\n")
+        subprocess.run(["git", "-C", root, "checkout-index", "-a", "--prefix", extracted + "/"], check=True)
+        old_root = gate.M.ROOT
+        gate.M.ROOT = root
+        try:
+            errors = gate._staged_tools_compile(extracted)
+            assert len(errors) == 2 and all(any(error.startswith(name + ":") for error in errors) for name in names), errors
+            for name in names:
+                shutil.copy2(os.path.join(root, name), os.path.join(extracted, name))
+            assert gate._staged_tools_compile(extracted) == []
+            os.remove(os.path.join(extracted, names[0]))
+            assert gate._staged_tools_compile(extracted) == [names[0] + ": missing staged file"]
+            gate.M.ROOT = extracted
+            try:
+                gate._staged_tools_compile(extracted)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("failed Git listing was accepted as an empty source tree")
+        finally:
+            gate.M.ROOT = old_root
 
 
 def test_precommit_now_check_reads_extracted_index_tree():
@@ -342,8 +384,121 @@ def test_precommit_now_check_reads_extracted_index_tree():
         shutil.rmtree(root, ignore_errors=True)
         shutil.rmtree(extracted, ignore_errors=True)
 
+def test_canary_children_pin_instance_and_block_ambient_tools():
+    """Exercise the wrapper contract with a fake runtime and ambient sentinel files."""
+    from pathlib import Path
+    from unittest.mock import patch
+    import hook_canary
+
+    with tempfile.TemporaryDirectory(prefix="hook-canary-isolation-") as temporary:
+        root = Path(temporary)
+        marker = root / "ambient-executed"
+        runtime = root / "runtime"
+        runtime.write_text('''#!/usr/bin/env python3
+import json, os, pathlib, subprocess, sys
+args = sys.argv[1:]
+root = pathlib.Path.cwd()
+if os.environ.get("MOTTORI_INSTANCE") != str(root):
+    raise SystemExit(31)
+if "exec" in args:
+    if any(key.upper().startswith(("CLAUDE_", "ANTHROPIC_")) for key in os.environ):
+        raise SystemExit(34)
+else:
+    if os.environ.get("CLAUDE_PROJECT_DIR") != str(root):
+        raise SystemExit(31)
+    if any(key.upper().startswith(("OPENAI_", "CODEX_")) for key in os.environ):
+        raise SystemExit(35)
+if any(key.startswith("GIT_") and key != "GIT_TERMINAL_PROMPT" for key in os.environ):
+    raise SystemExit(32)
+if os.environ.get("CLAUDE_CODE_PLUGIN_DIRS") or os.environ.get("CLAUDE_CODE_SYNC_PLUGINS"):
+    (root / "ambient-executed").write_text("plugin")
+if "exec" in args:
+    disabled = [args[i+1] for i, value in enumerate(args[:-1]) if value == "--disable"]
+    if "--ignore-user-config" not in args or "plugins" not in disabled or "apps" not in disabled or "mcp_servers={}" not in args:
+        (root / "ambient-executed").write_text("connector")
+    enabled = "hooks" not in disabled
+else:
+    required = ("--strict-mcp-config", "--disable-slash-commands", "--no-chrome")
+    if not all(flag in args for flag in required) or args[args.index("--setting-sources")+1] != "project" or json.loads(args[args.index("--mcp-config")+1]) != {"mcpServers": {}} or args[args.index("--tools")+1] != "":
+        (root / "ambient-executed").write_text("connector")
+    enabled = "--safe-mode" not in args
+if os.environ.get("MOTTORI_HOOK_CANARY") in args[-1]:
+    raise SystemExit(33)
+value = subprocess.check_output([sys.executable, "hook.py"], text=True).strip() if enabled else "ABSENT"
+if "exec" in args:
+    print(json.dumps({"type":"item.completed", "item":{"type":"agent_message", "text":value}}))
+else:
+    print(json.dumps({"type":"system", "subtype":"init", "tools":[], "mcp_servers":[], "plugins":[]}))
+    print(json.dumps({"type":"result", "is_error":False, "result":value}))
+''', encoding="utf-8")
+        runtime.chmod(0o755)
+        (root / "hook.py").write_text(
+            'import os\nprint(os.environ["MOTTORI_HOOK_CANARY"])\n', encoding="utf-8")
+        hostile = {
+            "MOTTORI_INSTANCE": "/synthetic/unrelated",
+            "CLAUDE_PROJECT_DIR": "/synthetic/unrelated",
+            "GIT_DIR": "/synthetic/unrelated/.git",
+            "GIT_INDEX_FILE": "/synthetic/unrelated/index",
+            "CLAUDE_CODE_PLUGIN_DIRS": "/synthetic/ambient-plugin",
+            "CLAUDE_CODE_SYNC_PLUGINS": "1",
+            "CLAUDE_CODE_SYNC_SESSION_REFS": "1",
+            "CLAUDE_CODE_SAFE_MODE": "1",
+            "CLAUDE_CODE_OAUTH_TOKEN": "SYNTHETIC-CLAUDE-TOKEN",
+            "ANTHROPIC_API_KEY": "SYNTHETIC-PROVIDER-TOKEN",
+            "claude_fixture": "SYNTHETIC-LOWERCASE",
+            "OPENAI_API_KEY": "SYNTHETIC-OPENAI-TOKEN",
+            "CODEX_PROVIDER": "SYNTHETIC-CODEX-PROVIDER",
+            "openai_fixture": "SYNTHETIC-LOWERCASE",
+        }
+        with patch.object(hook_canary, "ROOT", str(root)), \
+                patch.object(hook_canary.shutil, "which", return_value=str(runtime)), \
+                patch.object(hook_canary.claude_auth, "_read_token", return_value=None), \
+                patch.dict(os.environ, hostile):
+            for enabled, expected in ((True, "SYNTHETIC-NONCE"), (False, "ABSENT")):
+                result = hook_canary._run("SYNTHETIC-NONCE", enabled)
+                assert result.returncode == 0, (result.returncode, result.stdout, result.stderr)
+                assert hook_canary.agent_messages(result.stdout) == ([expected], 0)
+                result = hook_canary._run_claude("SYNTHETIC-NONCE", enabled)
+                assert result.returncode == 0, (result.returncode, result.stdout, result.stderr)
+                assert hook_canary.claude_messages(result.stdout) == (expected, 0, True)
+            assert os.environ["MOTTORI_INSTANCE"] == hostile["MOTTORI_INSTANCE"]
+        assert not marker.exists(), marker.read_text() if marker.exists() else ""
+
+
+def test_claude_canary_rejects_tools_plugins_and_missing_startup():
+    import hook_canary
+
+    init = {"type": "system", "subtype": "init", "tools": [], "mcp_servers": [], "plugins": []}
+    result = {"type": "result", "is_error": False, "result": "SYNTHETIC-NONCE"}
+    def stream(*events):
+        return "\n".join(json.dumps(event) for event in events)
+
+    assert hook_canary.claude_messages(stream(init, result)) == ("SYNTHETIC-NONCE", 0, True)
+    bundled = [{"name": name, "path": "builtin", "source": name + "@builtin"}
+               for name in sorted(hook_canary.CLAUDE_BUILTIN_PLUGINS)]
+    assert hook_canary.claude_messages(stream(dict(init, plugins=bundled), result))[2] is True
+    for plugins in (None, {}, bundled + bundled, [{"name": []}],
+                    [{"name": "unknown", "path": "builtin", "source": "unknown@builtin"}],
+                    [dict(bundled[0], path="/configured/plugin")],
+                    [dict(bundled[0], source="configured")]):
+        assert hook_canary.claude_messages(stream(dict(init, plugins=plugins), result))[2] is False
+    assert hook_canary.claude_messages(stream(result))[2] is False
+    assert hook_canary.claude_messages(stream(init, init, result))[2] is False
+    missing_plugins = {key: value for key, value in init.items() if key != "plugins"}
+    assert hook_canary.claude_messages(stream(missing_plugins, result))[2] is False
+    for key in ("tools", "mcp_servers", "plugins"):
+        unsafe = dict(init, **{key: ["ambient"]})
+        assert hook_canary.claude_messages(stream(unsafe, result))[2] is False
+    tool = {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "mcp__external"}]}}
+    assert hook_canary.claude_messages(stream(init, tool, result))[1] == 1
+    assert hook_canary.claude_messages(stream(init, dict(result, is_error=True)))[0] is None
+    assert hook_canary.claude_messages(stream(init, result, dict(result, is_error=True)))[0] is None
+
+
 
 TESTS = [
+    test_canary_children_pin_instance_and_block_ambient_tools,
+    test_claude_canary_rejects_tools_plugins_and_missing_startup,
     test_capability_roles_do_not_collapse,
     test_gate_unit_rejects_current_only_checker_key,
     test_doctor_rejects_declared_hook_with_invalid_command,
@@ -354,6 +509,7 @@ TESTS = [
     test_installer_honors_relative_hookspath,
     test_canary_parser_reads_only_agent_messages,
     test_all_canary_persists_runtime_results_without_nonce,
+    test_staged_python_syntax_checks_unicode_spaces_and_index_bytes,
     test_precommit_now_check_reads_extracted_index_tree,
 ]
 

@@ -11,6 +11,26 @@ outstanding, `python3 tools/doctor.py` fails after the pull.
 
 ---
 
+## v0.9 · 2026-10-08 (memory and reviewed engine transfer)
+
+### `[Note]` Upgrade engine code and review instance configuration separately
+
+Evidence: `decision:KIT-DR-018`.
+
+For a cloned kit instance, use `git pull`, then `python3 tools/doctor.py`. Resolve any reported schema migration with the documented setup procedure. For an instance that receives only the worker cluster, run `bash /path/to/kit/tools/sync_engine.sh /path/to/instance`. That command updates the worker and its direct dependencies, verifies existing state-tool consumers, and rolls back on failure. It does not install the full kit, change instance configuration, or register schedules.
+
+New setups include `~/.codex/archived_sessions` as an additional `codex-jsonl` source. Existing `episodic_sources` arrays are authoritative and are not silently expanded by a pull. To search archives, retain the existing entries and add the corresponding entry from `templates/memory-config.json`, then run `python3 tools/recall.py sessions`. Archived and active sessions use the same instance/author filters and native-ID deduplication. Recall timestamps use the machine's local timezone.
+
+### `[Note]` Authentication and application records stay instance-owned
+
+Evidence: `decision:KIT-DR-018`.
+
+The optional `tools/claude_auth.py` helper can use an explicitly saved headless Claude credential; installation creates none. Normal login remains valid. A saved credential is injected only into Claude workers, and each worker removes the other provider's credential variables. Read declarations are self-reports, not a read sandbox. Exact materials and write scope have separate checks.
+
+Start a private reasoning record from `templates/deep-pass-ledger.md`; keep it under the instance's private area, never in a tracked lens definition. Debate rounds can start from `templates/debate-round.md`. The kit does not install an automatic proposal-application loop or inherit another instance's commit authority. The generated memory-map UI remains Korean with translation explicitly pending; absent optional adapters are UNAVAILABLE.
+
+---
+
 ## v0.8 · 2026-09-18 (English canonical migration)
 
 ### `[Note]` A trigger store surfaces due items at session start, inside a fixed action-tier boundary

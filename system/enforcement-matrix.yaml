@@ -2356,7 +2356,7 @@
       ],
       "invariant": "strict scope에서 prefix 밖 변경은 scope_violation으로 종료하고 meta에 위반을 남긴다.",
       "boundary": "test",
-      "fail_close": "--strict-scope 위반이면 run status가 scope_violation이고 wrapper exit가 4가 된다.",
+      "fail_close": "--strict-scope 위반은 scope.status에 남기고 보통 exit 4로 막는다. 산출물 회수 실패가 겹치면 exit 5가 우선하며 worktree를 보존한다.",
       "fixtures": {
         "positive": "tools/test_fresh_worker.py",
         "negative": "tools/test_fresh_worker.py"
@@ -4068,7 +4068,7 @@
       ],
       "invariant": "선언한 write-prefix 위반은 항상 실패하고 strict scope는 prefix를 필수로 하며 .git과 전용 immediate parent의 직접 변경을 관측한다.",
       "boundary": "test",
-      "fail_close": "관측된 control-surface 변경은 scope_violation과 wrapper exit 4가 된다.",
+      "fail_close": "관측된 control-surface 변경은 scope.status=scope_violation으로 남기고 보통 exit 4로 막는다. 산출물 회수 실패가 겹치면 exit 5가 우선하며 worktree를 보존한다.",
       "fixtures": {
         "positive": "tools/test_fresh_worker.py",
         "negative": "tools/test_fresh_worker.py"

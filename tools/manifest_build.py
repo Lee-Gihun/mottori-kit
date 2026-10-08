@@ -15,21 +15,18 @@ import argparse
 import hashlib
 import json
 import os
+import posixpath
 import re
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "system" / "review-manifest.yaml"
 MANIFEST_REL = "system/review-manifest.yaml"
-# Kit locations whose files count before Git indexes them. A worker clone carries its new files untracked
-# (a non-resumable worker cannot add to the index) and the fresh-install fixture applies the dispatcher's patch
-# the same way, so the manifest must be identical before and after `git add`. Until 2026-09-18 this was a
-# hand-kept list of file names; two new files missed it and the fresh-install gate failed twenty minutes into a
-# commit with a ghost-path message. A location rule has no list to forget. Worker artifacts (REPORT.md, .agents/)
-# live outside these prefixes and stay out.
+# Include untracked delivery files so worker patches and indexed trees produce the same inventory. Exclude scratch artifacts outside these prefixes.
 DELIVERY_PREFIXES = ("tools/", "system/", "templates/", ".github/workflows/", ".claude/commands/")
 GATE_DEFINITION_PATHS = {
     ".github/workflows/gates.yml",
@@ -43,8 +40,7 @@ GATE_DEFINITION_PATHS = {
     "tools/manifest_build.py",
     "tools/test_language.py",
 }
-# Tracked, append-only ledger. An untracked swarm-private path (the first draft) can never be seen by CI,
-# so every gate-definition change would fail the remote gate (2026-09-18 port measurement).
+# Keep approval records tracked so local and remote gates can read the same decisions.
 APPROVAL_FILE = Path("system/gate-definition-approvals.md")
 APPROVAL_RE = re.compile(
     r"^gate-definition-approval: decision:(?:KIT-)?DR-\d{3} "
@@ -168,9 +164,7 @@ def installed_instance(root: Path) -> bool:
     return (root / "system" / "memory-config.json").is_file()
 
 
-# KIT-DR-013 scope: the approval ledger governs the kit tree, where gate definitions are authored. An installed
-# instance receives them through engine sync, and the origin kit's ledger already approved that diff, so the
-# check is reported as not applicable there instead of blocking every engine sync (2026-09-18 port measurement).
+# Gate-definition approvals apply to the kit authoring tree; installed instances receive approved engine definitions through sync.
 NOT_APPLICABLE_INSTANCE = (
     "~gate-definition-approval\tnot applicable: installed instance "
     "(gate definitions arrive through engine sync; the origin kit's ledger approved that diff)"
@@ -210,13 +204,37 @@ def dependencies(path: str, candidates: set[str]) -> list[str]:
         return sorted(candidates - {path})
     text = (ROOT / path).read_text(encoding="utf-8")
     found = set()
+    document_refs = []
+    lexical_text = text
+    if path.endswith(".md"):
+        document_refs = re.findall(r"\]\(<?([^\s)>]+)>?\)", text)
+        document_refs += re.findall(r"`([^`\s]+)`", text)
+        for ref in document_refs:
+            lexical_text = lexical_text.replace(ref, "")
     for candidate in candidates:
         if candidate == path or not candidate:
             continue
         # References are intentionally lexical. This catches path literals in
         # docs, shell, JSON, and Python without pretending to resolve imports.
-        if re.search(r"(?<![A-Za-z0-9_.-])" + re.escape(candidate) + r"(?![A-Za-z0-9_.-])", text):
+        if re.search(r"(?<![A-Za-z0-9_.-])" + re.escape(candidate) + r"(?![A-Za-z0-9_.-])", lexical_text):
             found.add(candidate)
+    if path.endswith(".md"):
+        # Document links are relative to the document, unlike repo-root literals
+        # in code. Only manifest candidates can become dependencies; remote URLs,
+        # fragments, and paths outside this tree do not create entries.
+        for ref in document_refs:
+            try:
+                parsed = urlsplit(ref)
+            except ValueError:
+                continue
+            if parsed.scheme or parsed.netloc or not parsed.path or parsed.path.startswith("/"):
+                continue
+            relative = posixpath.normpath(posixpath.join(posixpath.dirname(path), unquote(parsed.path)))
+            if relative in candidates and relative != path:
+                found.add(relative)
+            # Existing code spans also use full repository-relative paths.
+            if parsed.path in candidates and parsed.path != path:
+                found.add(parsed.path)
     return sorted(found)
 
 
@@ -250,8 +268,7 @@ def build() -> dict:
             # remote gate definitions: run by CI, read by nobody else
             default_kind, default_consumers = "tool", ["tool"]
         elif path.startswith("tools/test_") and path.endswith(".py"):
-            # Regression suites are mechanical: read by people, run by the gates. Classifying them by hand
-            # on every new suite was the recurring manual step behind stale-manifest blocks (2026-09-18).
+            # Classify regression suites deterministically as human-readable tests run by gates.
             default_kind, default_consumers = "tool", ["human", "tool"]
         elif path.startswith("templates/"):
             # Instance-owned seeds copied by setup.sh: the same classification the existing template rows carry.
@@ -283,9 +300,7 @@ def render(document: dict) -> str:
 
 
 def issues_mode() -> int:
-    """Gate checker (tools/gate.py CHECKS). A tree without the manifest (an installed instance) is not
-    applicable; a stale manifest is a gated issue per path so a commit cannot land with a generated file
-    behind the index (2026-09-18: the CI workflow was committed while missing from the manifest)."""
+    """Report stale review-manifest entries as gated issues. An installed instance without this manifest is not applicable."""
     if not MANIFEST.exists():
         print("~manifest-absent\tnot applicable: no system/review-manifest.yaml in this tree")
         if installed_instance(_approval_repo()):

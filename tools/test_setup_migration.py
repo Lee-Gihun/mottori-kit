@@ -65,11 +65,8 @@ def fixture(old_cfg, rows):
 
 
 def fixture_env(root, env=None):
-    """Make every fixture subprocess treat its own root as the instance.
-
-    setup.sh exports `MOTTORI_INSTANCE`. When doctor ran this test from setup, the inherited
-    value made now.py read the parent instance state (2026-09-17 measurement: 13/13 from a
-    shell, 11/13 from setup). A test whose result depends on the caller environment is not a test.
+    """Bind every fixture subprocess to its temporary instance so inherited environment
+    variables cannot redirect state access.
     """
     merged = dict(os.environ if env is None else env)
     merged["MOTTORI_INSTANCE"] = root
@@ -94,7 +91,9 @@ def run_now(root, *args):
 
 
 def text(root, rel):
-    with open(os.path.join(root, rel), encoding="utf-8") as f:
+    path = os.path.join(root, rel)
+    assert os.path.isfile(path), f"expected setup output: {rel}"
+    with open(path, encoding="utf-8") as f:
         return f.read()
 
 
@@ -118,8 +117,7 @@ def assert_setup_aborts_without_config_overwrite(root):
     after = open(cfg_path, "rb").read()
     assert result.returncode != 0, result.stdout + result.stderr
     assert before == after
-    # Preflight checks the journal first, so it may stop before backup (2026-09-17).
-    # If a backup exists, it must match the original.
+    # Preflight may stop before backup; any created backup must match the original.
     assert (not os.path.exists(cfg_path + ".bak")) or open(cfg_path + ".bak", "rb").read() == before
 
 
@@ -128,9 +126,11 @@ def test_fresh_setup_creates_v4_config_and_now():
     try:
         result = run_setup(root)
         assert result.returncode == 0, result.stdout + result.stderr
-        cfg = json.load(open(os.path.join(root, "system", "memory-config.json"), encoding="utf-8"))
+        cfg = json.loads(text(root, "system/memory-config.json"))
         assert cfg["schema_version"] == 4
+        assert "journal_visibility" in cfg, cfg
         vis = cfg["journal_visibility"]
+        assert {"public_tracks", "legacy_cutoff", "legacy_public_tracks"} <= vis.keys(), vis
         assert vis["public_tracks"] == ["system"]
         assert vis["legacy_cutoff"] is None
         assert vis["legacy_public_tracks"] == []
@@ -145,7 +145,7 @@ def test_noninteractive_fresh_setup_defaults_to_work_context():
     try:
         result = run_setup_defaults(root)
         assert result.returncode == 0, result.stdout + result.stderr
-        cfg = json.load(open(os.path.join(root, "system", "memory-config.json"), encoding="utf-8"))
+        cfg = json.loads(text(root, "system/memory-config.json"))
         assert cfg["instance"]["context"] == "work"
     finally:
         shutil.rmtree(parent, ignore_errors=True)
@@ -175,7 +175,9 @@ def test_setup_binds_instance_to_its_own_root():
         env = dict(os.environ, MOTTORI_INSTANCE=hostile)
         result = run_setup(root, env=env)
         assert result.returncode == 0, result.stdout + result.stderr
-        cfg = json.load(open(os.path.join(root, "system", "memory-config.json"), encoding="utf-8"))
+        cfg = json.loads(text(root, "system/memory-config.json"))
+        assert "journal_visibility" in cfg, cfg
+        assert "legacy_cutoff" in cfg["journal_visibility"], cfg["journal_visibility"]
         assert cfg["journal_visibility"]["legacy_cutoff"] == "2026-01-01T00:00:00+09:00"
         assert file_snapshot(hostile) == before
         assert "OWN-ROOT-ROW" in text(root, "_private/state/NOW.md")
@@ -215,8 +217,10 @@ def test_v2_history_is_fail_closed_and_cannot_be_retro_promoted():
         result = run_setup(root)
         assert result.returncode == 0, result.stdout + result.stderr
         cfg_path = os.path.join(root, "system", "memory-config.json")
-        cfg = json.load(open(cfg_path, encoding="utf-8"))
+        cfg = json.loads(text(root, "system/memory-config.json"))
+        assert "journal_visibility" in cfg, cfg
         vis = cfg["journal_visibility"]
+        assert {"public_tracks", "legacy_cutoff", "legacy_public_tracks"} <= vis.keys(), vis
         assert cfg["schema_version"] == 4
         assert vis["legacy_cutoff"] == "2026-01-01T00:00:01+09:00"
         assert vis["legacy_public_tracks"] == []
@@ -247,8 +251,10 @@ def test_v1_empty_config_with_history_is_fail_closed():
         result = run_setup(root)
         assert result.returncode == 0, result.stdout + result.stderr
         cfg_path = os.path.join(root, "system", "memory-config.json")
-        cfg = json.load(open(cfg_path, encoding="utf-8"))
+        cfg = json.loads(text(root, "system/memory-config.json"))
+        assert "journal_visibility" in cfg, cfg
         vis = cfg["journal_visibility"]
+        assert {"public_tracks", "legacy_cutoff", "legacy_public_tracks"} <= vis.keys(), vis
         assert vis["legacy_cutoff"] == "2026-01-01T00:00:00+09:00"
         assert vis["legacy_public_tracks"] == []
         vis["public_tracks"].append("novel")
@@ -272,8 +278,10 @@ def test_v3_freezes_the_preexisting_approved_set():
     try:
         result = run_setup(root)
         assert result.returncode == 0, result.stdout + result.stderr
-        cfg = json.load(open(os.path.join(root, "system", "memory-config.json"), encoding="utf-8"))
+        cfg = json.loads(text(root, "system/memory-config.json"))
+        assert "journal_visibility" in cfg, cfg
         vis = cfg["journal_visibility"]
+        assert {"public_tracks", "legacy_cutoff", "legacy_public_tracks"} <= vis.keys(), vis
         assert vis["legacy_cutoff"] == "2026-01-01T00:00:01+09:00"
         assert vis["legacy_public_tracks"] == ["system", "shared"]
         public = text(root, "state/NOW.md")
@@ -300,8 +308,10 @@ def test_v4_preserves_existing_visibility_cutover_semantics():
     try:
         result = run_setup(root)
         assert result.returncode == 0, result.stdout + result.stderr
-        cfg = json.load(open(os.path.join(root, "system", "memory-config.json"), encoding="utf-8"))
+        cfg = json.loads(text(root, "system/memory-config.json"))
+        assert "journal_visibility" in cfg, cfg
         vis = cfg["journal_visibility"]
+        assert {"public_tracks", "legacy_cutoff", "legacy_public_tracks"} <= vis.keys(), vis
         assert vis["public_tracks"] == ["system", "shared"]
         assert vis["legacy_cutoff"] == "2026-01-01T00:00:00+09:00"
         assert vis["legacy_public_tracks"] == ["system"]
@@ -324,8 +334,7 @@ def test_malformed_legacy_journal_aborts_without_overwriting_v2_config():
         after = open(os.path.join(root, "system", "memory-config.json"), "rb").read()
         assert result.returncode != 0
         assert before == after
-        # Preflight checks the journal first and stops before creating a backup (2026-09-17).
-        # If a backup exists it must match the original; no backup is the normal outcome.
+        # Preflight normally stops before backup; verify the original if a backup exists.
         bak = os.path.join(root, "system", "memory-config.json.bak")
         assert (not os.path.exists(bak)) or open(bak, "rb").read() == before
     finally:

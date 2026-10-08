@@ -43,7 +43,10 @@ print(json.dumps({"type":"turn.completed","usage":{"input_tokens":1,"output_toke
 
 
 def _env(root, fake=None):
-    env = dict(os.environ, MOTTORI_INSTANCE=str(root))
+    env = {key: value for key, value in os.environ.items()
+           if not key.upper().startswith(("CLAUDE_", "ANTHROPIC_", "OPENAI_", "CODEX_"))}
+    env.update(HOME=str(root / ".fixture-home"), MOTTORI_INSTANCE=str(root),
+               CODEX_HOME=str(root / ".fixture-home/.codex"))
     if fake is not None:
         env["MOTTORI_FRESH_WORKER_CODEX_BIN"] = str(fake)
     return env

@@ -1,30 +1,22 @@
 #!/usr/bin/env python3
-"""녹음 파일 하나를 전사한다. 레시피 정본은 2026-07-26 재전사 노트.
+"""Transcribe an audio file and report candidate gaps.
 
-기본 동작:
-  1) 입력을 16k mono wav로 정규화 (highpass/afftdn/lowpass/speechnorm)
-  2) mlx_whisper large-v3-turbo로 전사 (환각 억제 파라미터 고정, 도메인 프롬프트는 `_private/transcribe-prompts.json`)
-  3) 타임스탬프 텍스트 + srt + json 저장
-  4) 5초 이상 세그먼트 공백을 스캔해 실제 무음인지 volumedetect로 판정
-     (무음이 아니면 결손 후보 = 사람이 확인해야 하는 자리)
+Normalize to 16 kHz mono audio, transcribe with mlx_whisper large-v3-turbo, then write
+timestamped text, SRT, and JSON. Instance vocabulary comes from
+_private/transcribe-prompts.json.
 
-왜 4)가 있나: 7/23 한 녹음의 전사에서 30.3초가 통째로 빠지고 그 자리를 "감사합니다"
-환각이 메웠다. 그 결손을 화자의 침묵으로 오독한 분석이 나왔다. 결손은 조용히
-지나가지 않게 계기로 잡는다.
+Check segment gaps of at least five seconds with volumedetect. Non-silent gaps require
+review; they are not evidence that a speaker was silent.
 
-사용:
-  python3 tools/transcribe.py <audio> [--out DIR] [--lang ko] [--keep-wav]
+Usage: python3 tools/transcribe.py <audio> [--out DIR] [--lang ko] [--keep-wav]
 """
 import argparse, json, os, re, stat, subprocess, sys, tempfile, time
 
-# "Listen carefully" recipe (2026-09-18; owner: do not compromise on noisy recordings). Measured on restaurant
-# noise: dynaudnorm alone produced hallucination loops and invented sentences, while spectral denoising (afftdn)
-# plus speech normalization (speechnorm) plus strict decoding thresholds recovered the same span as human speech.
-# Spans that still cannot be heard are not invented; they are reported in `-noise-spans.txt` for a person.
+# Denoise and normalize speech before decoding. Report unrecoverable spans for review rather
+# than filling them with inferred speech.
 FILTER = "highpass=f=100,afftdn=nf=-25,lowpass=f=7500,speechnorm=e=6.25:r=0.0001:l=1"
-# Decoder vocabulary hint per language. The engine ships only generic prompts; names and domain terms belong to
-# the instance in `_private/transcribe-prompts.json` ({"ko": "...", "en": "..."}), which never enters the kit
-# (2026-09-18: company names in this dict were caught by the instance's identifier scan on export).
+# Keep engine vocabulary generic; instance names and domain terms belong in the private
+# per-language prompt file.
 PROMPTS = {
     "ko": "한국어 대화. 회의, 추천, 랭킹, 실험, 제품, 온보딩.",
     "en": "Conversation about recommendations, ranking, experiments, product, onboarding.",
@@ -32,17 +24,16 @@ PROMPTS = {
 PROMPT_FILE = os.environ.get("MOTTORI_TRANSCRIBE_PROMPTS") or os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "_private", "transcribe-prompts.json")
 NOISE_SPAN_MIN_SEC = 8.0
-# Subtitle-credit phrases Whisper invents on silence or noise (subtitle credits from its training data).
-# Observed 2026-09-18: "한글자막 by ..." (Korean subtitles by), "다음 영상에서 만나요" (see you in the next video).
+# Reject common subtitle-credit phrases hallucinated on silence or noise.
 WATERMARKS =("한글자막 by", "자막 by", "다음 영상에서 만나요", "시청해주셔서 감사합니다", "구독과 좋아요", "Thanks for watching",
               "Subtitles by", "Subscribe to")
 MODEL = "mlx-community/whisper-large-v3-turbo"
-GAP_SEC = 5.0          # 이 이상 벌어지면 결손 후보로 검사
-SILENCE_DB = -45.0     # mean_volume이 이보다 작으면 실제 무음으로 판정
-DETECT_LANGUAGES = ("ko", "en")   # 이 밖의 표는 버린다
-DETECT_WINDOW_SEC = 30.0          # whisper 판별 단위와 같은 길이
-DETECT_POINTS = (0.2, 0.5, 0.8)   # 도입부 인사말에 끌려가지 않게 본문에서 뽑는다
-DETECT_MIN_TEXT = 10              # 이보다 짧게 나온 구간은 무음으로 보고 버린다
+GAP_SEC = 5.0          # Inspect gaps at or above this duration.
+SILENCE_DB = -45.0     # Treat lower mean volume as silence.
+DETECT_LANGUAGES = ("ko", "en")   # Discard language votes outside this range.
+DETECT_WINDOW_SEC = 30.0          # Match the decoder's audio-span length.
+DETECT_POINTS = (0.2, 0.5, 0.8)   # Sample interior spans to avoid opening greetings dominating language detection.
+DETECT_MIN_TEXT = 10              # Ignore language-detection spans shorter than this threshold.
 
 
 def _regular_input(path):
@@ -173,7 +164,7 @@ def filter_hallucinations(segs):
 
 
 def audio_duration(path):
-    """초 단위 길이. 오디오로 열리지 않으면 0을 준다 (판별을 건너뛰는 신호)."""
+    """Return audio duration in seconds, or zero when it cannot be read."""
     r = run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
              "-of", "default=nw=1:nk=1", path])
     try:
@@ -189,16 +180,11 @@ def _window_wav(src, start, length, dst):
 
 
 def detect_language(src, fallback="ko"):
-    """오디오 여러 구간을 자동판별해 다수결로 전사 언어를 정한다.
+    """Detect language from several interior audio spans and take a majority vote.
 
-    왜 파일명이 아니라 오디오인가: 언어를 파일명에 적게 하는 건 기계가 할 수 있는
-    판정을 사람에게 떠넘기는 것이고, 빠뜨리면 결손이 아니라 유창한 오출력으로
-    나타나 결손 QA에 걸리지 않는다 (8/30 GenZ readout — 영어 48분을 ko로 걸 뻔했다).
-
-    왜 한 구간이 아닌가: 영어 회의도 한국어 인사말로 열리고 그 반대도 흔하다.
-    동률이면 판별하지 못한 것으로 보고 fallback을 쓴다.
-
-    반환: (언어코드 또는 None, 표 목록). None은 "판별 실패"이지 "ko"가 아니다.
+    Filenames may omit language, and opening greetings may differ from the main
+    conversation. A tie or failed detection returns None for the caller's fallback. Return
+    (language code or None, votes).
     """
     duration = audio_duration(src)
     if duration < DETECT_WINDOW_SEC / 2:
@@ -265,7 +251,7 @@ def mean_db(wav, start, end):
 
 
 def scan_gaps(segs, wav):
-    """세그먼트 사이 공백을 검사해 (시작, 끝, dB, 판정) 목록을 만든다."""
+    """Inspect segment gaps and return (start, end, dB, verdict) rows."""
     out = []
     for a, b in zip(segs, segs[1:]):
         gap = b["start"] - a["end"]

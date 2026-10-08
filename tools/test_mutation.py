@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Deterministic mutation probes for the eight critical distribution tools.
+"""Run deterministic mutation probes against critical distribution tools.
 
-Default mode reruns the four mutations that survived M1.  ``--full`` runs the
-complete 8 tools x 3 mutation matrix.  Every mutant lives in a fresh temporary
-copy; the source worktree is never edited.
+The default selects four probes; --full runs all eight tools with three mutations each.
+Every mutant runs in a temporary copy, leaving the source tree unchanged.
 """
 from dataclasses import dataclass
+import ast
+import re
 import os
 import shutil
 import subprocess
@@ -57,8 +58,8 @@ MUTATIONS = (
              "declared != len(gated)", "declared == len(gated)",
              "tools/test_hook_runtime.py"),
     Mutation("gate-return", "tools/gate.py", "early-return",
-             "def _issues(cmd, cwd=None, instance=None):\n",
-             "def _issues(cmd, cwd=None, instance=None):\n    return set()\n",
+             "def _issues(cmd, cwd=None, instance=None, extra_env=None):\n",
+             "def _issues(cmd, cwd=None, instance=None, extra_env=None):\n    return set()\n",
              "tools/test_hook_runtime.py"),
     Mutation("gate-string", "tools/gate.py", "constant",
              'startswith("#issues ")', 'startswith("#issue ")',
@@ -145,19 +146,134 @@ def _run_test(root, test):
     )
 
 
-def run_mutation(mutation):
-    parent = tempfile.mkdtemp(prefix=f"mutation-{mutation.id}-")
-    clone = os.path.join(parent, "repo")
+def anchor_issues(root, mutations):
+    """Inspect every selected seam before spending time on subprocesses."""
+    issues = []
+    for mutation in mutations:
+        try:
+            text = open(os.path.join(root, mutation.tool), encoding="utf-8").read()
+            count = text.count(mutation.old)
+            if count != 1:
+                issues.append(f"{mutation.id}: mutation anchor occurs {count} times")
+        except (OSError, UnicodeError) as error:
+            issues.append(f"{mutation.id}: cannot read anchor: {error}")
+    return issues
+
+
+def _test_outcome(root, test, result):
+    """Separate a completed test failure from a crashed or incomplete measurement."""
+    output = (result.stdout or "") + "\n" + (result.stderr or "")
+    summaries = re.findall(
+        r"^(?:state runtime|hook runtime|install checks|install hooks|setup migration): "
+        r"([0-9]+)/([0-9]+) passed$", output, re.M)
+    if summaries:
+        if len(summaries) != 1:
+            return "ERROR", "ambiguous test summary"
+        passed, total = map(int, summaries[0])
+        failed_line = re.search(r"^(?:✗|FAIL) ", output, re.M)
+        exceptions = re.findall(r"^✗ test_[A-Za-z0-9_]+: ([A-Za-z0-9_]+):", output, re.M)
+        if any(exception != "AssertionError" for exception in exceptions):
+            return "ERROR", "test runner reported a non-assertion exception"
+        if total > 0 and passed == total and result.returncode == 0 and not failed_line:
+            return "PASS", f"{passed}/{total} passed"
+        if 0 <= passed < total and result.returncode == 1 and failed_line:
+            return "FAIL", f"{total - passed}/{total} failed"
+        return "ERROR", "exit status and test summary disagree"
+    if result.returncode == 1 and "Traceback (most recent call last):" in output:
+        if re.search(r"^AssertionError(?:[\s:]|$)", output, re.M) and os.path.basename(test) in output:
+            return "FAIL", "test assertion failed"
+        return "ERROR", "test process crashed without a reported assertion failure"
+    if result.returncode != 0:
+        return "ERROR", f"test process exited {result.returncode} without a valid failure summary"
+    if test == "tools/test_memlib_journal.py":
+        matches = re.findall(
+            r"^PASS: journal ([0-9]+) generated cases, config ([0-9]+) cases, seed=[0-9]+$",
+            output, re.M)
+        if len(matches) == 1 and int(matches[0][0]) >= 200 and int(matches[0][1]) > 0:
+            return "PASS", "generated journal and config cases completed"
+    elif test == "tools/test_fresh_worker.py":
+        tree = ast.parse(open(os.path.join(root, test), encoding="utf-8").read())
+        expected = next((
+            [item.id for item in node.value.elts]
+            for node in tree.body if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "TESTS" for target in node.targets)
+            and isinstance(node.value, (ast.List, ast.Tuple))
+            and all(isinstance(item, ast.Name) for item in node.value.elts)
+        ), [])
+        observed = re.findall(r"^PASS (test_[A-Za-z0-9_]+)$", output, re.M)
+        if expected and observed == expected:
+            return "PASS", f"{len(expected)} test cases completed"
+    return "ERROR", "missing or incomplete success summary"
+
+
+def _measure_test(root, test):
     try:
+        result = _run_test(root, test)
+    except subprocess.TimeoutExpired:
+        return "ERROR", "test process timed out"
+    except OSError as error:
+        return "ERROR", f"test process could not start: {error}"
+    outcome, detail = _test_outcome(root, test, result)
+    if outcome == "ERROR":
+        tail = (result.stdout + result.stderr).strip().splitlines()[-3:]
+        if tail:
+            detail += ": " + " | ".join(tail)
+    return outcome, detail
+
+
+def control_suites(mutations):
+    """Establish one unmodified passing control for each selected suite."""
+    with tempfile.TemporaryDirectory(prefix="mutation-controls-") as parent:
+        root = os.path.join(parent, "repo")
+        _copy_repo(root)
+        results = []
+        for test in sorted({mutation.test for mutation in mutations}):
+            outcome, detail = _measure_test(root, test)
+            results.append((test, outcome, detail))
+            print(f"CONTROL {outcome} {test}: {detail}", flush=True)
+        return results
+
+
+def run_mutation(mutation):
+    with tempfile.TemporaryDirectory(prefix=f"mutation-{mutation.id}-") as parent:
+        clone = os.path.join(parent, "repo")
         _copy_repo(clone)
         _apply(clone, mutation)
-        result = _run_test(clone, mutation.test)
-        if result.returncode == 0:
-            tail = (result.stdout + result.stderr).strip().splitlines()[-3:]
-            return False, " | ".join(tail)
-        return True, (result.stdout + result.stderr).strip().splitlines()[-1]
-    finally:
-        shutil.rmtree(parent, ignore_errors=True)
+        outcome, detail = _measure_test(clone, mutation.test)
+        return {"FAIL": "CAUGHT", "PASS": "SURVIVED", "ERROR": "ERROR"}[outcome], detail
+
+
+def test_mutation_preflight_reports_all_invalid_anchors():
+    with tempfile.TemporaryDirectory(prefix="mutation-anchor-test-") as root:
+        path = os.path.join(root, "target.py")
+        with open(path, "w", encoding="utf-8") as target:
+            target.write("duplicate duplicate unique")
+        probes = (
+            Mutation("missing", "absent.py", "constant", "x", "y", "test.py"),
+            Mutation("duplicate", "target.py", "constant", "duplicate", "y", "test.py"),
+            Mutation("gone", "target.py", "constant", "not present", "y", "test.py"),
+            Mutation("valid", "target.py", "constant", "unique", "y", "test.py"),
+        )
+        issues = anchor_issues(root, probes)
+        assert len(issues) == 3 and all(any(issue.startswith(name + ":") for issue in issues)
+                                      for name in ("missing", "duplicate", "gone")), issues
+
+
+def test_mutation_classification_rejects_crashes_and_false_success():
+    def outcome(rc, stdout="", stderr=""):
+        return _test_outcome(ROOT, "tools/test_hook_runtime.py",
+                             subprocess.CompletedProcess([], rc, stdout, stderr))[0]
+    assert outcome(0, "hook runtime: 3/3 passed\n") == "PASS"
+    assert outcome(1, "✗ test_x: AssertionError\nhook runtime: 2/3 passed\n") == "FAIL"
+    assert outcome(1, "hook runtime: 3/3 passed\n") == "ERROR"
+    assert outcome(1, "✗ test_x: KeyError: missing\nhook runtime: 2/3 passed\n") == "ERROR"
+    assert outcome(0) == "ERROR"
+    assert outcome(-15) == "ERROR"
+    assert outcome(1, stderr="Traceback (most recent call last):\n"
+                   "  File tools/test_hook_runtime.py\nSyntaxError: invalid syntax\n") == "ERROR"
+    assert outcome(1, stderr="Traceback (most recent call last):\n"
+                   "  File tools/test_hook_runtime.py\nAssertionError: expected rejection\n") == "FAIL"
+    assert outcome(0, "hook runtime: 3/3 passed\nhook runtime: 3/3 passed\n") == "ERROR"
 
 
 def main():
@@ -169,16 +285,28 @@ def main():
         if not selected:
             print(f"unknown mutation: {only}")
             return 2
-    caught = 0
+    for test in (test_mutation_preflight_reports_all_invalid_anchors,
+                 test_mutation_classification_rejects_crashes_and_false_success):
+        run_test(test, __file__)
+    issues = anchor_issues(ROOT, selected)
+    if issues:
+        for issue in issues:
+            print("PREFLIGHT ERROR " + issue)
+        print(f"mutation: preflight failed; 0 mutants executed, {len(issues)} invalid anchors")
+        return 2
+    controls = control_suites(selected)
+    if any(outcome != "PASS" for _test, outcome, _detail in controls):
+        print("mutation: control failed; 0 mutants executed")
+        return 2
+    caught, errors = 0, 0
     for mutation in selected:
-        detected, detail = run_mutation(mutation)
-        caught += int(detected)
-        print(f"{'CAUGHT' if detected else 'SURVIVED'} {mutation.id} "
-              f"({mutation.tool}, {mutation.kind})"
-              + (f": {detail}" if not detected else ""))
+        outcome, detail = run_mutation(mutation)
+        caught += int(outcome == "CAUGHT")
+        errors += int(outcome == "ERROR")
+        print(f"{outcome} {mutation.id} ({mutation.tool}, {mutation.kind}): {detail}", flush=True)
     mode = "single" if only is not None else ("full" if full else "M1-survivor smoke")
-    print(f"mutation ({mode}): {caught}/{len(selected)} caught")
-    return 0 if caught == len(selected) else 1
+    print(f"mutation ({mode}): {caught}/{len(selected)} caught; {errors} errors")
+    return 2 if errors else (0 if caught == len(selected) else 1)
 
 
 if __name__ == "__main__":

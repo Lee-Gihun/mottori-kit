@@ -29,7 +29,14 @@
       "kind": "codex-jsonl",
       "base": "~/.codex/sessions",
       "glob": "**/*.jsonl",
-      "note": "Codex desktop/CLI sessions. This location is shared by all instances, so recall results may include other contexts"
+      "note": "Codex desktop/CLI sessions; only matching instance cwd user/assistant originals are eligible."
+    },
+    {
+      "name": "codex",
+      "kind": "codex-jsonl",
+      "base": "~/.codex/archived_sessions",
+      "glob": "**/*.jsonl",
+      "note": "Archived Codex sessions, filtered to this instance and deduplicated by native session identity."
     }
   ],
   "tracks": [

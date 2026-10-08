@@ -1,22 +1,13 @@
 #!/bin/bash
-# setup — 엔진에 인스턴스 정체를 부여한다.
-#
-# 하는 일 넷. 전부 되돌릴 수 있다 (만든 파일을 지우면 원상복구).
-#   1. templates/memory-config.json -> system/memory-config.json  (이름·context 치환)
-#   2. templates/instance-rules.md  -> system/instance-rules.md
-#   3. state/ 준비 + 첫 journal 엔트리
-#   4. 첫 NOW 렌더
-#
-# 사용:  bash setup.sh                              (대화형)
-#        bash setup.sh --name <이름> --context work|personal
-#        bash setup.sh --force                      (기존 설정 덮어쓰기)
+# Initialize instance configuration, local documents, and state.
+# Validate existing journals and merged config before writing.
+# Usage: bash setup.sh [--name NAME] [--context work|personal] [--force]
+# Without a terminal, use defaults; --force preserves instance-owned settings.
 
 set -euo pipefail
-# pwd -P: 심볼릭 링크를 푼 물리 경로. macOS의 /var → /private/var 같은 링크 아래에서 논리 경로를
-# export하면 memlib ROOT와 도구의 realpath가 달라 doctor가 "ROOT 불일치"를 낸다 (2026-09-17 실측).
+# Use a physical root so symlink aliases resolve consistently with the Python tools.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-# setup은 자기 checkout을 초기화하는 명령이다. 부모 shell의 인스턴스 override를 물려받으면
-# 아래 memlib import와 now/gate가 다른 repo의 state를 읽거나 쓸 수 있으므로 자체 ROOT로 고정한다.
+# Bind all child tools to this checkout instead of inheriting another instance root.
 export MOTTORI_INSTANCE="$ROOT"
 cd "$ROOT"
 say() { python3 "$ROOT/tools/i18n.py" "$@"; }
@@ -43,15 +34,10 @@ if [ -f "$CFG" ] && [ "$FORCE" -eq 0 ]; then
   exit 0
 fi
 
-# --- 1. 인스턴스 정체 ---
-# tty가 없으면(에이전트·CI·파이프) 묻지 않고 기본값을 쓴다. 이전 판은 `read`가 EOF를 만나
-# set -e로 아무 말 없이 exit 1 했다 (2026-09-17 실측: SETUP.md 지시대로 에이전트가 돌린 첫 경로가
-# 바로 이것이라 "5분 설치"가 0분에 죽었다). 기본값은 화면에 남기고 override 방법을 적는다.
+# Without a terminal, use visible defaults rather than failing on input EOF.
 DEFAULT_NAME="$(basename "$ROOT")"
 DEFAULT_CONTEXT="work"
-# --force 재실행이면 기존 config의 정체를 기본값으로 쓴다. 이전 판은 이름·context를 다시 묻고
-# 비대화형이면 work로 떨어져, personal 인스턴스가 재실행 한 번에 조용히 work로 바뀔 수 있었다
-# (2026-09-17 문서 감사). 정체는 사람이 정한 값이라 기계가 바꾸면 안 된다.
+# On --force, preserve the existing instance identity unless explicitly overridden.
 if [ -f "$CFG" ]; then
   OLD_NAME="$(python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(c.get("instance",{}).get("name",""))' "$CFG" 2>/dev/null || true)"
   OLD_CONTEXT="$(python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(c.get("instance",{}).get("context",""))' "$CFG" 2>/dev/null || true)"
@@ -82,10 +68,8 @@ if [ "$CONTEXT" != "work" ] && [ "$CONTEXT" != "personal" ]; then
   say setup.context_invalid "context=$CONTEXT"; exit 1
 fi
 
-# --- 2. config 생성 ---
-# 클론해 온 origin은 킷 리포다. 엔진 업데이트를 받는 정상 경로이므로 allowlist에 넣는다.
-# 넣지 않으면 doctor가 매번 FAIL을 내고, 늑대소년이 된 검사는 아무도 안 본다.
-# **데이터 차단은 이 allowlist가 아니라 .gitignore와 pull-only 자격증명이 한다** (DR-002).
+# Allow the cloned origin as the engine-update source. Ignore rules and credential restrictions
+# own data protection.
 ORIGIN="$(git remote get-url origin 2>/dev/null || true)"
 
 python3 - "$NAME" "$CONTEXT" "$ORIGIN" <<'PY'
@@ -93,7 +77,7 @@ import datetime, json, os, shutil, sys
 name, context, origin = sys.argv[1], sys.argv[2], sys.argv[3]
 dst = "system/memory-config.json"
 cfg = json.load(open("templates/memory-config.json", encoding="utf-8"))
-# fresh clone에서도 최종 merged config를 쓰기 전에 같은 schema authority로 검증한다.
+# Validate the final config with the same schema authority before writing.
 sys.path.insert(0, "tools")
 import memlib as config_schema
 from i18n import t
@@ -105,10 +89,8 @@ def legacy_watermark():
     빨려 들어간다. 기존 행 자체의 max timestamp를 경계로 쓰면 old/new 집합이 정확히 갈린다.
     malformed 행이 있으면 경계를 추측하지 않고 migration을 중단한다.
     """
-    # journal grammar/type/body 검증과 물리 파일 탐색은 스키마 정본의 public parser가 맡는다.
-    # visibility=None이라 legacy routing 결과와 무관하게 기존 tracked 행 전부를 받는다.
-    # public·private 둘 다 strict로 읽는다. private가 malformed면 여기서 멈춰야 config·public journal이
-    # 먼저 바뀌는 부분 변경이 안 생긴다 (2026-09-17 독립 리뷰 1(b)).
+    # Read all existing public and private journal rows with the canonical strict parser,
+    # regardless of legacy visibility routing.
     rows = config_schema.parse_journal(
         strict=True, physical_visibilities=("public", "private"))
     latest = None
@@ -128,10 +110,8 @@ def validate_legacy_threads(data, schema):
     if schema < 4 and data.get("threads"):
         raise ValueError(t("setup.legacy_threads"))
 
-# 쓰기 전 전면 preflight. 기존 journal(public·private)이 문법에 맞고 마지막 줄이 개행으로 끝나는지
-# 먼저 본다. 이전 판은 config 백업·쓰기가 journal 검사보다 앞서, private journal이 손상된 --force에서
-# exit 1인데도 config와 public journal이 먼저 바뀌는 부분 변경이 났다 (2026-09-17 독립 리뷰 2회 지적).
-# config가 없는 복구 설치에서도 같은 검사를 한다.
+# Preflight journal syntax and final newlines before backups or writes, including recovery
+# installs without config.
 import glob as _glob
 for _jp in sorted(_glob.glob("state/journal-*.md") + _glob.glob("_private/state/journal-*.md")):
     with open(_jp, "rb") as _f:
@@ -143,8 +123,7 @@ try:
 except Exception as _e:
     raise SystemExit(t("setup.preflight_failed", error=_e))
 
-# --force 재실행이 손으로 등록한 트랙·스레드·검사목록을 지우면 안 된다
-# (2026-08-24 적대 검증: 이전 판은 tracks=[]로 초기화해 조용히 날렸다).
+# Preserve manually configured tracks, threads, and checker inventories on --force.
 old = {}
 had_old = os.path.exists(dst)
 if had_old:
@@ -154,8 +133,7 @@ if had_old:
     except Exception as e:
         print(t("setup.config_parse_failed", error=e), file=sys.stderr)
         raise SystemExit(2)
-    # JSON 문법만 맞고 known container가 잘못된 config도 보존 로직 전에 거부한다. 이 검증을
-    # write 뒤의 now.py에 미루면 실패했는데도 merged config가 원본을 덮는다.
+    # Reject invalid config container shapes before merging or overwriting the original.
     config_schema._validate_config_shape(old)
 cfg["tracks"]  = old.get("tracks", [])
 cfg["threads"] = old.get("threads", [])
@@ -173,7 +151,7 @@ if had_old:
     old_vis = old.get("journal_visibility")
     watermark = legacy_watermark()
     if old_schema >= 4:
-        # 위의 memlib config shape 검증이 v4 cutover 쌍·timezone·track type을 보증한다.
+        # The shared schema validator guarantees the cutover pair, timezone, and track types.
         cfg["journal_visibility"]["public_tracks"] = list(dict.fromkeys(
             old_vis["public_tracks"]))
         cfg["journal_visibility"]["legacy_cutoff"] = old_vis["legacy_cutoff"]
@@ -185,15 +163,15 @@ if had_old:
         cfg["journal_visibility"]["legacy_cutoff"] = watermark
         cfg["journal_visibility"]["legacy_public_tracks"] = approved if watermark else []
     else:
-        # v1/v2에는 과거 visibility 판정의 증거가 없다. 추측해서 공개하지 않고 기존 tracked
-        # journal 전부를 legacy-private로 동결한다. 새 사건은 template의 live allowlist를 쓴다.
+        # Old configs lack visibility provenance. Freeze existing tracked events as private and
+        # use the live allowlist only for new events.
         cfg["journal_visibility"]["legacy_cutoff"] = watermark
         cfg["journal_visibility"]["legacy_public_tracks"] = []
 
 cfg["instance"]["name"] = name
 cfg["instance"]["context"] = context
 cfg["instance"]["remote_allowlist"] = [origin] if origin else []
-# old 조각을 합친 최종 config도 쓰기 전에 같은 스키마 정본으로 검증한다.
+# Validate the fully merged config before writing.
 config_schema._validate_config_shape(cfg)
 json.dump(cfg, open(dst, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 print(t("setup.config_written", path=dst, name=name, context=context))
@@ -207,7 +185,6 @@ if [ -n "$ORIGIN" ] && [ "$CONTEXT" = "work" ]; then
   say setup.work_remote_warning "origin=$ORIGIN"
 fi
 
-# --- 3. 인스턴스 소유 문서 (업스트림 파일과 쌍을 이룬다) ---
 if [ ! -f "$RULES" ]; then
   cp "templates/instance-rules${DOC_SUFFIX}.md" "$RULES"
   say setup.rules_created "path=$RULES"
@@ -221,23 +198,18 @@ if [ ! -f system/rituals.local.md ]; then
   say setup.rituals_created
 fi
 
-# --- 4. 상태 초기화 ---
 mkdir -p state _private/state
-# 전사 어휘 프롬프트는 인스턴스 소유(이름·회사명이 들어가므로 `_private/`). 템플릿은 일반 문구뿐이라 그대로 두면
-# 엔진 기본값과 같고, 사람이 자기 어휘로 고친다. 엔진 파일에 어휘를 박으면 내보내기 스캔이 잡는다 (2026-09-18 실측).
+# Copy generic vocabulary into an instance-owned private file for local customization.
 if [ ! -f _private/transcribe-prompts.json ] && [ -f templates/transcribe-prompts.json ]; then
   cp templates/transcribe-prompts.json _private/transcribe-prompts.json
 fi
 python3 tools/now.py log "[system/state] 인스턴스 세팅: $NAME ($CONTEXT) — 킷 클론 후 초기화" >/dev/null
-# local overlay도 첫날부터 실체로 둔다. render는 local 입력이 하나라도 있어야 overlay를 쓰는데,
-# AGENTS.md·rituals.md가 `_private/state/NOW.md`를 가리키므로 overlay가 없으면 첫 doctor가
-# 깨진 참조 2개를 내고 SessionStart 주입은 local을 unavailable로 보고한다 (2026-09-17 실측).
-# 첫 local 사건 한 줄이 그 입력이다. 내용은 setup 사실뿐이라 국경 문제가 없다.
+# Create an initial local event so the overlay is present from the first render; record only
+# setup state.
 python3 tools/now.py log --private "[system/state] local overlay 초기화 — setup ($NAME)" >/dev/null
 python3 tools/now.py render >/dev/null
-# 기준선 → linkcheck → doctor 순이다. linkcheck의 통과 기록이 doctor의 "산출물 검사누락" 인증서라
-# 안 남기면 HEAD 커밋이 추가한 파일이 미검증 새 파일로 잡히고(2026-09-17 실측: tools/sync_engine.sh),
-# 기준선 파일(SETUP.md가 가리킨다)은 linkcheck 전에 있어야 그 참조가 깨진 것으로 안 센다.
+# Create the baseline before linkcheck, then record linkcheck success before doctor inspects its
+# evidence.
 BASELINE_RC=0
 BASELINE_ERR="$(mktemp)"
 trap 'rm -f "$BASELINE_ERR"' EXIT
@@ -246,9 +218,7 @@ python3 tools/gate.py baseline >/dev/null 2>"$BASELINE_ERR" || BASELINE_RC=$?
 python3 tools/linkcheck.py >/dev/null 2>&1 || true
 say setup.state_written "month=$(date +%Y-%m)"
 
-# --- 5. 검증 ---
-# 실패를 삼키지 않는다. 이전 판은 doctor FAIL이 떠도 exit 0이라 자동화가 설치 성공으로 오판했다
-# (2026-09-17 독립 감사 I). 안내문은 끝까지 인쇄하고 종료코드로 사실을 전한다.
+# Print the remaining guidance, but preserve a failed validation exit status.
 echo
 say setup.verification
 DOCTOR_RC=0

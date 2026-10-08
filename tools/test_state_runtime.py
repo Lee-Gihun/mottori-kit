@@ -66,17 +66,19 @@ def instance(*, with_config=True, public_tracks=None, threads=None,
     return root
 
 
-def run_now(root, *args, env=None, check=True):
+def run_now(root, *args, env=None, check=True, stdin=None):
     e = dict(os.environ, MOTTORI_INSTANCE=root)
     if env:
         e.update(env)
-    r = subprocess.run([sys.executable, NOW, *args], capture_output=True, text=True, env=e, cwd=root)
+    r = subprocess.run([sys.executable, NOW, *args], capture_output=True, text=True, env=e, cwd=root,
+                       input=stdin if stdin is not None else "")
     if check and r.returncode:
         raise AssertionError(f"now.py {' '.join(args)} exit={r.returncode}\nstdout={r.stdout}\nstderr={r.stderr}")
     return r
 
 
 def read(path):
+    assert os.path.isfile(path), f"expected output file: {path}"
     with open(path, encoding="utf-8") as f:
         return f.read()
 
@@ -86,7 +88,7 @@ def digest(path):
 
 
 # now.py derives the journal filename from the current time. Hard-coding it breaks on the
-# first day of each month (2026-09-01 measurement: 13 simultaneous month-rollover failures).
+# first day of each month.
 JOURNAL_NOW = "journal-%s.md" % datetime.datetime.now().strftime("%Y-%m")
 
 
@@ -1064,7 +1066,67 @@ def test_hook_internal_failure_is_nonzero():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def _journal_text(root):
+    out = ""
+    for rel in (("state", JOURNAL_NOW), ("_private", "state", JOURNAL_NOW)):
+        path = os.path.join(root, *rel)
+        if os.path.exists(path):
+            out += read(path)
+    return out
+
+
+def test_precompact_tags_runtime_and_session_hash():
+    root = instance()
+    try:
+        r = run_now(root, "precompact", "--runtime", "claude", stdin=json.dumps({"session_id": "sess-123"}))
+        assert r.stdout == ""
+        expected = hashlib.sha256(b"sess-123").hexdigest()[:8]
+        assert f"컴팩션 발생 (claude · s:{expected})" in _journal_text(root), _journal_text(root)
+        run_now(root, "precompact", "--runtime", "codex")
+        assert "컴팩션 발생 (codex · s:unknown)" in _journal_text(root)
+        run_now(root, "precompact", stdin="not json at all")
+        assert "컴팩션 발생 (unknown · s:unknown)" in _journal_text(root)
+        run_now(root, "precompact", "--runtime", "Bad Runtime!", stdin="{}")
+        assert _journal_text(root).count("(unknown · s:unknown)") == 2
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_now_folds_consecutive_compaction_events_only():
+    root = instance()
+    try:
+        jp = os.path.join(root, "state", JOURNAL_NOW)
+        lines = [f"- 2026-09-02T21:00:00+09:00 [system/decision] REAL-ALPHA\n"]
+        for i in range(5):
+            rt = "codex" if i % 2 == 0 else "claude"
+            lines.append(f"- 2026-09-02T21:{10 + i:02d}:00+09:00 [system/state] 컴팩션 발생 ({rt} · s:deadbeef) — 이후 컨텍스트는 요약본\n")
+        lines.append("- 2026-09-02T21:30:00+09:00 [system/state] REAL-BETA\n")
+        lines.append("- 2026-09-02T21:40:00+09:00 [system/state] 컴팩션 발생 — 이후 컨텍스트는 요약본\n")
+        lines.append("- 2026-09-02T21:41:00+09:00 [system/state] 컴팩션 발생 (claude · s:unknown) — 이후 컨텍스트는 요약본\n")
+        lines.append("- 2026-09-02T21:50:00+09:00 [system/state] REAL-GAMMA\n")
+        lines.append("- 2026-09-02T21:55:00+09:00 [system/state] 컴팩션 발생 (claude · s:unknown) — 이후 컨텍스트는 요약본\n")
+        with open(jp, "w", encoding="utf-8") as f:
+            f.write("".join(lines))
+        run_now(root, "render")
+        now = read(os.path.join(root, "state", "NOW.md"))
+        recent = now.split("## 최근 사건")[1].split("## 정본 포인터")[0]
+        assert recent.count("컴팩션 발생") == 3, recent
+        assert "컴팩션 발생 5회 (codex 3 · claude 2) ~2026-09-02T21:14" in recent, recent
+        assert "컴팩션 발생 2회 (unknown 1 · claude 1) ~2026-09-02T21:41" in recent, recent
+        assert "컴팩션 발생 (claude · s:unknown)" in recent.split("REAL-GAMMA")[1], recent  # Preserve a single event verbatim.
+        for token in ("REAL-ALPHA", "REAL-BETA", "REAL-GAMMA"):
+            assert token in recent, token
+        assert recent.index("REAL-BETA") < recent.index("컴팩션 발생 2회") < recent.index("REAL-GAMMA")
+        decisions = now.split("## 최근 결정·국면")[1].split("## 최근 사건")[0]
+        assert decisions.count("컴팩션 발생") == 3, decisions
+        assert read(jp).count("컴팩션 발생") == 8  # Keep the source journal uncollapsed.
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 TESTS = [
+    test_precompact_tags_runtime_and_session_hash,
+    test_now_folds_consecutive_compaction_events_only,
     test_routing_and_public_immutability,
     test_legacy_filter_and_private_thread,
     test_legacy_allowlist_expansion_does_not_retro_promote,

@@ -65,12 +65,11 @@
 - **에르고드**와 접속: 흡수상태로의 추락은 대부분 강화 루프를 탄다.
 - **울타리**와 접속: 기존 구조가 균형 루프의 부품일 수 있다 — 철거 전 루프 확인.
 
-## 시금석 (사용 원장 — 적용할 때마다 한 줄 추가)
+## 적용 기록
 
-*(사용 원장은 인스턴스마다 따로 쌓인다. 이 렌즈를 쓸 때마다 한 줄씩 여기 append.)*
+실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
 
 ## 원전
 
 Forrester, *Industrial Dynamics* · Meadows, *Thinking in Systems* · 대기행렬 이론
 (Erlang, M/M/1) · Goodhart (1975) / Strathern의 정식화 · Senge의 시스템 원형.
-

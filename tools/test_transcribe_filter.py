@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
-"""Regression pins for ``tools/transcribe.py``: the deterministic half of the listening recipe
-(``filter_hallucinations``) and the instance-owned prompt file (``prompt_for``).
+"""Test transcribe.py hallucination filtering and instance-owned vocabulary prompts.
 
-Measured 2026-09-18 on a restaurant recording: Whisper repeated one sentence dozens of times ("I'm not a
-friend." x14) and invented subtitle credits ("한글자막 by ...", Korean subtitles by). The filter drops such
-segments and reports their time as noise spans, so an unreadable span is handed to a person instead of being
-invented. The other half of the recipe (ffmpeg filter chain and decoding thresholds) is not deterministic and
-is validated by listening, not here.
-"""
+Repeated phrases and subtitle-credit artifacts are dropped and reported as noise
+spans. Audio filtering and decoding quality require listening checks outside this suite."""
 import json
 import os
 import sys
