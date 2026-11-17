@@ -214,7 +214,10 @@ def _growth_tree(root):
     with open(os.path.join(root, "engine.py"), "w", encoding="utf-8") as f:
         f.write("print('engine')\n")
     subprocess.run(["git", "-C", root, "add", "engine.py"], check=True)
+    # A commit starts `git maintenance run --auto --detach`, which holds a lock file under .git
+    # after the commit returns. Turn it off so nothing but the code under test can touch the tree.
     subprocess.run(["git", "-C", root, "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                    "-c", "maintenance.auto=false", "-c", "gc.auto=0",
                     "commit", "-q", "--no-verify", "-m", "x"], check=True)
 
 
@@ -298,7 +301,10 @@ def test_growth_check_writes_nothing():
                                  "growth_unguided_work_dirs_max": 0}}
         doctor._growth_report(root, config, disk_usage=_plenty_of_disk)
         doctor._growth_report(root, {}, disk_usage=_plenty_of_disk)
-        assert _snapshot(root) == before
+        after = _snapshot(root)
+        changed = sorted(os.path.relpath(path, root) for path in set(before) | set(after)
+                         if before.get(path) != after.get(path))
+        assert not changed, changed
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
