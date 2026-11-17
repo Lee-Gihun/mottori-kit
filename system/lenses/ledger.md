@@ -1,63 +1,104 @@
-# 장부 렌즈 (제1원칙)
+<!-- source: ledger.ko.md sha256:710dbb11306b3913da1021a5de254f8c2ac00e8ad10c09960889d959230eff6a source-of-truth: ko -->
+Korean: `ledger.ko.md`
 
-> 호출: **이 판의 보존량은 무엇이고, 어디서 잔고가 초과되나?**
+# Ledger lens
 
-## 핵심 직관
+> Question: **What is scarce here and has to be shared? If someone gains, who pays for it?**
+>
+> When to use: When you hear a proposal that says "both get better." When you get a report that one
+> number went up. When you compare options with a single total score.
+>
+> What to leave behind: An account table. The name of what is scarce, who pays in each account, and
+> "unmeasured" for any account you could not measure.
 
-통념을 걷어내면 보존법칙급 바닥 진실만 남는다. 판의 화폐(보존량)를 먼저 명명하면
-모든 주장이 회계 항목이 되고, 모순은 잔고 초과로 자동 발각된다.
-논쟁을 산수로 바꾸는 렌즈다.
+## Summary
 
-## 작동 원리
+Every situation has something whose amount is fixed, so it has to be shared. Time, budget, people's
+attention, and space on a screen are examples. This document calls that thing the "currency." Once you
+decide what the currency is, you can rewrite any claim as "who pays how much and who receives how
+much." If you write it out and see only a receiver and no payer, first look for a cost you left out.
 
-닫힌 계의 불변량은 가능한 궤적 전체를 제약한다. 불변량을 위반하는 주장은 서사가 아무리
-그럴듯해도 거짓이다. 서사는 위조가 싸고 회계는 위조가 비싸다. 오류와 기만은 반드시
-어딘가에서 수지가 안 맞으며, 장부는 그 지점의 체계적 탐색이다.
+## Example
 
-## 변형
+A team reports that a new search model scores 3 points higher in accuracy than the old model. Write
+down side by side what went into each model: training time, the number of attempts with different
+settings, model size, and response speed. Once it is written down, you see that the new model was tuned
+by changing its settings twenty times. The old model used the default settings. The new model is also
+twice as large, so its responses are that much slower. In that case, what the report actually says may
+be "spending more makes it better." Match what went into both models and compare again. If the new
+model still leads, then you have grounds to say the new model is better.
 
-- **화폐 명명**: 판마다 보존량이 다르다. 정보 / 시간 / 신뢰 / 주의력 / 메모리 바이트 /
-  확률 예산 / gradient 채널 / 옵티마이저 스텝 / 정치적 자본. 명명이 일의 절반이다.
-- **공짜점심 탐지**: "둘 다 좋아진다"는 주장 앞에서 지불 항목을 찾는다. 못 찾으면
-  발견이거나 은폐인데, 대부분 은폐다.
-- **수지 대조**: 투입과 산출을 같은 단위로 강제 환산한다. "열심히 했다"는 항목이 아니다.
-- **비용 이전 추적**: 사라진 비용은 소멸이 아니라 이전이다. 누구의 장부로 갔는지 찾는다.
+## Why it works
 
-## 적용
+When the amount of something is fixed, spending more on one side means spending less on the other. So
+an explanation that says more was spent on both sides has a calculation error somewhere. It does happen
+that cutting waste makes both sides better with the same amount. In that case you must be able to write
+down what waste was cut. A story is easy to make plausible, but it is hard to make this calculation
+balance as well. So when you write down the items one by one, the places with mistakes or hidden costs
+show up.
 
-- **설계**: mixture 학습이 단일 학습을 이긴다는 결과 → 옵티마이저 스텝 장부를 열면
-  mixture 쪽이 업데이트를 2배 받았을 수 있다. 이득의 출처(다양성인가 예산인가)를
-  분리하기 전에는 결론 금지.
-- **증거**: 점수 상승 보고 → 어떤 예산이 늘었나(데이터·컴퓨트·튜닝 시도 횟수).
-  보고서에 없는 예산 항목이 핵심 교란변수다.
-- **결정**: 선택지 비교에서 화폐를 하나로 두면 틀린다. 시간·학습률·옵션가치·신뢰를
-  별도 계정으로. 한 계정의 흑자가 다른 계정의 적자를 가리는 것이 전형적 오류다.
-- **자기**: 만성 피로 → 주의력 장부를 연다. 수입(수면·운동·몰입)과
-  지출(전환·미결정 사항·걱정 루프)을 적으면 적자 항목이 드러난다.
+## How to use it
 
-장난감 예시: "모델 A가 B보다 낫다" → 파라미터 수 / 학습 토큰 / 튜닝 예산 / 평가 시도
-횟수를 대조한다. 하나라도 A가 크면 그 주장의 실제 내용은 "예산이 크면 좋다"일 수 있다.
-넷을 맞추고도 이기면 그때가 발견이다.
+- **Decide the currency**: First decide what has a fixed amount in this situation. Time, budget,
+  attention, memory, and the compute used for training are common candidates. The unit you notice
+  first is often not the currency. For example, you may be working hard to reduce the number of unread
+  emails, while the thing that is actually scarce is a person's attention.
+- **Suspect free gains**: When you hear "both get better," look for who pays. If you cannot find a
+  payer, it is one of three things. The way of sharing changed, waste was reduced, or a cost was hidden.
+  Check the hidden cost first.
+- **Use the same unit**: Convert what you put in and what you got into the same unit before you compare.
+  Something without a unit, such as "we worked hard," cannot be compared.
+- **Find where the cost moved**: If a cost seems to have disappeared, first check whether it moved to
+  another person or to a later time.
+- **Split the accounts**: Do not merge gains and costs into one average or one total score. Write each
+  item separately. If you merge them, a large loss in one item is hidden by the gains in another item.
+  Among the separate items, also include things whose amount is not fixed (trust, learning, fun).
 
-## 실패 지형
+## Where to use it
 
-- **화폐 오명명**: 보존되지 않는 것을 보존량으로 잡으면 장부 전체가 허구가 된다.
-  보존은 대칭성이 있을 때만 성립한다.
-- **측정 가능한 것만 계상**: 장부에 안 잡히는 계정(관계·평판·재미)을 0으로 처리하는
-  순간 최적화가 그쪽을 파괴한다. 미측정 계정은 "미측정"으로 명시하고 비워둔다.
-- **정밀도 연극**: 유효숫자 한 자리짜리 추정을 세 자리로 적으면 장부가 권위를 사칭한다.
+- **When you compare experiment results**: When you get a report that a score went up, ask what was
+  spent more. Data, compute, and the number of tuning rounds are the candidates. A budget that is not
+  written in the report often explains the result.
+- **When you choose between options**: Write down time, learning speed, room to choose a different path
+  later, and trust separately, then compare.
+- **When you are tired all the time**: Write down where attention comes in and where it goes out. It
+  comes in from sleep, exercise, and focused time. It goes out through switching between tasks, things
+  you put off without deciding, and repeated worry.
 
-## 간섭
+## Ways to misuse it
 
-- **극한**과 짝: 장부로 항목을 세우고 극한으로 각 항목을 검증한다 (재시동 시퀀스 1-2단).
-- **되먹임**과 보완: 장부는 정역학(스냅샷), 되먹임은 동역학(흐름과 루프). 장부가 맞아도
-  루프가 계를 다른 평형으로 끌고 갈 수 있다.
-- **침묵**이 전제: 장부에 오른 항목 자체가 선택된 표본일 수 있다.
+- **Asking "who paid" about things whose amount is not fixed**: With time and attention, when one side
+  grows the other side shrinks. Information, trust, and relationships can be newly created, and many
+  people can hold them at once. For these, "both get better" can be true. Do not be suspicious only
+  because there is no payer.
+- **Writing down only what you can measure**: If you leave out items that are hard to measure, such as
+  relationships, reputation, and fun, the missing items get damaged while you grow the written items.
+  Write "unmeasured" for an item you could not measure, and keep it in the table.
+- **Pretending to be precise**: If you write a value you know only roughly to several decimal places,
+  the table looks more reliable than it is.
+- **Treating the split as fact**: Splitting items makes conflicting claims look organized, so it feels
+  as if the explanation is finished. But the split is a frame you chose. Until you check that things
+  really behave that way, keep it as a hypothesis.
 
-## 적용 기록
+## With other lenses
 
-실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
+- **Limits** (the lens that pushes a value to zero and to infinity): After you set up items with the
+  Ledger lens, check each item with the Limits lens.
+- **Feedback loop** (the lens that looks at how the other side reacts to your action): A ledger is a
+  calculation at one point in time. Use the Feedback loop lens for the parts that affect each other
+  over time.
+- **Silence** (the lens that looks for what is missing from the data): The items in the ledger may not
+  be all of them. Use the Silence lens to find the missing items.
 
-## 원전
+The full list of all 13 lenses is in the [README](README.md).
 
-보존법칙-대칭성 대응(Noether) · Munger의 회계적 회의주의 · Jaynes, *Probability Theory* 서문.
+## Usage records
+
+Do not write actual usage records in this engine document. The location and format of records follow
+the records section of `system/deep-pass.md`. The default location is the instance's
+`_private/deep-pass/ledger.md`. Copy `templates/deep-pass-ledger.md` to use it.
+
+## Sources
+
+The correspondence between conservation laws and symmetries (Noether) · Munger (suspicion of accounting
+numbers that hide costs) · Jaynes, *Probability Theory*, preface.

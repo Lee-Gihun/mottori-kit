@@ -1,79 +1,122 @@
-# 인센티브 렌즈
+<!-- source: incentive.ko.md sha256:81471a1afbe2dca3f1eae44b648ec291a51cb4c6bc08eb63e2fa1e7d4c996488 source-of-truth: ko -->
+Korean: `incentive.ko.md`
 
-> 호출: **이 발화자는 무엇을 믿도록 보수받나?**
+# Incentive lens
 
-## 핵심 직관
+> Question: **Which conclusion benefits the person saying this? Would they have said it even if it were not true?**
+>
+> When to use: When you are about to use advice, a recommendation, a report, a review, or an article as
+> evidence. When an organization made a decision that is hard to understand. When you prepare a request,
+> a negotiation, or a proposal.
+>
+> What to leave behind: One line on what the speaker is rewarded for, and how much you will trust the
+> statement because of it. When you design a proposal, one line for each person involved on what they
+> need to gain.
 
-멍거: 인센티브를 보여주면 결과를 맞혀주겠다. 사람과 기관의 행동은 선언된 의도보다
-보수·승진·지위의 기울기를 따라 흐른다. 악당이라서가 아니다 — **선의의 사람도 자기
-인센티브가 보이는 방향으로 세계를 진심으로 믿게 된다.** 그래서 "누굴 믿을까"는 틀린
-질문이고, 맞는 질문은 "이 보수 구조에서 이 발화가 나올 확률이 참일 때와 거짓일 때
-얼마나 다른가"다.
+## Summary
 
-## 작동 원리
+Charlie Munger said, "Show me the incentive and I will show you the outcome." People and organizations
+move toward pay, promotion, and status more than toward the intentions they state. This is not because
+they are bad people. Even people with good intentions come to sincerely believe in the version of the
+world that benefits them. So asking "would this person have said this even if it were not true" is more
+useful than asking "whom should I trust".
 
-말은 위조 비용이 0에 가깝지만 인센티브를 거스르는 행동은 비용이 실린다. 신호이론(Spence):
-정보를 나르는 신호는 위조 비용이 유형에 따라 다른 것뿐이다. 따라서 인센티브 순방향 발화는
-참이어도 정보량이 낮고, **역방향 발화와 행동만 고등급 증거다.** 기관 수준의 원리:
-모든 조직은 명시된 사명과 무관하게 자기 존속을 향해 최적화하는 선택 압력 아래 있다.
+## Example
 
-## 변형
+A company that sells a design tool sent you a customer case study. You need to decide whether to propose
+adopting the tool to your team. Split the sentences in the material into two kinds. What you can check
+is the release date of the integration feature, the price list, and the security certification. "Time
+spent on handoffs dropped 40%" and "team satisfaction rose sharply" are interpretations that do not say
+how they were measured. The seller would have written these even if they were not true. So in the
+proposal, check the release date, price list, and certification yourself and use them as evidence, and
+rewrite the 40% reduction as "measure it ourselves in our team for two weeks".
 
-- **10초 감사**: 입력(조언·주장·기사·리뷰) 수신 시 발화자의 보수 함수를 한 줄로 명명한다.
-- **인센티브-only 예측**: "이해 안 되는" 조직 행동 앞에서 선언을 다 지우고 인센티브만으로
-  행동을 예측해본다. 예측이 맞으면 미스터리가 아니었던 것이다.
-- **역방향 승격**: 자기 인센티브를 거스르는 발화(자기 상품의 한계 고지, 경쟁자 추천,
-  불리한 데이터 공개)는 증거등급을 올린다.
-- **정렬 설계**: 부탁·협상·계약에서 상대가 "나를 돕는 것 = 자기 이득"이 되도록 구조를
-  먼저 설계한다. 설득은 정렬 실패의 보상 작업이다.
-- **면제 금지**: 나의 믿음에도 같은 감사를 건다 — 나는 무엇을 믿도록 보수받고 있나
-  (거울 렌즈와의 접합부).
-- **한 문서 안에서 주장 종류를 가른다**: 인센티브 순방향 문서에도 두 종류가 섞여 있다.
-  **검증 가능한 주장**(날짜·출시 여부·공시 수치·법적 책임이 실린 것)과
-  **평가·프레이밍**("무엇이 성공인가", "무엇 덕분인가")이다.
-  전자는 위조 비용이 실려 있어 쓸 수 있고, 후자는 순방향이라 정보량이 낮다.
-  **채널로 등급을 정하지 말고 주장 종류로 정한다** — 내부 발화라도 자기 이익 방향이면 낮고,
-  공개 발화라도 불리한 수치 공시는 높다. 위 "역방향 승격"이 그대로 적용된다.
-  *(Why: 2026-08-25 실측 — 순방향 프레이밍(감소 완화를 개선으로, 지표 하나의 부호 역전을 승리로)을
-  증거로 채택했다. 같은 문서의 검증 가능한 부분과 프레이밍 부분을 안 갈랐다.)*
+There is a shorter example too. A broker says, "This offer is only valid until this week." The broker
+earns more the faster the deal closes, so this statement comes out whether or not the deadline is real.
+So check separately, through another channel, whether the deadline exists. You are not throwing the
+statement away. You are reducing the weight you give it.
 
-## 적용
+## Why it works
 
-- **조직 읽기**: 새 조직에 합류하면 조직도보다 먼저 보수 지도를 그린다 — 누가 무엇으로
-  평가받고, 누구의 성공이 누구의 성공인가. "이상한" 결정의 대부분이 이 지도 위에서
-  자명해진다.
-- **증거**: 논문의 주장 강도 — 게재처는 novelty로, 저자는 인용으로 보상받는다.
-  한계 고지가 충실한 논문의 본문 주장에 가중치를 더 주는 이유다.
-- **협상**: 상대 요구의 표면이 아니라 상대가 내부에서 평가받는 지표를 추정한다.
-  그 지표를 채워주는 양보가 싸고 강력하다.
-- **소비**: 전문가 추천(시술·상품·계약) 앞에서 — 이 전문가의 수입 구조가 이 추천과
-  독립인가. 독립인 전문가를 찾는 비용은 거의 항상 지불할 가치가 있다.
+Words are easy to fake, and actions that go against your own interest have a cost. So a statement that
+points the same way as the speaker's interest cannot, by itself, be told apart as true, even when it is
+true. Statements and actions that go against the speaker's own interest are more reliable evidence.
 
-장난감 예시: 중개인이 "이 조건은 이번 주까지만 유효합니다." 감사: 중개인의 보수는
-성사 × 속도 → 마감 압박 발화는 참·거짓과 무관하게 나온다 → 정보량 ~0 → 마감의 실재는
-다른 채널로 별도 검증한다. 발화를 무시하는 것이 아니라 가중치를 낮추는 것이다.
+Organizations are similar. Whatever purpose they state, organizations lean toward what helps them keep
+existing.
 
-## 실패 지형
+## How to use it
 
-- **냉소 붕괴**: 인센티브는 분포를 설명하지 개인을 확정하지 않는다. "다 자기 이득 때문"은
-  렌즈가 아니라 렌즈캡이다 — 예측을 만들지 않으면 냉소일 뿐이다.
-- **자기 면제**: 남의 인센티브만 감사하고 자기 것은 안 보는 것. 이 렌즈의 가장 흔한 오용.
-- **인센티브 = 의식적 동기 착각**: 사람들은 대부분 자기 인센티브를 의식하지 못한 채
-  정직하다. 기만을 상정하지 말고 굴절을 상정하라.
+- **The 10-second check**: When you receive advice, a claim, an article, or a review, write one line on
+  what the speaker is rewarded for. Then ask "would they have said this even if it were not true". If it
+  seems they would have, check it separately through another channel.
+- **Predict from rewards alone**: When an organization's behavior does not make sense, erase the reasons
+  the organization gives and write down a prediction of its next action from the reward structure alone.
+  Watching whether it actually moves that way tells you whether you read the structure correctly.
+- **Trust statements against self-interest more**: Trust more a statement that reveals the limits of the
+  speaker's own product, a statement that recommends a competitor, or an action that makes data
+  unfavorable to the speaker public.
+- **Design so that interests line up**: When you make a request, negotiate, or make a proposal inside
+  an organization, first arrange things so that helping you is also in the other person's interest. If
+  several people are involved, write down separately what each person is evaluated on and who gets the
+  credit for results. Then place the proposal where it fills each person's evaluation items without
+  taking anyone's share. When you line things up this way, there is less to persuade.
+- **Check yourself too**: Ask your own beliefs the same question. Which conclusion benefits me?
+- **Sort the kinds of claims within one document**: Even a document that favors the speaker mixes two
+  kinds of claims. One is a checkable claim, where the speaker pays a price if it is wrong. Dates put in
+  writing, whether something was released, disclosed numbers, and content that carries legal liability
+  belong here. The other is evaluation and interpretation, such as "what counts as success" or "what it
+  was thanks to". Use the first kind as evidence after you actually check the record. If you could not
+  check it, write it as "the other side said this". For the second kind, look separately at the evidence
+  behind the interpretation. Look at what kind of claim it is more than at where it was published. Trust
+  less an interpretation that favors the speaker, even in an internal document. Trust more a public
+  statement that discloses numbers unfavorable to the speaker. (This item came from a real mistake. In a
+  document announcing results, an interpretation that called "the decline slowed down" an "improvement"
+  was accepted as evidence.)
 
-## 간섭
+## Where to use it
 
-- **거울**과 안팎 한 쌍: 밖으로는 인센티브 감사, 안으로는 거울.
-- **침묵**과 직렬: 누가 어떤 데이터를 생산·은폐할 인센티브가 있는지가 침묵의 지도를
-  그려준다.
-- **울타리**와 접속: 관행의 지대 대납자를 찾는 작업이 곧 인센티브 추적이다.
+- **When you get to know a new organization**: Before the org chart, draw who is evaluated on what and
+  whose success brings whose success with it. Many decisions that seemed strange are explained by this
+  picture.
+- **When you read a paper**: Journals are rewarded for publishing new results and authors for being cited
+  a lot, so papers lean toward stating claims strongly. The claims of a paper that reports its limits
+  fully can be trusted that much more.
+- **When you negotiate**: Rather than what the other side openly asks for, guess what the other person
+  is evaluated on inside their own organization. A concession that fills that item costs you little and
+  has a large effect for them.
+- **When you get an expert's recommendation**: See whether the expert's income is unrelated to this
+  recommendation. If it is related, ask once more of someone whose income has nothing to do with the
+  recommendation.
 
-## 적용 기록
+## Ways to misuse it
 
-실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
+- **Doubting everything**: A reward structure only explains the tendencies of many people. It does not
+  settle what one person will do. "It is all self-interest" is only cynicism if it predicts nothing. To
+  the extent that interests overlap, statements do carry facts, so accept a kindness from someone whose
+  interests line up with yours as a kindness.
+- **Leaving yourself out**: This is when you examine others' reward structures and not your own. It is
+  the most common mistake with this lens. When you hand this lens to an AI assistant, also look at which
+  way the AI leans. An AI can lean toward agreeing with the other person, toward producing longer
+  analysis, and toward repeating the words written in the evaluation criteria.
+- **Assuming deliberate deception**: Most people speak honestly without being aware of their own reward
+  structure. Do not assume they are lying. Assume their view is tilted to one side.
 
-## 원전
+## With other lenses
 
-Munger, "The Psychology of Human Misjudgment" · Spence (1973) job market signaling ·
-public choice 학파 (기관의 자기 존속) · Upton Sinclair: 월급이 이해를 막는다.
+- **Mirror** (the lens that compares judgments about yourself with records): Use this lens on what others
+  say, and the Mirror lens on what you say.
+- **Silence** (the lens that looks for what is missing from the data): If you know who has reason to
+  produce which data and to hide which data, you can guess what is missing from the data.
+- **Fence** (the lens that asks what an old practice protects): Finding who pays the cost of keeping a
+  practice is the same as finding the reward structure.
 
+The full list of all 13 is in the [README](README.md).
+
+## Usage records
+
+Do not write actual usage records in this engine document. The location and format of records follow the records section of `system/deep-pass.md`. The default location is the instance's `_private/deep-pass/ledger.md`. Copy `templates/deep-pass-ledger.md` to use it.
+
+## Sources
+
+Munger, "The Psychology of Human Misjudgment" · Spence (1973), signaling theory · Crawford & Sobel (1982, statements carry information to the extent that interests overlap) · Public choice theory (organizations move toward their own survival) · Upton Sinclair: It is difficult to get a man to understand something when his salary depends on his not understanding it.

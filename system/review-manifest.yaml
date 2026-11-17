@@ -1061,18 +1061,6 @@
         "system/WORKING-WITH-AI.md",
         "system/enforcement-matrix.yaml",
         "system/kit-decisions.md",
-        "system/lenses/ergodic.md",
-        "system/lenses/feedback-loop.md",
-        "system/lenses/fence.md",
-        "system/lenses/incentive.md",
-        "system/lenses/inversion.md",
-        "system/lenses/isomorphism.md",
-        "system/lenses/jensen.md",
-        "system/lenses/ledger.md",
-        "system/lenses/limits.md",
-        "system/lenses/marginal.md",
-        "system/lenses/mirror.md",
-        "system/lenses/silence.md",
         "system/person-ledger.md",
         "system/reviews/architecture.md",
         "system/reviews/content-audit.tsv",
@@ -1113,6 +1101,8 @@
         "codex"
       ],
       "depends_on": [
+        "AGENTS.md",
+        "CLAUDE.md",
         "system/debate/README.md",
         "system/deep-pass.md",
         "system/lenses/ergodic.md",
@@ -1143,6 +1133,8 @@
         "codex"
       ],
       "depends_on": [
+        "AGENTS.md",
+        "CLAUDE.md",
         "README.ko.md",
         "system/debate/README.md",
         "system/deep-pass.md",
@@ -1175,7 +1167,9 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1190,7 +1184,10 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
+        "system/lenses/ergodic.ko.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1205,7 +1202,9 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1220,7 +1219,10 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
+        "system/lenses/feedback-loop.ko.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1235,7 +1237,9 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1250,7 +1254,10 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
+        "system/lenses/fence.ko.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1265,7 +1272,9 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1280,7 +1289,9 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
         "system/lenses/feynman.ko.md",
         "templates/deep-pass-ledger.md"
       ],
@@ -1296,7 +1307,9 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1311,7 +1324,10 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
+        "system/lenses/incentive.ko.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1326,7 +1342,9 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1341,7 +1359,10 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
+        "system/lenses/inversion.ko.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1356,7 +1377,9 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1371,7 +1394,10 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
+        "system/lenses/isomorphism.ko.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1386,7 +1412,9 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1401,7 +1429,10 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
+        "system/lenses/jensen.ko.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1416,7 +1447,9 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1431,7 +1464,10 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
+        "system/lenses/ledger.ko.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1446,7 +1482,9 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1461,7 +1499,10 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
+        "system/lenses/limits.ko.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1476,7 +1517,9 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1491,7 +1534,10 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
+        "system/lenses/marginal.ko.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1506,7 +1552,9 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1521,7 +1569,10 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
+        "system/lenses/mirror.ko.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1536,7 +1587,9 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null
@@ -1551,7 +1604,10 @@
         "codex"
       ],
       "depends_on": [
+        "README.md",
         "system/deep-pass.md",
+        "system/lenses/README.md",
+        "system/lenses/silence.ko.md",
         "templates/deep-pass-ledger.md"
       ],
       "reviewed_at": null

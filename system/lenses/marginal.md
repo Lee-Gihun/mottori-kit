@@ -1,68 +1,120 @@
-# 한계효용 렌즈
+<!-- source: marginal.ko.md sha256:e34921feb48d7cca47079f90b192cf7a11384a22fad4dd4bc8ee693f61d33c42 source-of-truth: ko -->
+Korean: `marginal.ko.md`
 
-> 호출: **다음 한 시간의 한계수익은 어디가 최대인가?**
+# Marginal value lens
 
-## 핵심 직관
+> Question: **Where would the next hour make the biggest improvement?**
+>
+> When to use: When you must split time, budget, or length across several places. When you are unsure
+> whether to stop polishing. When you keep going because you do not want to waste what you already put
+> in. When you keep going over something that is past. Turn it off while you are doing work you already
+> decided to do.
+>
+> What to leave behind: One place to put the next unit into, and one place to take it from.
 
-결정은 총량이나 평균이 아니라 가장자리(margin)에서 일어난다. 이미 쓴 것(매몰)은 앞으로의
-선택에 정보가 0이고, 유효한 질문은 하나다: 다음 한 단위를 어디에 넣을 때 수익이 최대인가.
-반추의 해독제이기도 하다 — "이 후회의 다음 10분 수익률은 0이다."
+## Summary
 
-## 작동 원리
+When you decide how much to spend on what, look at the next unit instead of the total spent so far. Time
+and money already spent do not come back whatever you choose, so they must not affect future choices.
+So you ask only one thing: where will the next unit make the biggest improvement? The same question
+works when you keep going over something that is past. Ask "will anything change if I think about this
+for 10 more minutes?" If nothing will, stop.
 
-과거 지출은 어떤 미래 행동으로도 회수되지 않으므로 최적화 변수에서 빠지는 것이 옳다.
-그러나 인간의 회계는 심리적 계좌를 만들어 매몰을 자산처럼 취급한다 — 이 렌즈는 그 버그를
-명시적 질문으로 우회한다. 또 하나: 대부분의 수익 곡선은 오목해서(체감), 한 곳에 계속
-넣는 것보다 한계수익이 같아지도록 재배분하는 쪽이 총수익을 올린다.
+## Example
 
-## 변형
+You have two and a half days of work time left this week and three candidate tasks. One is adding more
+tests to the payment feature, which already has 80% test coverage. One is fixing a flaky automated check
+that has to be rerun three or four times a day. One is polishing the documentation for a new feature.
+Take half a day as one unit and compare "the next half day" for each candidate. The tests already cover
+the important paths, such as payment, refund, and duplicate payment, so another half day would change
+little. Fixing the automated check stops five team members from losing 20 minutes each every day, so its
+first half day has the largest effect. You put the next half day into the automated check and take that
+time from the extra tests.
 
-- **다음 한 시간 질문**: 지금부터 60분을 어디에 넣으면 최대인가. 하루 계획의 원자 단위.
-- **반추 해독**: 후회·자책이 돌기 시작하면 "이 루프의 다음 10분 수익률은?" 0이면 이탈.
-- **포화 탐지**: 같은 활동의 한계수익이 급락하는 지점을 감지한다. 학습, 다듬기, 회의,
-  통찰 소비까지 — 어떤 좋은 것도 포화한다.
-- **재배분 검사**: 주기적으로 "제일 과투자된 계정과 제일 저투자된 계정"을 명명하고
-  한 단위를 옮긴다.
-- **한계비용 대칭**: 비용도 가장자리로 본다. "하나 더 맡는 것"의 한계비용은 가동률이
-  높을수록 평균비용을 훨씬 초과한다 (되먹임의 대기행렬 수학).
+Numbers make it clearer. You have 4 hours to study. Subject A goes up 1 point per hour. Subject B goes up
+5, 3, 2, and 0.5 points for each successive hour. Spending all the time on A gives 4 points. Splitting it
+half and half gives 10 points. Spending all of it on B gives 10.5 points. Spending 3 hours on B and 1
+hour on A gives 11 points, the highest. Keep putting hours into B only while B's next hour is worth more
+than A's 1 point.
 
-## 적용
+## Why it works
 
-- **설계**: 실험 예산 배분 — 이미 5번 돌린 방향의 6번째 실험과 안 돌린 방향의 첫 실험.
-  한계정보량은 거의 항상 후자가 크다.
-- **증거**: 같은 주제 10번째 논문의 한계지식은 첫 논문의 몇 %인가. 포화가 감지되면
-  주제를 옮긴다.
-- **결정**: 다듬기의 중단 시점 — "한 시간 더 다듬어 좋아지는 양"이 "그 시간에 다음 것을
-  시작해 얻는 양"보다 작아지는 순간이 출하 시점이다.
-- **자기**: 자책 루프 감지 → 반추 해독 발동 → 다음 10분을 수익률 있는 최소 행동으로
-  강제 전환.
+What you have already spent cannot be recovered whatever you do next, so it is right to leave it out of
+the calculation. But people feel as if what they spent is something they still hold, so they keep
+holding on. Asking about "the next unit" directly lets you get around that feeling. Also, for most work,
+the more you do, the less one more unit improves things. So instead of putting everything into one
+place, it is better overall to split units so that the effect of the next unit is about the same in
+each place.
 
-장난감 예시: 공부 4시간 배분. 과목 A는 시간당 +1점, 과목 B는 첫 시간 +5점 이후 체감.
-최적은 A 몰빵도 균등도 아니고, 한계수익이 같아질 때까지 B에 먼저 넣는 것이다.
-이 산수를 하루 전체로 확장한 것이 이 렌즈다.
+## How to use it
 
-## 실패 지형
+- **Ask about the next unit**: Take whatever is scarcest in the situation as one unit. It can be an
+  hour, money, one slide, or one question. Ask where putting that unit in would improve things most. If
+  putting it anywhere changes nothing, do not put it in. Deciding not to make something is also a
+  choice.
+- **Stop going over the past**: When regret or self-blame repeats, ask "will anything change if I think
+  about this for 10 more minutes?" If nothing will, stop and spend those 10 minutes on one small action.
+- **Notice the point where more does not add more**: If you keep doing the same thing, there comes a
+  point where the effect drops clearly. Studying, polishing, meetings, and reading material all work
+  this way.
+- **Move units**: At regular intervals, pick two places. One is where taking a unit away loses little.
+  The other is where putting a unit in gains a lot. Whether you are currently putting a lot or a little
+  into a place is not the criterion. If the gain is still larger after subtracting the cost of moving,
+  move one unit.
+- **Look at cost as the next unit too**: The cost of "taking on one more thing" grows the more you have
+  already taken on. When a schedule gets full, the time that gets pushed back grows sharply.
 
-- **덩어리 투자 파괴**: 어떤 수익은 연속 블록을 요구한다 — 깊은 작업, 신뢰 구축,
-  기초 체력. 한계 단위로 얇게 썰면 문턱을 영원히 못 넘는다. 한계 사고는 배분 계층에만
-  쓰고, 채택된 블록 안에서는 끈다.
-- **측정 가능한 수익 편향**: 한계수익이 잘 측정되는 계정(일)으로만 자원이 흘러 측정 안
-  되는 계정(관계·건강)이 만성 저투자된다. 미측정 계정의 명시(장부 렌즈)로 방어한다.
-- **매몰 무시의 오용**: 매몰비용 무시는 약속 파기의 면허가 아니다. 평판과 신뢰는
-  과거 계정이 아니라 미래 계정이라 장부에 살아 있다.
+## Where to use it
 
-## 간섭
+- **When you split experiments or research**: Compare a sixth experiment in a direction you have
+  already tried five times with a first experiment in a direction you have not tried. If the first five
+  gave the same answer, you often learn more from the first experiment in the new direction. If you are
+  reading the tenth source on the same topic, check whether you are learning almost nothing new, and
+  move to another topic.
+- **When you stop polishing**: Ship it when the improvement from one more hour of polishing becomes
+  smaller than what you would gain by starting the next task in that hour.
+- **When you decide whether to buy an add-on**: Do not judge by the total price. Subtract the part that
+  overlaps with what you already have, and compare only the new part with the price. Do not see a new
+  commitment as something added to your existing schedule. Judge it by what it replaces.
+- **When you prepare for a meeting**: In a 30-minute meeting, you learn most when you ask about things
+  only the other person knows, and least when they present again what you have already heard. Choose
+  your questions in that order.
 
-- **에르고드**가 상위 게이트: 한계수익이 최대라도 흡수상태 위험이 있으면 기각.
-- **되먹임**과 접속: 한계비용은 가동률의 함수다. 여유가 없을수록 "하나 더"의 실제 비용이
-  폭등한다.
-- **파인만**의 배분자: 어디까지 깊게 재유도할지를 이 렌즈가 정한다.
+## Ways to misuse it
 
-## 적용 기록
+- **Cutting work that needs long stretches into small pieces**: Deep focused work, building trust, and
+  building basic fitness only pay off when you spend long, unbroken time on them. If you split them into
+  small units, you never reach the point where they pay off. Use this lens only when you split what to
+  do. Do not use it while you are doing work you already decided to do.
+- **Going only where you can measure**: Time flows only to work whose effect is easy to see in numbers,
+  and relationships or health, whose effect is hard to see, stay short of time. Writing down separately
+  the places you could not measure prevents this.
+- **Using it as an excuse to break a promise**: Not counting what you already spent does not mean you
+  may break promises. Breaking a promise lowers your future reputation and trust.
+- **Treating an estimate like a measurement**: The effect of the next unit is mostly an estimate. Do not
+  invent numbers to fill unknown cells. If the difference in size is clear, choose by a rough
+  comparison, and write down the assumption together with "what would change the verdict if it were
+  confirmed."
 
-실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
+## With other lenses
 
-## 원전
+- **Ergodicity** (the lens that first asks whether there is an irreversible loss): Even if the next unit
+  has the largest effect, do not choose it if it carries a risk of irreversible loss.
+- **Feedback loop** (the lens that looks at how others react to your action): The Feedback loop lens has
+  the calculation for why the cost of "one more" grows sharply as a schedule fills up.
+- **Ledger** (the lens that tracks what is scarce and what it costs): The Ledger lens has the method for
+  leaving items you could not measure marked as "unmeasured."
+- **Feynman** (the lens that checks understanding by calculating it yourself): Use this lens to decide
+  how deep to check with the Feynman lens.
 
-한계혁명 (Jevons / Menger / Walras) · Thaler의 심리적 회계 · 탐색-활용 트레이드오프 문헌.
+The full list of all 13 lenses is in [README](README.md).
 
+## Usage records
+
+Do not write actual usage records in this engine document. The location and format of records follow
+the records section of `system/deep-pass.md`. The default location is the instance's
+`_private/deep-pass/ledger.md`. Copy `templates/deep-pass-ledger.md` to use it.
+
+## Sources
+
+The marginal revolution (Jevons, Menger, Walras) · Thaler's mental accounting · literature on the balance between exploration and exploitation.

@@ -1,71 +1,126 @@
-# 에르고드 렌즈
+<!-- source: ergodic.ko.md sha256:8fc84bda2d5fc23efb2a1902f59a877cd484ff1f4840c0f1dbf310e3260220de source-of-truth: ko -->
+Korean: `ergodic.ko.md`
 
-> 호출: **잘못되면 다음 판이 있나? 100번 반복하면 나는 어디 있나?**
+# Ergodicity lens
 
-## 핵심 직관
+> Question: **If this goes wrong, do I get another chance? If I repeat this 100 times, what happens to me?**
+>
+> When to use: When someone says "the expected value is good" or "once is fine." When you face a
+> decision and it is not clear whether you can reverse it. If the decision is reversible, make it
+> quickly and turn this lens off.
+>
+> What to leave behind: Whether the decision is reversible or not, and one line on the case in which it
+> becomes irreversible. If the decision is irreversible, a way to delay it or split it.
 
-"평균적으로 이득"에는 평균이 두 종류 있다. 앙상블 평균(평행한 만 명의 내가 동시에 한 번씩
-한 평균)과 시간 평균(한 명의 내가 순서대로 반복한 평균). 흡수상태 — 파산, 죽음, 신뢰
-상실처럼 들어가면 못 나오는 상태 — 가 있으면 둘이 갈라지고, 통상의 기댓값은 전부 앙상블
-쪽이다. **너는 병렬이 아니라 직렬로 산다.** 직렬 인생에서 유효한 것은 시간 평균뿐이다.
+## Summary
 
-## 작동 원리
+When people say "profitable on average," there are two kinds of average. One is the average when ten
+thousand identical people each do it once at the same time. The other is the average when one person
+does it many times in a row. These two averages differ when there is a state you cannot leave once you
+enter it, such as bankruptcy, death, or lost trust. The usual expected value is the first average. But a
+person lives one life, one step after another. So the average that matters to me is the second one.
+(In mathematics, the property that makes the two averages equal is called "ergodicity." The lens takes
+its name from that.)
 
-곱셈 과정(재산·평판·건강은 더해지지 않고 곱해진다)에서 시간 평균 성장률은 산술평균이
-아니라 기하평균을 따른다. 0이 한 번 곱해지면 이후의 모든 수가 무효 — 흡수상태의 수학적
-정체다. 동전 예시: 앞이면 ×1.5, 뒤면 ×0.6. 앙상블 기댓값은 회당 +5%지만 시간 평균은
-√(1.5×0.6) = √0.9 ≈ 0.949, 회당 −5%. **기댓값 양수와 파산 확정이 동시에 성립한다.**
+## Example
 
-## 변형
+You decided to change the name and logo of a service. You must decide whether to change everything at
+once. Split the changes into those you can reverse and those you cannot. The colors and fonts of the app
+and web screens can be reversed by deploying again. A large print order, new signs, a trademark
+registration, and a press announcement are hard to reverse. So you change the screens this week and
+watch the response for 2 to 3 weeks. You delay the printing and the signs until after that, and first
+print a small test batch.
 
-- **흡수상태 검사**: 모든 결정의 첫 질문 — 최악의 결과에서 다음 판이 있는가.
-  없으면 확률 불문 기댓값 논증을 기각한다.
-- **문 분류**: 양방향 문(되돌릴 수 있음)이면 속도가 미덕 — 빨리 통과하고 빨리 되돌린다.
-  일방향 문일 때만 정밀 검사. 대부분의 결정은 양방향인데 일방향 대접을 받아 삶이 느려진다.
-- **반복 노출 누적**: "한 번은 괜찮아"의 확률을 연간 빈도로 환산한다. 회당 1%의 사고
-  확률을 주 1회 반복하면 연 40%다. 낮은 확률 × 높은 빈도 = 확정 사건.
-- **비대칭 베팅 수확**: 하방 캡(최악 = 거절 한 마디) + 상방 개방(연락, 지원, 공개, 요청)인
-  복권은 발견 즉시 전부 긁는다. 파산 없는 베팅은 크게, 파산 있는 베팅은 일부만
-  (켈리 기준의 정성 판본).
-- **중단 비파산화**: 시스템 설계 시 중단이 파산이 아니게 만든다 — 상태를 디스크에,
-  체크포인트를 자주. 장기 작업이 세션·장애를 넘어 이어지게 하는 공학적 판본.
+There is also an example with numbers. Take a bet on a coin toss. Heads multiplies your money by 1.5.
+Tails multiplies it by 0.6. If ten thousand people each play once, the average is 1.05 times, a 5% gain.
+If one person keeps playing, the result is different. Over two tosses with one heads and one tails, you
+get 1.5 × 0.6 = 0.9 times, which is a 10% loss. That is a loss of about 5% per toss on average. The
+expected value is a gain, but if you keep playing, your money approaches 0. Russian roulette is a more
+extreme case. With one bullet in a six-shot revolver, the chance of survival is five in six. If the
+reward is large, the expected value of one round looks good. But if you repeat it, the chance of
+survival approaches 0. It is a bet you cannot repeat, whatever the reward.
 
-## 적용
+## Why it works
 
-- **결정**: 선택지 비교표에 "기대 수익" 옆에 반드시 "복구 불가 시나리오" 열을 추가한다.
-  두 열이 다른 선택지를 가리키면 흡수상태 쪽이 이긴다.
-- **설계**: 파이프라인·실험·마이그레이션에 "여기서 죽으면 어디서부터 다시?"를 강제한다.
-  답이 "처음부터"인 구간은 설계 결함이다.
-- **건강·평판**: 곱셈 자산에는 상한 베팅 규칙 — 수면 부채, 무리한 마감, 신뢰를 거는
-  발언은 회당 싸 보여도 곱셈으로 붙는다.
-- **자기**: "이번 한 번만"이 반복되는 패턴을 감지하면 연간 빈도로 환산해 재판정한다.
+Wealth grows and shrinks in proportion to what you already have. It moves by multiplication, not by
+addition. When something moves by multiplication and reaches 0 once, anything you multiply after that
+still gives 0. Reputation and health are similar. If you lose a lot, the chances to gain later shrink.
+When you repeat things like this, you must look at the result of many multiplications converted to a
+per-round value (the geometric mean). In the coin bet above, the ordinary average is 1.05, but this value
+is √(1.5 × 0.6) ≈ 0.95.
 
-장난감 예시: 러시안룰렛, 보수 100억. 앙상블 기댓값은 5/6 × 100억 ≈ 83억으로 "합리적"이다.
-시간 평균: 반복하면 생존 확률 (5/6)ⁿ → 0. 보수가 얼마든 반복 불가 게임이다. 같은 구조를
-찾아라 — 무보험 운전, 만성화된 수면 압축, 검증 없는 프로덕션 배포. 전부 보수 좋은 룰렛이다.
+## How to use it
 
-## 실패 지형
+- **Ask whether there is another chance**: When you decide, first ask "If the worst result happens, do I
+  still get another chance?" If not, do not do it because "the expected value is good," even when the
+  chance of the worst result is low.
+- **Sort decisions by whether they are reversible**: Make reversible decisions quickly. Try it, and if it
+  is wrong, reverse it. Only irreversible decisions need careful analysis. Many decisions are reversible
+  but get treated as irreversible, and this slows them down.
+- **Delay or split irreversible decisions**: Delay until the needed information arrives, and start with
+  the reversible early part. Ways to do this include a trial run, paying only a deposit, and confirming
+  in stages.
+- **When unsure, choose the option you can fix later**: For example, when you decide what information to
+  publish, something left out can be added later, but something published cannot be taken back. So when
+  unsure, leave it unpublished.
+- **Calculate how much builds up with repetition**: When someone says "once is fine," convert it to how
+  many times a year it happens and calculate. If the chance is the same p each time and does not depend
+  on earlier results, the chance that it happens at least once in n tries is 1 − (1 − p)ⁿ. A 1% event
+  done every week gives about 41% in a year. A 5% event done every month gives about 46% in a year.
+  Events that become more likely after they happen once do not fit this formula, so analyze them
+  separately.
+- **Take attempts with small losses and large gains**: Some attempts have a single refusal as the worst
+  result and no upper limit on the good result. Contacting someone, applying, asking for a favor, and
+  showing your work are like this. Do not delay these attempts.
+- **Make it safe to stop in the middle**: Design long tasks so that an interruption does not force you to
+  start over. Save progress to files and add checkpoints often.
 
-- **마비**: 모든 하방을 파산으로 취급하면 아무것도 못 한다. 흡수상태의 정의는 좁게 —
-  회복에 수년 이상 걸리거나 불가능한 것만. 창피함, 실패, 거절은 흡수상태가 아니라
-  비대칭 베팅의 싼 하방이다.
-- **문 오분류**: 실제로는 양방향인 문(직장·도시·분야 전환)을 일방향으로 착각한 과잉 신중.
-  분류 자체를 검증하라.
-- **기하평균 만능화**: 반복되지 않는 1회성 결정에는 시간 평균 논리가 그대로 붙지 않는다.
-  거기서는 흡수상태 검사만 가져간다.
+## Where to use it
 
-## 간섭
+- **When you compare options**: If the option with the largest expected gain carries an irreversible
+  risk, choose an option without that risk.
+- **When you design a long task**: Ask "If it stops here, where do I restart?" If any stage has the
+  answer "from the beginning," fix the design.
+- **Matters of health and reputation**: Cutting sleep, an unreasonable deadline, and a statement that
+  puts your credibility at stake can each look minor once, but they build up. Set an upper limit on how
+  much you can stake at one time.
+- **When "just this once" keeps repeating**: Convert it to how many times a year and judge again.
 
-- **한계효용**의 상위 게이트: 한계수익이 최대라도 흡수상태가 있으면 기각.
-- **역산**과 직렬: 역산이 찾은 사망 조건 중 복구 불가만 골라내는 것이 이 렌즈다.
-- **되먹임**과 접속: 흡수상태로의 추락은 대부분 강화 루프를 탄다 — 루프 감지가 조기경보다.
+## Ways to misuse it
 
-## 적용 기록
+- **Treating every loss like bankruptcy**: Then you can do nothing. Define irreversible states narrowly.
+  Include only losses that take several years to recover from or cannot be recovered. Do not include
+  embarrassment, failure, or rejection. But when a loss can be recovered by itself and still blocks the
+  path to the next chance, treat it as close to an irreversible state. Losing trust and therefore not
+  getting the next chance is such a case.
+- **Treating a reversible decision as irreversible**: Changing jobs or the city you live in is usually
+  reversible. If you think it is irreversible, you become too cautious. So check that you sorted the
+  decision correctly.
+- **Using the repetition calculation on a one-time decision**: For a decision that does not repeat, the
+  "if you do it many times" calculation does not apply directly. For such a decision, ask only "Is there
+  another chance?"
+- **Getting wrong what repeats**: Consider the judgment "I can come back to this city later, so let us
+  save money this time." What can come back is the city. The people you came with now and this period of
+  life will not come back. First write down what repeats and what happens only once.
 
-실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
+## With other lenses
 
-## 원전
+- **Marginal value** (the lens that asks where to spend the next unit): Even if the next unit has the
+  largest effect, do not choose it if it carries a risk of becoming irreversible. This lens comes first.
+- **Inversion** (the lens that starts by writing down the conditions for failure): Use this lens to pick
+  out the irreversible ones among the failure conditions that inversion found.
+- **Feedback loop** (the lens that looks at how others respond to my action): Falls into irreversible
+  states often happen through a flow that grows by itself. If you notice that flow early, you can stop it
+  in advance.
 
-Kelly (1956) · Ole Peters의 ergodicity economics · Taleb, *Antifragile* (barbell과 ruin) ·
-Bezos 주주서한 (one-way / two-way doors).
+The full list of all 13 lenses is in the [README](README.md).
 
+## Usage records
+
+Do not write actual usage records in this engine document. Follow the recording section of
+`system/deep-pass.md` for the location and format of records. The default location is the instance's
+`_private/deep-pass/ledger.md`. Copy `templates/deep-pass-ledger.md` to use it.
+
+## Sources
+
+Kelly (1956) · Ole Peters, ergodicity economics · Taleb, *Antifragile* and *Skin in the Game* (the logic of risk taking) · Bezos, shareholder letters (reversible and irreversible decisions).

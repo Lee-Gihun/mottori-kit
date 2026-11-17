@@ -1,74 +1,131 @@
-# 거울 렌즈
+<!-- source: mirror.ko.md sha256:486737f9bc5e9450c258d1502a4e1828b3def896e42100277d323495dc47be7a source-of-truth: ko -->
+Korean: `mirror.ko.md`
 
-> 호출: **이 판단의 화자가 나라면, 증거등급은 몇인가?**
+# Mirror lens
 
-## 핵심 직관
+> Question: **Do the records support this judgment I made about myself?**
+>
+> When to use: When a claim about yourself is about to be used as a basis for a judgment. This covers
+> claims that put you down and claims that build you up. For an AI assistant, it also covers claims about
+> its own work, such as "I verified it" or "it works". Once you have checked the records and changed the
+> sentence, turn this lens off and go back to the original problem.
+>
+> What to leave behind: The claim rewritten as a sentence the records support. If there are no records,
+> "unknown".
 
-모든 측정 사슬에는 계측기가 끼어 있고, 자기 자신에 대한 판단에서는 계측기가 곧 측정
-대상이다. "나는 글렀다 / 나는 원래 이렇다"는 관측이 아니라 계측기가 자기 상태를 데이터로
-착각한 출력일 수 있다. 외부 사실에는 조회를 요구하면서 자기 단언만 무사통과시키는 것이
-표준 버그다. 이 렌즈는 그 규칙을 자기에게 확장한다: **너를 원장에 넣어라.**
+## Summary
 
-## 작동 원리
+To measure something you need a measuring tool. When you judge yourself, the measuring tool and the
+thing measured are the same. So statements like "I am hopeless" or "I have always been like this" can
+carry that day's mood and fatigue. We often demand checks for facts about the outside world, yet accept
+claims about ourselves without checking. This lens demands the same check for claims about yourself.
 
-자기 서사는 관찰이 아니라 사후 구성이며, 구성 과정에 현재 기분·피로·최근 사건이 가중치로
-들어간다. 즉 자기 보고는 (실제 상태) × (계측기 상태)의 곱인데, 곱을 풀 방법이 자기 안에는
-없다. 유일한 해법은 외부 기록이다: 날짜와 사건만 적힌 트레이스는 계측기 상태와 독립이라,
-서사와 트레이스의 차이가 곧 계측기 오차의 측정값이 된다. 그리고 이 오차는 개인마다
-일관된 부호(상방 또는 하방 편향)를 가지므로, 한 번 실측해두면 이후의 자기 단언을
-보정할 수 있다.
+## Example
 
-## 변형
+You are writing a review of the quarter, and this sentence comes out first: "This quarter I only handled
+incidents and got almost no feature work done." Drop the adjectives and look only at records that
+already exist. These are the list of merged code changes, the incident response log, and the calendar.
+Of 23 code changes, 14 were feature work. There were 5 incidents, and two of them took two days each.
+The sentence the records support is "I shipped 14 feature changes and spent about four days on two large
+incidents." The gap between the first sentence ("almost no") and the records (14) shows which way and how
+far your current judgment is tilted. If there is a period with no records, write "that period has no
+records, so it is unknown".
 
-- **자기 발화 등급제**: 자기 자신에 대한 단언, 특히 자조와 비관은 증거등급 최하로
-  분류하고 트레이스 조회 후에만 승격한다.
-- **트레이스 로그**: 날짜 + 사건만, 형용사와 해석 금지. 자기 서사는 이 로그의 파생물로
-  강등한다. 유일한 합법 추론 경로: "이 기록의 주인공에 대해 데이터가 지지하는 문장은
-  무엇인가."
-- **계측기 상태 회계**: 판단 전 3항 점검 — 수면 / 최근 타격 / 이해관계. 하나라도
-  적신호면 판단을 기록만 하고 집행은 유예한다.
-- **자기 포함 분석**: 내가 낀 시스템(조직·관계·협상)을 분석할 때 자기 항을 명시적으로
-  포함한다 — 내 존재·기분·인센티브가 관측을 어떻게 굴절시키는가.
-- **예측 캘리브레이션**: 자기 예측("이건 못 할 것 같다")을 등록해두고 결과와 대조해
-  자기 계측기의 오차 부호와 크기를 실측한다.
+## Why it works
 
-## 적용
+Stories about yourself contain parts made up after the fact. This is especially true of explanations of
+"why I did that". When you make them up, your current mood, fatigue, and recent experiences weigh
+heavily. So reports about yourself mix your actual state with your current state, and inside you there
+is no way to separate the two. What can separate them is the records left outside. A record that holds
+only dates and events is much less colored by that day's mood.
 
-- **자기 단언 감지 시** (주 용법): "글렀다" 감지 → 게이트 발동 → 트레이스 조회 →
-  데이터가 지지하는 문장으로 교체 → 그다음에야 다른 렌즈 진행.
-- **회고**: 잘됨/안됨 판정을 느낌이 아니라 시작 시점에 등록한 예측과 대조해서 내린다.
-- **조직 분석**: "팀이 나를 어떻게 보는가" 추정에 내 불안의 굴절률을 항으로 포함한다.
-  기록 기반 회고에서도 귀속 오류는 관계의 방향까지 뒤집을 수 있다.
-- **연구**: 자기 이론으로 모든 것이 수렴할 때 — 그 수렴이 이론의 힘인지 나의 소망인지를
-  제3의 반증자에게 위탁한다 (구조 대응의 뿌리화 경보와 합류).
+The direction of the tilt is not fixed to one per person. It differs by area. The same person can
+understate their own progress and still trust their own judgment without checking. So do not harden a
+result you checked in one area into a personality label such as "I am someone who sells myself short".
+Check each area separately, and leave areas you have not checked as "unknown".
 
-장난감 예시: 일요일 밤 "이번 주 아무것도 못 했다" → 트레이스 조회: 화 리뷰 2건,
-수 실험 셋업, 목 반나절 병원, 금 발표 → 데이터가 지지하는 문장: "목요일 반나절이 비었고
-나머지는 정상 가동." 서사와 트레이스의 차이("아무것도" 대 "반나절")가 계측기 오차의
-오늘 측정값이다.
+Records have errors too. When a meeting recording is transcribed, who said what can get switched, and an
+owner can be written down wrong. If a conclusion depends on one line of a record, check the original
+once more.
 
-## 실패 지형
+## How to use it
 
-- **무한 자기참조**: 거울로 거울을 비추기 시작하면 배꼽응시다. 이 렌즈는 게이트지
-  거주지가 아니다 — 조회하고, 문장을 교체하고, 나간다.
-- **로그의 무기화**: 트레이스를 자기 처벌 도구로 쓰는 것. 로그는 증거지 탄약이 아니다.
-  편향 교정용이지 새 채찍이 아니다.
-- **타인에게 들이대기**: 남의 자기 서사를 "트레이스 내놔봐"로 반박하는 것은 오용이다.
-  이것은 1인칭 전용 도구다.
+- **Treat what you say about yourself as the weakest evidence**: Treat claims about yourself, especially
+  self-mockery and pessimism, as the weakest kind of evidence. Use them as evidence only after you check
+  the records.
+- **Look at records that hold only dates and events**: Records that already exist, such as a calendar,
+  sent email, or code change history, are enough. You do not need to write new ones. Read them without
+  adjectives and interpretation. With that record in front of you, ask "what sentence about the person
+  in this record does the record support".
+- **Check your current state first**: Before you judge, check three things. Did you sleep enough? Did
+  something upset you badly recently? Do you have a stake in the outcome of this judgment? If any one
+  applies, write one line on which way it would tilt the judgment, and add evidence from records or from
+  other people's eyes. If you are in a state where your judgment will be badly clouded and the decision
+  can wait, set a date to look again and postpone acting.
+- **Put yourself in the analysis**: When you analyze an organization or a relationship you belong to,
+  include yourself as an item. Write down how your presence and your mood change what you see. Also write
+  down how your strengths change the other person's role. For example, if you put out a finished version
+  early, a colleague gets pushed from co-creator to reviewer.
+- **Write predictions down and check them**: Write down predictions such as "I don't think I can do
+  this", then compare them with the results later. You can measure which way and how far your judgment
+  tilts.
+- **Check positive claims the same way**: "This method works", "I am strong at this kind of work", and
+  "this failure was the tool's fault" go through the same check as self-mockery. First look at where the
+  assessment came from. Check whether you made it yourself, or whether an AI or another person gave it to
+  you.
+- **Count how many times you corrected your judgment**: Over a set period, count together how many
+  judgments you made whose outcome can be checked, how many of those outcomes you checked, and how many
+  you corrected as "my judgment back then was wrong". If you had few chances to check, leave it as
+  unknown. If some judgment's outcome missed and you did not correct it, or if you often put yourself
+  down but your correction count is close to 0, you are not seeing the cases where your judgment is
+  wrong.
 
-## 간섭
+## Where to use it
 
-- **모든 렌즈의 전처리 게이트**: 자기 단언이 낀 문제에서는 거울 통과 후에만 다른 렌즈가
-  유효하다.
-- **역산**의 감시자: 이 역산을 결정 전에 했는가 후에 했는가 (사후 합리화 감지).
-- **인센티브**와 짝: 남의 발화에는 인센티브 감사, 내 발화에는 거울 — 같은 회의주의의 안팎.
+- **When a claim about yourself comes up** (the most common use): When something like "I am hopeless"
+  comes up, stop and look at the records. Rewrite it as a sentence the records support, then go back to
+  the original problem.
+- **When you evaluate past work**: Do not decide whether it went well by feel. Decide by comparing it
+  with the prediction you wrote down at the start.
+- **When you guess how others see you**: Write down separately how much your anxiety changes that guess.
+- **When you evaluate your own theory**: If everything seems to be explained by your theory, ask someone
+  else to argue against it, to find out whether the theory is good or you just want it to be.
 
-## 적용 기록
+## Ways to misuse it
 
-실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
+- **Looking only at yourself, over and over**: If you start looking with this lens at what you saw with
+  this lens, it never ends. Once you have checked the records and changed the sentence, stop there.
+- **Using records to punish yourself**: Use records to correct a tilted judgment. Do not use them to
+  scold yourself.
+- **Using it on others**: Do not use it to argue against what another person says about themselves by
+  saying "show me the records". This lens is for the person who made the judgment to use on themselves.
+  An AI assistant uses it in two cases. One is for the AI's own recommendations and conclusions. The other
+  is for what the owner (the person who gave the AI assistant the work) says about themselves. In the
+  second case, compare against records the owner has entrusted to it, and do not argue. Return the
+  sentence the records support.
+- **Checking only negative claims**: This is when you check only self-mockery and let positive claims and
+  your own judgments pass. It looks like humble self-correction, but in fact it blocks the signals that
+  would tell you your judgment is wrong. You can tell by recalling when you last checked a positive claim.
+- **Recording a label someone else gave as fact**: This is when a personality label that another person
+  or an AI attached after one or two cases gets written into memory or a rules file as if it were a
+  checked result. That label tilts the next judgment in advance, and the tilted judgment is then used as
+  evidence for the label.
 
-## 원전
+## With other lenses
 
-Kahneman의 기분-판단 오염 연구 계열 · Tetlock, *Superforecasting* (캘리브레이션 실측
-방법론) · 스토아 저녁 복기 (Seneca, *De Ira* 3.36 — 트레이스 로그의 원형).
+- **Before other lenses**: In a problem that involves a claim about yourself, go through this lens first
+  and then use other lenses.
+- **Incentive** (the lens that looks at the speaker's interest): Use the Incentive lens on what others
+  say, and this lens on what you say.
+- **Inversion** (the lens that starts by writing down the conditions for failure): Use this lens to check
+  whether you did Inversion before or after deciding. If you did it after, it may be rationalization.
 
+The full list of all 13 is in the [README](README.md).
+
+## Usage records
+
+Do not write actual usage records in this engine document. The location and format of records follow the records section of `system/deep-pass.md`. The default location is the instance's `_private/deep-pass/ledger.md`. Copy `templates/deep-pass-ledger.md` to use it.
+
+## Sources
+
+Schwarz & Clore (1983, mood enters judgment as if it were information) · Nisbett & Wilson (1977, reports on the reasons for one's own behavior can be made up after the fact) · Tetlock, *Superforecasting* (writing predictions down and checking them) · The Stoic evening review (Seneca, *De Ira* 3.36).

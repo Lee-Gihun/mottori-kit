@@ -1,67 +1,124 @@
-# 역산 렌즈
+<!-- source: inversion.ko.md sha256:319b8ca843c15a42393f95a1b76a69a120eaee008e1fd3e1e374ae44f22f62a1 source-of-truth: ko -->
+Korean: `inversion.ko.md`
 
-> 호출: **뭐가 하면 반드시 망하나? 최저가 반증은?**
+# Inversion lens
 
-## 핵심 직관
+> Question: **What would make this fail for sure? What is the cheapest way to check whether my idea is
+> wrong?**
+>
+> When to use: Just before you run, send, or lock in a design. When there are too many candidates. When
+> you have piled up only reasons why it will work.
+>
+> What to leave behind: A few conditions that make it fail, and for each condition what you removed,
+> reduced, or put an alarm on, or your reason for leaving it as it is. One cheapest disproof.
 
-"어떻게 성공하나"는 답이 무한하고 흐릿하다. "뭐가 하면 반드시 망하나"는 답이 유한하고
-선명하다. 문제를 뒤집어 확실한 사망 조건부터 나열하고 제거하면, 남은 공간이 성공의
-후보지다. 야코비의 "뒤집어라, 항상 뒤집어라"와 멍거의 "내가 어디서 죽을지 알려주면
-거기 안 간다"가 같은 수다.
+## Summary
 
-## 작동 원리
+"How do I succeed?" has endless, vague answers. If you turn it around and ask "what would make this
+fail for sure?", you can write much more concrete answers. So you flip the problem, write down the
+conditions that make it fail for sure, and avoid them. Avoiding the failure conditions does not
+guarantee success, but it shrinks the range you need to look at. The mathematician Jacobi's "invert,
+always invert" and Charlie Munger's "tell me where I'm going to die, so I'll never go there" are the
+same idea.
 
-실패 조건은 성공 조건보다 알기 쉽다. 제약은 목적함수보다 구조가 단순하고, 사망 사례는
-성공 사례보다 인과가 깨끗하다 — 성공은 과잉결정이라 원인 귀속이 안 되지만 치명타는
-보통 하나다. 그리고 탐색 공간에서 사망 지대를 빼는 것은 교집합 연산이라 빠르게 좁혀진다.
+## Example
 
-## 변형
+You are about to release a new recommendation model to half of the users. Assume "this launch failed"
+and write down the reasons. The input values were computed differently in training and in serving. The
+model leaned toward popular items, so users with rare tastes became less satisfied. Responses got
+slower. For each reason, choose a signal that warns you in advance: the difference in input value
+distributions, the click rate of the group of users with rare tastes, and response time. As a result,
+you extended by one week the period of running it out of sight of real users, and you put an alarm on
+the metrics for the group of users with rare tastes.
 
-- **프리모템**: 실행 전에 "이 프로젝트는 죽었다. 부고를 써라." 사망 원인 3개를 먼저 쓰고
-  각각에 감시 지표를 단다.
-- **최저가 반증**: 내 가설을 가장 싸게 죽일 수 있는 실험부터 한다. 비싼 확증 실험 10개보다
-  싼 반증 실험 1개가 정보량이 크다.
-- **탈락사유 리스트**: 채택 기준이 아니라 탈락 기준부터 작성한다. 후보가 많을 때 특히.
-- **kill criteria 사전 등록**: "무엇이 관측되면 접는다"를 시작 전에 문서로 남긴다.
-  진행 중엔 매몰비용이 눈을 가려 사후 판정이 불가능해진다.
-- **반사실 검사**: "X 덕분에 됐다"는 주장에 — X를 빼면 안 됐을 것인가를 명시적으로 묻는다.
+## Why it works
 
-## 적용
+Conditions for failure are easier to find than conditions for success. Success has many causes that
+overlap, so it is hard to tell what it was due to. Failure conditions can be separated and checked one
+at a time. Also, each time you remove a failure condition, the range you need to look at shrinks.
 
-- **설계**: 설계 리뷰에서 "잘 되는 시나리오" 발표 금지, "죽는 시나리오" 3개부터.
-  각 시나리오에 현재 설계의 방어가 있는지 대조한다.
-- **증거**: 논문 읽기의 첫 질문 — "이 주장이 틀렸다면 어떤 표에서 드러났어야 하나."
-  그 표가 없으면 부재 자체가 정보다 (침묵 렌즈와 합류).
-- **결정**: 선택지마다 "3년 뒤 최악이 되는 경로"를 먼저 쓴다. 최악 경로의 발생 확률과
-  복구 가능성이 비교의 실제 축이다 (에르고드와 접속).
-- **자기**: "어떻게 하면 확실히 번아웃되나" 목록을 쓰면 지금 하고 있는 항목이 보인다.
-  성공 습관의 추가보다 사망 습관의 제거가 먼저다.
+## How to use it
 
-장난감 예시: 실험 설계 전 "이 실험이 아무것도 증명 못 하게 되는 조건 3개"를 먼저 쓴다
-(베이스라인 튜닝 부족 / 측정 분산 > 효과 크기 / 교란변수 미통제). 셋 다 방어했을 때만
-실행한다. 방어하지 못하면 그 실험은 시작 전에 이미 죽어 있다.
+- **A failure report written in advance**: Before you start, assume "this work failed" and write down
+  two or three reasons. For each reason, choose one signal that can warn you in advance.
+- **The cheapest disproof**: Start with the cheapest experiment that can show your hypothesis is wrong.
+  Collecting many pieces of evidence that it is right still does not settle a hypothesis. If the
+  measurement is reliable, one piece of evidence that it is wrong is enough. But a test that will
+  obviously pass tells you nothing, even if it is cheap. Pick the cheapest test among the ones that can
+  actually fail.
+- **Elimination criteria first**: When there are many candidates, write the criteria for dropping them
+  before the criteria for choosing.
+- **Write the stopping conditions in advance**: Before you start, write down "if I see this, I stop."
+  While the work is in progress, it is hard to judge well because you do not want to waste what you
+  already put in.
+- **Think by removing**: When you hear the claim "it worked because of X," ask whether it would have
+  worked without X.
+- **Work backward from the finished state**: First write down what things look like when the work is
+  done, then work backward from there to today's task. Counting backward from the date you need also
+  tells you whether there is a reason to hurry now.
+- **Filter out fake success**: When you choose a metric, first write down cases where the metric
+  improved but things actually failed. Examples are a case where the metric rises only for one group of
+  users while another group loses, and a case that is marked as learned when nothing was learned. Do
+  not use a metric that cannot tell these cases apart.
 
-## 실패 지형
+## Where to use it
 
-- **부정 편향 고착**: 역산만 쓰면 아무것도 시작하지 못한다. 역산은 필터지 생성기가
-  아니다. 생성은 구조 대응이, 배분은 한계효용이 맡는다.
-- **상상 가능한 실패 ≠ 유의미한 실패**: 모든 실패 시나리오가 방어 가치를 갖지 않는다.
-  확률 × 피해 × 복구 불가능성으로 가중한다 (에르고드의 흡수상태 검사).
-- **사후 역산**: 이미 결정해놓고 반대편의 사망 조건만 나열하는 것 — 역산의 탈을 쓴
-  합리화다. 판별 질문: 이 역산을 결정 전에 했는가, 후에 했는가 (거울 렌즈로 감지).
+- **When you review a design**: Handle two or three ways it can fail before the ways it can work. For
+  each way, check whether the current design blocks it.
+- **When you design an experiment**: First write down "the conditions under which this experiment
+  proves nothing." Common ones are not matching the comparison targets well enough, noise in the
+  measurement that is larger than the expected effect, and not controlling other factors that affect
+  the result. Prevent noise by calculating the number of repeats or the sample size in advance.
+- **When you read a paper**: First ask "if this claim were wrong, which table should have shown it?" If
+  that table is not in the paper, that is also information.
+- **When you choose between options**: For each option, first write down "the path where things are
+  worst three years from now." Compare the options on how likely that path is and whether you can undo
+  it if you end up on it.
+- **When you prepare a meeting or a piece of writing**: Before a meeting, first write down "the ways
+  these 30 minutes fail," and turn them into a list of "things not to say." For writing, first write
+  down the worst way it could be read, and remove that wording.
+- **When you change daily habits**: If you write down "how would I surely become exhausted and
+  collapse?", you see the items you are already doing. Remove those items before you add good habits.
 
-## 간섭
+## Ways to misuse it
 
-- 재시동 시퀀스의 3단: 장부 → 극한 → **역산**.
-- **에르고드**와 직결: 역산이 찾은 사망 조건 중 흡수상태(복구 불가)는 확률 불문 우선 제거.
-- **침묵**과 상보: 역산은 내 계획의 구멍을, 침묵은 내 증거의 구멍을 찾는다.
+- **Using only this lens**: This lens is a filtering tool, so it does not create new options. If you use
+  only this lens, you cannot start anything.
+- **Trying to block every failure you can think of**: Not every failure you can imagine is worth
+  blocking. Choose by looking at how likely it is, how large the damage is, and whether it can be
+  undone, together.
+- **Blocking healthy things along with the failure**: If you block a failure path with a ban, the ban can
+  also block normal paths. Before you write a ban, count what else gets blocked with it. Also check
+  whether you can avoid the same failure by separating it out or by loosening a condition instead of
+  banning.
+- **Using it after the decision**: If you have already decided and you write down only why the other
+  side fails, it becomes rationalization. Ask yourself whether you did this review before or after you
+  decided.
+- **Only writing things down**: If you write down failure conditions but do not check for each one
+  whether it is blocked now, it is the same as not using the lens. For each condition, write what you
+  removed, what you reduced, and what alarm you added. If you left it as it is because it is already
+  blocked or because blocking it costs more, write that reason.
 
-## 적용 기록
+## With other lenses
 
-실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
+- **Ergodicity** (the lens that first asks whether there is a loss you cannot undo): Among the failure
+  conditions found by inversion, block the ones that cannot be undone first, even if they are unlikely.
+- **Silence** (the lens that looks for what is missing from the data): Inversion finds what is missing
+  from your plan. Silence finds what is missing from your evidence.
+- **Structure mapping** (the lens that looks for the same problem in another field): If you need a new
+  option, find it with the Structure mapping lens.
+- **Mirror** (the lens that compares judgments about yourself against records): Use the Mirror lens to
+  check whether an inversion was written after the decision.
 
-## 원전
+The full list of all 13 lenses is in the [README](README.md).
 
-Jacobi "man muss immer umkehren" · Munger, *Poor Charlie's Almanack* (inversion 장) ·
-Klein의 premortem · Popper 반증주의가 이 렌즈의 인식론 판본.
+## Usage records
 
+Do not write actual usage records in this engine document. The location and format of records follow
+the records section of `system/deep-pass.md`. The default location is the instance's
+`_private/deep-pass/ledger.md`. Copy `templates/deep-pass-ledger.md` to use it.
+
+## Sources
+
+Jacobi "man muss immer umkehren" · Munger, *Poor Charlie's Almanack* · Klein's premortem · Popper's
+falsificationism.

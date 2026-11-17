@@ -26,3 +26,5 @@ gate-definition-approval: decision:KIT-DR-018 files=system/review-manifest.yaml,
 gate-definition-approval: decision:KIT-DR-018 files=.github/workflows/gates.yml,system/review-manifest.yaml,tools/gate.py sha256=77e22531426f8f3f95852f7ec6194ab1265fb39425b18025c3cc5f431faaa861
 
 gate-definition-approval: decision:KIT-DR-018 files=.github/workflows/gates.yml,system/review-manifest.yaml,tools/gate.py sha256=34defdda2e09df65c0bc3cd2fcdaa4dbc4328f694b676314bd3055c3f8656df9
+
+gate-definition-approval: decision:KIT-DR-019 files=system/language-pending.txt,system/review-manifest.yaml sha256=f50422b8684302490b2010ece7f4a08ff5cff8730d740a0a32ad6d95d69d5485

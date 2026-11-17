@@ -1,75 +1,114 @@
-<!-- source: feynman.ko.md sha256:911af0f2a1f5eca0ed76be990fbe2d58cc19ad07cbc062ddebfaedd15ac85b4a source-of-truth: ko -->
+<!-- source: feynman.ko.md sha256:8cb5a5bdc09365b627f4ca3803c913ea737fed81b2a52ca02b59c005ff321b95 source-of-truth: ko -->
 Korean: `feynman.ko.md`
 
 # Feynman lens
 
-> Invocation: **Do you know the name, or do you know how it works? Have you calculated a toy case?**
+> Question: **Do you only know the name, or do you know how it works? Did you calculate a small example
+> yourself?**
+>
+> When to use: When an explanation goes on with only terms and analogies. When you are about to accept
+> someone else's conclusion as evidence. When you are about to decide based on the feeling that you
+> "understood."
+>
+> What to leave behind: A prediction written down in advance, the result of one case calculated by
+> hand, and the place where you got stuck.
 
-## Core intuition
+## Summary
 
-Knowing the name of something is not the same as knowing it. The feeling of understanding can come
-from retrieving a cached sentence, so it is unreliable. The only reliable test is rederivation: explain
-it without jargon and calculate the smallest case by hand. The point where you get stuck is exactly
-where your understanding ends.
+Knowing the name of something is different from knowing how it works. The feeling of understanding can
+appear just from recalling a sentence you memorized, so you cannot judge by that feeling alone. So you
+do it again yourself. You explain it without technical terms, and you calculate the smallest case by
+hand. If you get stuck somewhere along the way, your understanding reaches only up to that point.
 
-## How it works
+## Example
 
-Jargon is compression, but it is also concealment. One term can hide an entire area that is not
-understood. Banning the term makes concealment impossible and exposes the gap. Toy calculations work
-for the same reason: narratives are arbitrarily flexible, but arithmetic is not. If the model is wrong,
-the numbers do not agree.
+You are about to change a training setting because you believe this claim: "If you compute in several
+parts and combine them, the result is the same as one large computation." First, write down the
+prediction "the results will be exactly the same." Then use a very small example with four numbers.
+By hand, compute the value from two computations of two numbers each, combined, and the value from one
+computation of all four numbers. When you do it, you find that the value doubles if you do not divide
+by the number of parts when you combine. The prediction was wrong, and you now know the place to check
+in the code (the place where the division happens).
 
-## Variations
+There is also an example of explaining without terms. Try to explain attention without using that word,
+like this. "Each position in a sentence sends a question to every position. It takes the answers that
+come back and averages them, weighted by how similar each one is to its own question. The score for
+similarity is divided by √d (d is the dimension of the vector) and then turned into probabilities." If
+you cannot answer "why divide by √d" here, that is the place to study. (Answer: if you take the dot
+product of two vectors whose components are independent with mean 0 and variance 1, its variance is d.
+As d grows, the scores spread out widely, so the probability piles up on one entry. Then almost no
+signal is left for learning.)
 
-- **Jargon-free explanation**: Explain it to someone in an adjacent field without using any terms from
-  the field itself. If you cannot, you do not know it.
-- **Toy calculation**: Reduce it to a 2 by 2 matrix, n=3, or a single step, then run it by hand or in code.
-- **Predict, run, compare**: Register the result before calculating, run the calculation, then interrogate
-  the difference. If the difference is zero you learned nothing; if it is large your model was wrong.
-  Both outcomes are information. If you omit the registered prediction, hindsight turns it into "I knew
-  that would happen" and invalidates the entire drill.
-- **Third-question test**: "Can I answer the third question that someone seeing this for the first time
-  would ask?"
+## Why it works
 
-## Applications
+A technical term shortens a long idea, but it also hides the parts you did not understand. If you are
+not allowed to use the term, you cannot hide them, so the parts you do not know show up. A small
+calculation works for the same reason. A spoken explanation can stay plausible even when it is wrong.
+In a calculation, if your thinking is wrong, the numbers do not match.
 
-- **Design**: Before adopting a new architecture, run one core operation at toy scale. The adoption
-  evidence should be numbers produced by your own hands, not a figure in a paper.
-- **Evidence**: Rederive one central claim in a paper from the author's equations. If you cannot derive
-  it, lower the confidence grade for that claim.
-- **Decision**: Explain why a choice is good without industry jargon. If only borrowed phrases such as
-  "because the market is large" remain, the decision is not yours; it is someone else's cached conclusion.
-- **Self**: Reconstruct from a blank page, 24 hours later, something you felt you had learned. The parts
-  you cannot reconstruct mark the boundary of actual learning.
+## How to use it
 
-Toy example: explain attention without the word "attention": "Each position asks every other position a
-question, then forms a weighted average according to how closely each answer resembles its question.
-The similarity scores are divided by a temperature and converted into probabilities." If "why divide by
-the square root of d?" stops you, that is the place to study. (Answer: the variance of the dot product
-grows in proportion to d, which saturates softmax. A two-dimensional example verifies this directly.)
+- **Explain without terms**: Explain it to someone from a neighboring field without using a single word
+  from the field. If the explanation does not come, or if the listener cannot say it back in their own
+  words, you do not know it yet.
+- **Shrink it and calculate**: Reduce the problem to two or three items and one step, then run it
+  yourself by hand or in code. If the problem has no numbers, follow one case step by step from input
+  to result. A step that does not connect is a place you do not know.
+- **Write the prediction first**: Before you calculate, write down the result you expect. After the
+  calculation, compare the two. If they are the same, your thinking has been confirmed once. If they
+  differ, either your thinking or your calculation is wrong, so find which one. If you do not write the
+  prediction down, you will look at the result and feel "I knew it," and the check loses its meaning.
+- **Answer the follow-up questions**: Think of the chain of questions that someone seeing this for the
+  first time would ask, up to the third question. See whether you can answer that far.
 
-## Failure terrain
+## Where to use it
 
-- **Explanation theater**: A fluent explanation made entirely of analogies. Analogy is not evidence of
-  understanding. It must produce numbers.
-- **Toy overconfidence**: Something true in a toy case can break at scale, as in the phase transitions
-  of the limits lens. A toy case is necessary for understanding, not sufficient.
-- **Perfectionist paralysis**: There is not enough time to rederive everything. Allocate rederivation only
-  to claims that bear weight in a decision, connecting this lens to marginal utility.
+- **When you adopt a new method**: Do one core calculation yourself at a small size. Use the numbers you
+  calculated as evidence, not the figures in the paper.
+- **When you accept a claim from a paper**: Derive one core claim again from the authors' equations. If
+  the derivation does not work, trust the claim that much less.
+- **When you give reasons for a decision**: Explain "why this choice is good" without industry terms. If
+  all that is left are sentences you heard from others, such as "because the market is big," the
+  decision is someone else's conclusion that you copied.
+- **When you check what you learned**: A day later, write what you felt you learned on a blank sheet of
+  paper. Only the part you can write is what you actually learned.
+- **When you pass it on to others**: In a talk or a document, write what a thing does instead of listing
+  field names. It is enough if a first-time listener can say it back in their own words within 20
+  seconds.
 
-## Interactions
+## Ways to misuse it
 
-- **Marginal utility** determines allocation: how deep to dig.
-- Pair with **mirror**: "I understand" is self-report and receives a low grade. Promote only the result
-  of rederivation.
-- This is the verification stage of **isomorphism**: a hypothesis generated by analogy becomes knowledge
-  only after it survives rederivation.
+- **Listing only analogies**: If the talk is fluent but made entirely of analogies, it is not evidence
+  of understanding. A number has to come out, or one case followed to the end.
+- **Trusting the small example too much**: Something that was right in a small example can be wrong at a
+  larger scale. Also, numbers that match inside an example you made only mean that your thinking has no
+  contradiction. They do not mean it matches reality. Mark any step you did not measure yourself as
+  "not checked."
+- **Trying to redo everything**: There is not enough time to derive everything yourself. Choose only the
+  claims that a decision depends on.
 
-## Application records
+## With other lenses
 
-Do not write instance observations in this engine document. Follow the recording contract in `system/deep-pass.md`. The default location is `_private/deep-pass/ledger.md` in the instance; start from `templates/deep-pass-ledger.md`.
+- **Marginal value** (the lens that asks where to spend the next unit): Use the Marginal value lens to
+  decide how deep to check.
+- **Mirror** (the lens that compares judgments about yourself against records): The feeling "I
+  understood" is a report about yourself, so it is weak evidence. Use only the results of redoing it
+  yourself as evidence.
+- **Structure mapping** (the lens that looks for the same problem in another field): A hypothesis that
+  came from an analogy can be trusted only after you derive it again with this lens.
+- **Limits** (the lens that pushes a value to zero and to infinity): Use the Limits lens to see whether
+  something that was right in a small example stays right as the scale grows.
+
+The full list of all 13 lenses is in the [README](README.md).
+
+## Usage records
+
+Do not write actual usage records in this engine document. The location and format of records follow
+the records section of `system/deep-pass.md`. The default location is the instance's
+`_private/deep-pass/ledger.md`. Copy `templates/deep-pass-ledger.md` to use it.
 
 ## Sources
 
-Feynman, *Surely You're Joking* (the chapter on physics education in Brazil); "What I cannot create,
-I do not understand"; and the general tradition of learning by implementing from first principles.
+Feynman, *Surely You're Joking, Mr. Feynman!* (the chapter on physics education in Brazil) · "What I
+cannot create, I do not understand" · The tradition of learning by building things yourself from the
+ground up.

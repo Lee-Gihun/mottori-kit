@@ -1,80 +1,127 @@
-# 침묵 렌즈
+<!-- source: silence.ko.md sha256:97bbac1e8d7954f1dabc25721f67aca6cd3c0bf93230e0dd5fabd97d68fee49c source-of-truth: ko -->
+Korean: `silence.ko.md`
 
-> 호출: **이 데이터에 원리적으로 들어올 수 없는 것은?**
+# Silence lens
 
-## 핵심 직관
+> Question: **What could never have entered this data in the first place?**
+>
+> When to use: When you are about to draw a conclusion from cases, reviews, data, or search results. When
+> you are about to write "there is none." When you are guessing what people who are not present want.
+>
+> What to leave behind: One sentence on how this data was filtered before it reached you. A list of the
+> missing things your conclusion depends on. One action for each missing thing (a question to ask, a
+> decision with a condition attached until the answer comes, or a default that is less affected by what
+> is missing).
 
-모든 데이터셋은 어떤 선택 과정의 출력이다. 돌아온 폭격기의 탄흔을 보고 장갑을 덧대면 안 된다 —
-탄흔 없는 부위가 급소다.
-돌아오지 못한 비행기는 데이터에 없으니까 (Wald). 보이는 증거를 전부 맞게 읽고도 틀리는
-유일한 길이 이것이라서, 부재를 세는 렌즈가 따로 필요하다.
+## Summary
 
-## 작동 원리
+All data reaches you after something has filtered it. There is a well-known story. In World War II,
+people looked at the bullet holes on bombers that came back and planned to add armor plates at those
+spots. The statistician Wald is said to have argued the opposite. The spots without bullet holes are the
+dangerous spots. Planes hit there did not come back, so they are not in the data. This is a case where
+you can read all the evidence in front of you correctly and still be wrong. That is why there is a lens
+that counts what is absent.
 
-생존, 응답, 출판, 기록은 전부 필터다. 필터를 통과한 표본만 관측되므로 관측된 분포는
-(실제 분포) × (통과 확률)이다. 통과 확률을 모형에 넣지 않으면 추정이 체계적으로 튄다 —
-그리고 통과 확률은 데이터 안에 없어서, 데이터를 아무리 열심히 봐도 안 보인다.
-반드시 데이터 밖에서 생성 과정을 물어야 나온다.
+## Example
 
-## 변형
+In a survey of people who canceled a service, "too expensive" came first at 38%. So you are about to
+propose a price cut. Before you propose it, write one sentence on how these answers reached you. "Only
+people who came to the cancel button themselves and did not skip the survey remain." Then you can see
+the people who could not enter this data. People whose card expired so the service ended on its own.
+People who keep paying without using it. People who skipped the survey and canceled. The conclusion to
+cut prices assumes that these people also left for the same reason. So you attach a condition to the
+conclusion. First check the share of people who answered the survey, and compare the usage records of
+people who left without answering.
 
-- **선택 과정 명명**: 모든 표본 앞에서 "무엇이 이것을 내 앞에 도착시켰나"를 한 문장으로.
-- **묘지 탐색**: 성공담을 듣기 전에 부검 표본부터 — 같은 것을 했는데 죽은 사례.
-- **구멍 명세서**: 수집물마다 "못 본 것의 목록"을 산출물에 포함시킨다. 구멍을 밝히지
-  못하는 수집은 커버리지를 주장할 자격이 없다.
-- **침묵의 정보화**: 무응답, 무언급, 무데이터를 결측이 아니라 신호로 읽는다.
-  응답하지 않는 문, 논문에 없는 표, 발표에서 건너뛴 분기 — "있어야 하는데 없는 것"의
-  목록을 작성한다.
-- **부재 단언의 경계**: "없다"고 쓰지 말고 **`코퍼스 C · 질의 Q · 기간 T에서 찾지 못했다`**고
-  쓴다. 결론이 그 부재에 의존하면, 그 사실이 존재할 수 있는 **인접 source family 하나**를
-  허용 범위 안에서 재조회한다. 조회할 수 없으면 완전성 주장을 낮춘다.
-  이 한 줄이 조직 경계뿐 아니라 파일 namespace·채널·시간 cutoff를 함께 덮는다.
-  **주의:** 경계 밖 조회가 외부 도구 호출을 뜻할 때 **질의 자체가 반출된다.** 허용된 공개
-  어휘로 비식별화할 수 없으면 조회하지 말고 구멍으로 남긴다.
-  *(Why: 관측 — 좁은 코퍼스에서 못 본 것을 전체에 없다고 승격한 사례가 한 세션에 여러 건.
-  메커니즘 — 수집 설계가 특정 채널의 커버리지를 보장하지 않는다. 차단 지점 — "없다"라고 쓰는 순간.)*
-- **생존 연한 보정**: 오래된 것들이 좋아 보이는 이유의 절반은 나쁜 것들이 소멸해서다
-  (음악·건축·고전). 과거 예찬 앞에서 자동 발동.
+There is also a more common example. The statement "successful founders all dropped out of college"
+reached you through this process. They succeeded, so articles were written, and you saw those articles.
+People who dropped out and failed cannot enter this process.
 
-## 적용
+## Why it works
 
-- **증거**: "X 했더니 Y 됐다" → 즉시: X 하고 Y 안 된 사람의 수는? 그들이 이 데이터에
-  들어올 경로가 있었나? 없으면 증거등급을 강등한다.
-- **채용·평가**: 합격자 특성 분석은 지원자 풀의 선택 과정을 모르면 무의미하다.
-  "누가 아예 지원하지 않았나"가 더 큰 정보일 수 있다.
-- **연구**: 벤치마크 점수 분포는 "보고된" 분포다. 안 되는 실험은 논문이 되지 않으므로,
-  출판 필터의 통과 확률을 곱해서 읽는다.
-- **자기**: 회고의 표본도 선택된다 — 기억에 남은 사건은 감정 필터의 통과분이다.
-  트레이스 로그(거울 렌즈)가 그 필터의 우회로다.
+Surviving, answering, being published, and being recorded are all filtering processes. If one kind of
+case has a low chance of staying in the data, that kind looks rarer than it really is. If you ignore
+that chance, your estimate leans to one side. The problem is that this chance is not in the data. You
+cannot find it however carefully you look at the data. You can learn it only by asking, from outside the
+data, how the data was made.
 
-장난감 예시: "성공한 창업자들은 다 중퇴했다" → 선택 과정: 성공 → 보도 → 내 표본 도착.
-중퇴 후 실패한 사람은 이 파이프라인에 진입할 수 없다. 표본이 말해주는 것은 중퇴의
-효과가 아니라 보도의 문법이다. 판정에는 중퇴자 전체 코호트가 필요하고, 그것은 기사에
-원리적으로 없다.
+## How to use it
 
-## 실패 지형
+- **Write down the filtering process**: When you look at data, write in one sentence "What brought this
+  to me?"
+- **Look for failures first**: Before you listen to a success story, first look for cases where people did
+  the same thing and failed.
+- **Make a list of what you did not see**: Each time you collect data, put a list of "what I did not see"
+  in the result. Then decide one action for each missing thing. Write one question to ask someone, or
+  attach a condition to the decision until the answer comes, or choose a default that changes little
+  whatever the missing thing turns out to be.
+- **Read absence as a signal**: Do not leave a missing answer, a missing mention, or missing data as a
+  plain blank. Write down what "should be there but is not," such as a party that does not answer, a
+  table left out of a report, or a period skipped in a presentation.
+- **How to write "there is none"**: Instead of writing "there is none," write "I searched this range,
+  where, with what, and up to when, and did not find it." The short form is
+  `Not found in corpus C · query Q · period T`. If a conclusion depends on the fact that something is absent, search one more
+  source of a different kind where that thing could appear. If you cannot search more, weaken the claim
+  that you "looked at everything." (This item came from real mistakes. In one task, failing to find
+  something in a narrow range was written as "absent everywhere" several times.)
+- **Be careful when you search outside**: If the tool you use to search more is an external service, the
+  content of your search terms leaves your machine. If you cannot rewrite it in words that are safe to
+  make public, do not search, and leave it as a missing item.
+- **When old things look good**: One big reason old things look good is that the bad ones have
+  disappeared. Remember this when you hear praise for old things.
 
-- **반증불가 회의주의**: 불리한 증거만 "선택편향"으로 기각하는 것. 판별 기준은
-  "그 선택 과정을 구체적으로 명명하고 통과 확률의 방향을 예측했는가"다.
-  명명 없는 기각은 회의주의가 아니라 회피다.
-- **유령 사냥**: 모든 데이터에 거대한 숨은 필터를 상정하면 아무 추론도 못 한다.
-  필터의 존재가 아니라 크기가 문제고, 크기 추정까지 가야 렌즈가 완성된다.
-- **자기 면제**: 내가 수집한 데이터의 구멍만 관대하게 보는 것 (거울과 접속).
+## Where to use it
 
-## 간섭
+- **When you hear "I did X and Y happened"**: Ask how many people did X and did not get Y, and whether
+  those people had any way to enter this data. If they did not, trust the statement less.
+- **When you analyze accepted applicants or success cases**: The analysis means nothing if you do not
+  know how the applicants were filtered and gathered. "Who did not apply at all" can be more important
+  information.
+- **When you read research results**: Reported scores are the scores of experiments that went well.
+  Read them with the fact in mind that experiments that went badly do not become papers.
+- **When you look back on past events**: What comes to mind is also filtered. Events with strong
+  emotions stay in memory. Looking at a record that lists only dates and events reduces this bias.
+- **When you design or plan**: Find who, among the people who will use the result, has no voice in the
+  data you have. Do not fill in what that person wants by guessing. Turn it into a question to ask. As a
+  design becomes more detailed, you get the feeling that "everything has been considered," and it becomes
+  easy to forget what you never asked in the first place.
 
-- **울타리**와 한 쌍: 같은 선택 과정을 반대편에서 본다. 순서는 침묵(표본 확인) 먼저,
-  울타리(해석) 나중.
-- **인센티브**와 직렬: 누가 어떤 데이터를 생산·은폐할 인센티브가 있는지가 침묵의 지도를
-  그려준다.
-- **역산**과 상보: 역산은 내 계획의 구멍, 침묵은 내 증거의 구멍.
+## Ways to misuse it
 
-## 적용 기록
+- **Calling only unfavorable evidence a "biased sample"**: This is picking only the evidence against you
+  and throwing it out as a biased sample. It is justified only when you state the filtering process
+  concretely and predict which way it pushed the result. Throwing evidence out without doing this is
+  avoidance.
+- **Seeing hidden things everywhere**: If you assume every dataset is missing something large, you can
+  infer nothing. What matters is how much the missing thing shakes the conclusion, more than the fact
+  that something is missing. If the conclusion does not depend on it, write one line and move on.
+- **Being lenient with your own data**: You are lenient only about what is missing from data you
+  collected yourself.
+- **Making the list and stopping there**: This is writing down the missing things and doing nothing. If
+  the same item appears on the list a second time, the problem is not too little looking. You have not
+  decided what to do about it. If the same list is attached every time, that list has already become a
+  formality.
 
-실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
+## With other lenses
 
-## 원전
+- **Fence** (the lens that asks what an old practice protects): Fence holds that "what remains may have
+  a reason." This lens suspects that "you are looking only at what remains." When you use them together,
+  first use this lens to see what is missing, then use Fence to find the reason for what remains.
+- **Incentive** (the lens that looks at the speaker's interest): If you know who has a reason to produce
+  which data and hide which data, you can guess what is missing.
+- **Inversion** (the lens that starts by writing down the conditions for failure): Inversion finds the
+  gaps in my plan. This lens finds the gaps in my evidence.
+- **Mirror** (the lens that compares judgments about yourself with records): The "record that lists only
+  dates and events," used when looking back on past events, is described in detail in the Mirror lens.
 
-Wald의 폭격기 메모 (SRG, 1943) · Taleb, *The Black Swan* (silent evidence 장) ·
-Berkson's paradox · 출판 편향 문헌 (funnel plot).
+The full list of all 13 lenses is in the [README](README.md).
 
+## Usage records
+
+Do not write actual usage records in this engine document. Follow the recording section of
+`system/deep-pass.md` for the location and format of records. The default location is the instance's
+`_private/deep-pass/ledger.md`. Copy `templates/deep-pass-ledger.md` to use it.
+
+## Sources
+
+Wald, bomber analysis (SRG, 1943) · Taleb, *The Black Swan* (silent evidence) · Literature on publication bias (funnel plot).

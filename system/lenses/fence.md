@@ -1,69 +1,120 @@
-# 울타리 렌즈 (체스터턴)
+<!-- source: fence.ko.md sha256:095998056ee8a8a5c15bc155ff5d5d647b91aa2c96aa7a049ae9afa0b42b07be source-of-truth: ko -->
+Korean: `fence.ko.md`
 
-> 호출: **이 관행은 어떤 지대를 냈나? 그 조건이 아직 사나?**
+# Fence lens
 
-## 핵심 직관
+> Question: **What was this practice protecting against? Does that condition still exist?**
+>
+> When to use: When you want to remove or skip a practice, piece of code, or rule whose reason you do
+> not know. In the other direction, when "we have always done it this way" is the only reason given.
+> When you are about to build a new structure.
+>
+> What to leave behind: The failure this practice was preventing, whether that condition still exists,
+> and a verdict (keep, keep only part, remove). If you removed it, the condition for bringing it back.
 
-들판 한가운데 이유를 알 수 없는 울타리가 있다. 개혁가는 "쓸모없으니 치우자" 하고,
-체스터턴은 답한다: 쓸모를 모르겠다면 절대 치우지 마라. 가서 쓸모를 알아낸 다음에,
-치우고 싶으면 치워라. 존속한 구조는 어떤 대가를 치르고 살아남은 것이다.
-이유가 안 보이는 것은 대개 이유가 없어서가 아니라 문서화되지 않아서다.
+## Summary
 
-## 작동 원리
+There is a fence in the middle of a field, and nobody knows why it is there. One person says, "It is
+useless, so let us take it down." The writer Chesterton answers like this. If you do not know what it
+is for, do not take it down. Go and find out why it was built. After that, if you still want to take
+it down, take it down. A practice that has lasted a long time has lasted while someone paid the cost of
+keeping it. Do not conclude that there is no reason just because you cannot see one. The reason may
+simply never have been written down.
 
-지속된 관행은 선택 과정을 통과한 생존자다. 유지 비용을 내면서도 살아남았다면 어딘가에서
-지대(rent)를 내고 있었다는 뜻이다. 이것은 보수주의가 아니라 정보 회수다: 울타리에는
-문서화되지 않은 실패 이력이 압축되어 있고, 철거 전에 그 압축을 풀지 않으면 같은 실패를
-비싸게 재구매한다.
+## Example
 
-## 변형
+There is a one-hour metrics review meeting every Monday. Since a dashboard appeared where anyone can see
+the metrics at any time, the meeting looks useless, and you want to cancel it. Before cancelling it,
+find the person who decides to keep this meeting even though it costs ten people an hour each. It was
+the head of the business unit. What he got from the meeting was not the numbers. It was this: when a
+strange number appeared, several teams looked at it together on the same day and decided who would own
+it. The dashboard shows the numbers but does not assign owners, so that condition still exists. So you
+cut the meeting to 15 minutes and keep only "numbers that changed a lot from last week, and assigning an
+owner." You also write down a condition: "If two teams investigate the same problem separately more
+than twice a month, go back to the one-hour meeting."
 
-- **철거 전 재현**: "왜 만들었나"를 알아낸 다음, "어떤 조건이면 부활하나"까지 명시하고
-  철거한다. 부활 조건이 철거의 안전망이다.
-- **코드베이스 고고학**: 이상해 보이는 코드 앞에서 — 이력 추적이 먼저, 리팩토링은 나중.
-  이상함은 대부분 만난 적 없는 엣지케이스의 화석이다.
-- **지대 추적**: 이 관행의 유지 비용을 누가 대납할 만큼 이득을 보는가. 대납자를 찾으면
-  울타리의 진짜 기능이 보인다.
-- **소멸 조건 검사** (공격 모드): 울타리가 정당했던 조건이 아직 사는가. 조건이 죽었으면
-  철거가 정당하다. 예: 초록으로 거르고 읽는 관행은 "읽기가 비싸다"는 조건의 울타리였다.
-  읽기 비용이 무너진 환경에서는 그 울타리의 지대가 소멸했으므로 철거 대상이 된다.
+The same holds for code. A configuration file has a timeout of 30 seconds, and nobody knows why. Before
+deleting it, you search the change history and find an outage record from three years ago. The value
+was added because an external API sometimes responded slowly. If you still use that API, leave the value
+as it is. If only some calls use it, keep the value only for those calls. If you no longer use it,
+delete the value with a comment that says "restore this if we start using it again."
 
-## 적용
+## Why it works
 
-- **설계**: 레거시 시스템의 "불필요해 보이는" 단계를 제거하기 전, 그 단계가 잡고 있던
-  장애 시나리오를 재현해본다. 재현 실패 = 아직 이해하지 못한 것.
-- **증거**: 정설을 뒤집는 논문 → 정설이 지대를 내던 데이터를 먼저 복원하고, 신설이
-  그 데이터까지 설명하는지 검사한다. 설명하지 못하면 뒤집기가 아니라 회피다.
-- **결정**: 업계 관행("계약은 서면으로")을 생략하고 싶을 때, 그 관행이 방어하는 사고를
-  확인한 뒤에 생략한다.
-- **자기**: 오래된 습관을 버리기 전, 그 습관이 지켜주던 것의 목록을 먼저 쓴다.
-  "X가 다시 생기면 복원한다"는 조건과 함께 버린다.
+A practice that has lasted a long time has survived many chances to disappear. If it survived while
+someone paid to keep it, it may have been preventing something or earning something to that degree.
+Practices often hold past failures that nobody recorded. If you remove a practice without finding them
+out, you go through the same failure again. This is not a lens for protecting old things. It says:
+decide after you know what the practice was protecting.
 
-장난감 예시: 설정 파일의 의미 불명 타임아웃 30초. 치우기 전에 이력을 추적한다 →
-3년 전 장애 기록 발견 → 외부 API의 간헐 지연 대응이었음 → 그 API를 아직 쓰는가?
-쓰면 유지, 안 쓰면 "재도입 시 복원" 주석과 함께 제거. 이것이 풀 사이클이다.
+## How to use it
 
-## 실패 지형
+- **Find the reason before removing it**: First find out why it was made. If you decide to remove it,
+  also write down the condition "if this happens, bring it back." Then you can reverse the removal if
+  it was a mistake.
+- **Look at the code history**: When you meet code that looks strange, search its change history before
+  you change it. It may exist because of an exceptional case that you have not run into yet.
+- **See who pays the cost**: Write down separately the person who actually spends the time and money,
+  the person who decides to keep the practice, and the person who benefits. These are often not the
+  same person. The real function of a practice is easiest to find in what the person who decides to
+  keep it gets out of it. But the fact that it benefits one person does not by itself reveal the
+  function of the whole practice.
+- **See whether the condition is gone**: Check whether the condition that made the practice necessary
+  still exists. If the condition is gone, you can remove the practice. The practice of filtering papers
+  by reading only the abstract started when reading one paper took a lot of time. If a language model
+  can now read the full text for you and that cost has dropped a lot, the reason to keep the practice
+  has also shrunk.
+- **Keep only part**: Besides keep and remove, there is a third verdict. Keep only the part that still
+  protects against something and remove the rest. Or leave the practice as it is and open one way
+  around it for the cases that need it. In practice, this verdict comes up most often.
+- **Look before building something new**: When you are about to build a new structure, first look for
+  a practice that already does that job.
 
-- **울타리 숭배**: 모든 관행을 보존하면 렌즈가 아니라 관성이다. 판별 질문은 항상
-  "지대를 **아직** 내는가"다. 과거에 냈다는 것은 보존 사유가 아니다.
-- **비대칭 적용**: 남의 울타리에는 엄격하고 내 울타리에는 관대해지는 것 (거울로 감시).
-- **존속 = 정당화 착각**: 살아남은 이유가 기능이 아니라 권력이나 우연일 수 있다.
-  어떤 선택 과정이 이 관행을 살렸는지까지 물어야 완결된다 (침묵과 접속).
+## Where to use it
 
-## 간섭
+- **When you clean up an old system**: Before removing a step that looks unnecessary, remove it in a
+  test environment and see whether the outage it was preventing happens again. If it does not, work out
+  whether the condition is gone or whether you identified the wrong outage.
+- **When you read a claim that overturns the accepted view**: First find the data that the accepted view
+  explained, and see whether the new claim also explains that data. If it does not, it is hard to say
+  that the accepted view has been overturned.
+- **When you propose changing a rule or metric in an organization**: First find out what it was
+  protecting. Then bring it up as the question "What did this protect?" instead of the proposal "Let us
+  remove it."
+- **When you drop an old habit**: Write down what the habit was protecting. Drop it together with the
+  condition "if this happens again, bring it back."
 
-- **침묵**과 한 쌍: 같은 선택 과정을 반대편에서 본다. 울타리는 "생존자를 존중하라",
-  침묵은 "생존자만 보고 있음을 의심하라". 순서는 침묵(표본 확인) 먼저, 울타리(해석) 나중.
-- **되먹임**과 접속: 울타리가 균형 루프의 부품일 때 철거하면 계가 발진한다.
-- **역산**과 순서: 철거 결정은 역산(뭐가 망하나)을 통과한 뒤에만.
+## Ways to misuse it
 
-## 적용 기록
+- **Keeping everything**: Keeping every practice is not using this lens. The question to ask is "does
+  it still protect against something now?" The fact that it used to is not a reason to keep it. In the
+  other direction, confirming that a practice protects something does not make it untouchable. What you
+  confirmed becomes a condition that the new design must meet.
+- **Being strict only with other people's practices**: You examine practices that others made strictly
+  and look at practices you made loosely.
+- **Treating survival as proof that it is right**: A practice may have survived for reasons other than
+  its function. It may be the wish of a powerful person, or chance. So also ask what made this practice
+  survive. In the other direction, the diagnosis "it is just politics" is also not a reason to remove a
+  practice until you confirm that it protects nothing.
 
-실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
+## With other lenses
 
-## 원전
+- **Silence** (the lens that looks for what is missing from the data): Fence assumes "what survived may
+  have a reason." Silence suspects "you are looking only at what survived." When you use them together,
+  first use Silence to see what is missing, then use Fence to find the reason for what remains.
+- **Feedback loop** (the lens that looks at how others react to your action): A practice can be part of
+  a mechanism that keeps a system stable. If you remove such a practice, the system becomes unstable.
+- **Inversion** (the lens that starts by writing down the conditions for failure): Before you decide to
+  remove something, ask "what fails if we remove it?"
 
-Chesterton, *The Thing* (1929) "The Drift from Domesticity" · 시스템 운영의 Chesterton's
-fence 전통 · Taleb의 Lindy 효과가 사촌 개념.
+The full list of all 13 lenses is in [README](README.md).
 
+## Usage records
+
+Do not write actual usage records in this engine document. The location and format of records follow
+the records section of `system/deep-pass.md`. The default location is the instance's
+`_private/deep-pass/ledger.md`. Copy `templates/deep-pass-ledger.md` to use it.
+
+## Sources
+
+Chesterton, *The Thing* (1929) "The Drift from Domesticity" · Chesterton's fence as used in systems operations · Taleb's Lindy effect.
