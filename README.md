@@ -55,7 +55,7 @@ Requirements: Python 3.8 or later, git 2.5 or later, Bash 3.2 or later, macOS or
 `node` are optional.
 
 ```bash
-git clone https://github.com/Lee-Gihun/mottori-kit ~/work
+git clone <this-repository> ~/work
 cd ~/work
 bash setup.sh --name work --context personal   # use --context work on a company machine
 bash tools/install_hooks.sh --repair            # pre-commit backstop (.git/hooks is not cloned)

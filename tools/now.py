@@ -1201,10 +1201,9 @@ def check(memory_dir=None, root=None, issues=False, portable=False):
                      journal_date=jdate))
 
     # Detect volatile state claims in the memory index, not provenance dates.
-    # The vocabulary comes from one Korean instance's job search ("waiting", "waiting for a call",
-    # "onsite", "deal phase", an interview round on a weekday, "scheduled"), so a match is advisory:
-    # ordinary words must not block the turn-end gate in another instance. It is that instance's
-    # data, kept in Korean only and escaped because engine source is English.
+    # The vocabulary is Korean wording for a status that goes stale (a wait, a scheduled item), so
+    # a match is advisory: ordinary words must not block the turn-end gate. The words are data,
+    # kept in Korean only and escaped because engine source is English.
     idx = os.path.join(memory_dir, "MEMORY.md")
 
     vol = _re.compile("\ub300\uae30\\b|\ucf5c \ub300\uae30|\uc628\uc0ac\uc774\ud2b8|\ub51c \uad6d\uba74|\u2192 \ub51c"
