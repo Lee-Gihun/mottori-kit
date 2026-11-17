@@ -1,5 +1,5 @@
-<!-- source: inversion.ko.md sha256:319b8ca843c15a42393f95a1b76a69a120eaee008e1fd3e1e374ae44f22f62a1 source-of-truth: ko -->
-Korean: `inversion.ko.md`
+<!-- source: ko/system/lenses/inversion.md sha256:319b8ca843c15a42393f95a1b76a69a120eaee008e1fd3e1e374ae44f22f62a1 source-of-truth: ko -->
+Korean: `ko/system/lenses/inversion.md`
 
 # Inversion lens
 

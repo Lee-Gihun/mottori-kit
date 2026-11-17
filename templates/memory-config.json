@@ -88,6 +88,10 @@
     "journal_stale_days": 2,
     "memory_rot_days": 14,
     "now_max_bytes": 6000,
-    "now_hook_max_bytes": 6000
+    "now_hook_max_bytes": 6000,
+    "context_instructions_max_bytes": 8192,
+    "context_state_max_bytes": 5400,
+    "context_memory_index_max_bytes": 12288,
+    "context_fixed_max_bytes": 24576
   }
 }

@@ -1,4 +1,4 @@
-Korean: `CHECKLIST.ko.md`
+Korean: `ko/CHECKLIST.md`
 
 # CHECKLIST: Checks after installation
 

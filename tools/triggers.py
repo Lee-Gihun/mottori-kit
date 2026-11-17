@@ -3,22 +3,27 @@
 
 Records live in the instance's _private/triggers/triggers.jsonl:
   id, when, what, tier, source, privacy, destination, tz, state, created, fired,
-  outcome, shown, slept_until, leased_until, leased_by, history
+  outcome, shown, last_shown, slept_until, leased_until, leased_by, history, sticky
 
 Defaults are privacy=private and destination=local; no tier implies outward delivery.
 Mutations take an exclusive lock and atomically replace the store. list and due are
-read-only unless due --mark is used; hook marks the items shown. claim creates a UTC
-lease naming its holder. fire requires that holder's active lease and rejects repeats.
+read-only unless due --mark is used; hook marks the items shown, at most once per
+calendar day per trigger. claim creates a UTC lease naming its holder. fire requires that
+holder's active lease and rejects repeats.
 
-when accepts date:YYYY-MM-DD, file_change:<path>, state:<predicate>, or event:<name>.
-Only date triggers are evaluated here; other kinds are stored for explicit dispatch.
+add accepts only date:YYYY-MM-DD. The kinds file_change:, state:, and event: are reserved:
+nothing evaluates them yet, so add refuses them instead of storing a trigger that never fires.
+
+A sticky trigger (add --sticky) is one the owner must see: it never falls asleep on its own after
+being shown without a fire, and the hook lists sticky triggers before the others. Only fire or an
+explicit sleep removes it from the list. add --sticky on an existing trigger makes it sticky.
 
 T0: notify. T1: prepare reversible private drafts. T2: outward actions require human
 execution and are surfaced as a draft plus a question, never executed unattended.
 Sources include experiment due dates, decision re-review dates, and explicit add calls.
 
 Usage:
-  triggers.py add --when date:YYYY-MM-DD --what "..." [--tier T1] [--source file:line] [--id ID]
+  triggers.py add --when date:YYYY-MM-DD --what "..." [--tier T1] [--source file:line] [--id ID] [--sticky]
   triggers.py due [--date YYYY-MM-DD] [--limit 5] [--mark]
   triggers.py hook [--date YYYY-MM-DD] [--format claude|text]
   triggers.py claim ID [--minutes 30] [--holder NAME]
@@ -57,6 +62,8 @@ DESTINATIONS = ("local", "owner")   # "owner" = the owner's own channel; never a
 STATES = ("open", "leased", "fired", "asleep")
 TIER_LABEL = {"T0": "say", "T1": "prepare", "T2": "ask (outward action, never unattended)"}
 WHEN_KINDS = ("date", "file_change", "state", "event")
+# Kinds add accepts. The others parse so older stored rows still load, but only dates are evaluated.
+SUPPORTED_WHEN_KINDS = ("date",)
 HOOK_LIMIT = 5            # most triggers surfaced per session start
 IGNORE_LIMIT = 3          # shown this many times without fire -> auto sleep
 AUTO_SLEEP_DAYS = 7
@@ -154,8 +161,14 @@ def _event(row, kind, today, note=None):
 
 
 def add(rows, when, what, tier="T1", source=None, trigger_id=None, today=None,
-        privacy="private", destination="local", tz="local"):
-    parse_when(when)
+        privacy="private", destination="local", tz="local", sticky=False):
+    """Append a trigger, or return the existing one with the same id. Returns (row, created).
+
+    sticky marks an existing row too, so an item already in the store can be pinned.
+    """
+    kind, _rest = parse_when(when)
+    if kind not in SUPPORTED_WHEN_KINDS:
+        raise TriggerError(f"when kind {kind!r} is not supported yet; use date:YYYY-MM-DD")
     if tier not in TIERS:
         raise TriggerError(f"tier must be one of {', '.join(TIERS)}")
     if privacy not in PRIVACY:
@@ -167,11 +180,16 @@ def add(rows, when, what, tier="T1", source=None, trigger_id=None, today=None,
     trigger_id = trigger_id or make_id(when, what, source)
     for row in rows:
         if row["id"] == trigger_id:
+            if sticky and not row.get("sticky"):
+                row["sticky"] = True
+                _event(row, "sticky", today)
             return row, False
     row = {"id": trigger_id, "when": when, "what": what.strip(), "tier": tier, "source": source,
            "privacy": privacy, "destination": destination, "tz": tz, "state": "open",
            "created": (today or dt.date.today()).isoformat(), "fired": None, "outcome": None,
            "shown": 0, "slept_until": None, "leased_until": None, "history": []}
+    if sticky:
+        row["sticky"] = True
     _event(row, "added", today)
     rows.append(row)
     return row, True
@@ -190,18 +208,24 @@ def _is_due(row, today):
 
 
 def due(rows, today, limit=HOOK_LIMIT, mark=True):
-    """Return due date triggers, least shown first (carry-over), then oldest.
+    """Return due date triggers: sticky first, then least shown (carry-over), then oldest.
 
     With ``mark`` a returned row counts as shown, and a row already shown IGNORE_LIMIT times without
     being fired is put to sleep for AUTO_SLEEP_DAYS (its ``ignored`` counter grows). Without ``mark``
     nothing is written: such rows are only left out of the listing. Returns (rows, changed).
+
+    A row counts as shown at most once per calendar day. The SessionStart hook also runs on resume,
+    /clear, and compaction, so counting every run would put a trigger to sleep within one working
+    day although the owner has seen it only once. A sticky row is counted but never put to sleep.
     """
     hits = [r for r in rows if _is_due(r, today)]
     # carry-over: least shown first, so a cap never starves the items behind it
-    hits.sort(key=lambda r: (r.get("shown", 0), r["when"], r["created"], r["what"], r["id"]))
+    hits.sort(key=lambda r: (not r.get("sticky"), r.get("shown", 0), r["when"], r["created"],
+                             r["what"], r["id"]))
     out, changed = [], False
     for row in hits:
-        if row.get("shown", 0) >= IGNORE_LIMIT:
+        if (row.get("shown", 0) >= IGNORE_LIMIT and row.get("last_shown") != today.isoformat()
+                and not row.get("sticky")):
             if mark:
                 row["slept_until"] = (today + dt.timedelta(days=AUTO_SLEEP_DAYS)).isoformat()
                 row["ignored"] = row.get("ignored", 0) + 1
@@ -214,18 +238,22 @@ def due(rows, today, limit=HOOK_LIMIT, mark=True):
     out = out[:limit]
     if mark:
         for row in out:
+            if row.get("last_shown") == today.isoformat():
+                continue
             row["shown"] = row.get("shown", 0) + 1
+            row["last_shown"] = today.isoformat()
             if row.get("state") == "asleep":
                 row["state"] = "open"
-        changed = changed or bool(out)
+            changed = True
     return out, changed
 
 
 def format_line(row):
     tier = row["tier"]
     head = f"- [{tier} {TIER_LABEL[tier]}] {row['what']}"
-    tail = f" ({row['when']}; source {row['source']}; id {row['id']})" if row.get("source") \
-        else f" ({row['when']}; id {row['id']})"
+    sticky = "; sticky" if row.get("sticky") else ""
+    tail = f" ({row['when']}; source {row['source']}; id {row['id']}{sticky})" if row.get("source") \
+        else f" ({row['when']}; id {row['id']}{sticky})"
     if tier == "T2":
         head += " -> draft only; the owner performs the outward action"
     return head + tail
@@ -443,6 +471,8 @@ def main(argv=None):
     p.add_argument("--privacy", default="private", choices=PRIVACY)
     p.add_argument("--destination", default="local", choices=DESTINATIONS)
     p.add_argument("--date")
+    p.add_argument("--sticky", action="store_true",
+                   help="never auto-sleep; listed before other triggers")
     p = sub.add_parser("due"); p.add_argument("--date"); p.add_argument("--limit", type=int, default=HOOK_LIMIT)
     p.add_argument("--mark", action="store_true", help="count the listed triggers as shown")
     p = sub.add_parser("hook"); p.add_argument("--date"); p.add_argument("--format", default="claude",
@@ -473,7 +503,7 @@ def main(argv=None):
             rows = _load()
             if a.cmd == "add":
                 row, new = add(rows, a.when, a.what, a.tier, a.source, a.id, _today(a.date),
-                               privacy=a.privacy, destination=a.destination)
+                               privacy=a.privacy, destination=a.destination, sticky=a.sticky)
                 _save(rows)
                 print(f"{'added' if new else 'exists'} {row['id']}")
             elif a.cmd == "due":
@@ -489,7 +519,9 @@ def main(argv=None):
                     _save(rows)
                 if hits:
                     body = "[triggers due today]\n" + "\n".join(format_line(r) for r in hits) + \
-                           "\nfire: python3 tools/triggers.py fire <id> --outcome '...' · sleep: ... sleep <id>\n"
+                           ("\nfire: python3 tools/triggers.py claim <id> && "
+                            "python3 tools/triggers.py fire <id> --outcome '...' · "
+                            "sleep: python3 tools/triggers.py sleep <id>\n")
                     if a.format == "text":
                         print(body)
                     else:

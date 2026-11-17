@@ -1,5 +1,5 @@
-<!-- source: feynman.ko.md sha256:8cb5a5bdc09365b627f4ca3803c913ea737fed81b2a52ca02b59c005ff321b95 source-of-truth: ko -->
-Korean: `feynman.ko.md`
+<!-- source: ko/system/lenses/feynman.md sha256:8cb5a5bdc09365b627f4ca3803c913ea737fed81b2a52ca02b59c005ff321b95 source-of-truth: ko -->
+Korean: `ko/system/lenses/feynman.md`
 
 # Feynman lens
 

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 526" width="1280" height="526" role="img" aria-labelledby="t d">
+<title id="t">One thread, many workers</title>
+<desc id="d">Wide work runs in fresh workers. Only a small receipt comes back into the thread you talk to; everything else stays on disk.</desc>
+<rect x="32" y="36" width="1216" height="56" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="56" y="72" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="600">your thread</text>
+<text x="1224" y="71" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="end">stays small: only receipts come back</text>
+<rect x="32" y="270" width="384" height="92" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="52" y="308" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="600">fresh worker</text>
+<text x="52" y="340" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">reads 40 files</text>
+<line x1="52" y1="94" x2="52" y2="260.8" stroke="#9198a1" stroke-width="1.5"/>
+<path d="M52 268L47.5 259L56.5 259Z" fill="#9198a1"/>
+<text x="62" y="122" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">brief</text>
+<line x1="241.2" y1="268" x2="241.2" y2="101.2" stroke="#e3a04f" stroke-width="1.5"/>
+<path d="M241.2 94L245.7 103L236.7 103Z" fill="#e3a04f"/>
+<rect x="78.5" y="136" width="325.5" height="106" rx="6" fill="#2a1f10" stroke="#e3a04f" stroke-width="1.5"/>
+<text x="88.5" y="170" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f">verdict: PASS</text>
+<text x="88.5" y="198" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f">unknowns: 0</text>
+<text x="88.5" y="226" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f">full: receipts.py show</text>
+<rect x="448" y="270" width="384" height="92" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="468" y="308" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="600">fresh worker</text>
+<text x="468" y="340" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">searches the web</text>
+<line x1="468" y1="94" x2="468" y2="260.8" stroke="#9198a1" stroke-width="1.5"/>
+<path d="M468 268L463.5 259L472.5 259Z" fill="#9198a1"/>
+<line x1="657.2" y1="268" x2="657.2" y2="101.2" stroke="#e3a04f" stroke-width="1.5"/>
+<path d="M657.2 94L661.7 103L652.7 103Z" fill="#e3a04f"/>
+<rect x="494.5" y="136" width="325.5" height="106" rx="6" fill="#2a1f10" stroke="#e3a04f" stroke-width="1.5"/>
+<text x="504.5" y="170" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f">verdict: FAIL</text>
+<text x="504.5" y="198" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f">unknowns: 1</text>
+<text x="504.5" y="226" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f">full: receipts.py show</text>
+<rect x="864" y="270" width="384" height="92" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="884" y="308" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="600">fresh worker</text>
+<text x="884" y="340" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">runs the test suite</text>
+<line x1="884" y1="94" x2="884" y2="260.8" stroke="#9198a1" stroke-width="1.5"/>
+<path d="M884 268L879.5 259L888.5 259Z" fill="#9198a1"/>
+<line x1="1073.2" y1="268" x2="1073.2" y2="101.2" stroke="#e3a04f" stroke-width="1.5"/>
+<path d="M1073.2 94L1077.7 103L1068.7 103Z" fill="#e3a04f"/>
+<rect x="910.5" y="136" width="325.5" height="106" rx="6" fill="#2a1f10" stroke="#e3a04f" stroke-width="1.5"/>
+<text x="920.5" y="170" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f">verdict: INCONCLUSIVE</text>
+<text x="920.5" y="198" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f">unknowns: 2</text>
+<text x="920.5" y="226" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f">full: receipts.py show</text>
+<rect x="32" y="454" width="1216" height="60" rx="10" fill="#2a1f10" stroke="#e3a04f" stroke-width="1.5"/>
+<rect x="130.7" y="466" width="186.7" height="36" rx="6" fill="#0d1117"/>
+<text x="224" y="491" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f" text-anchor="middle">full results</text>
+<rect x="553.6" y="466" width="172.8" height="36" rx="6" fill="#0d1117"/>
+<text x="640" y="491" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f" text-anchor="middle">run records</text>
+<rect x="997.4" y="466" width="117.2" height="36" rx="6" fill="#0d1117"/>
+<text x="1056" y="491" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f" text-anchor="middle">patches</text>
+<line x1="224" y1="364" x2="224" y2="445.8" stroke="#e3a04f" stroke-width="1.5"/>
+<path d="M224 453L219.5 444L228.5 444Z" fill="#e3a04f"/>
+<text x="236" y="415" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">everything else stays on disk</text>
+<line x1="640" y1="364" x2="640" y2="445.8" stroke="#e3a04f" stroke-width="1.5"/>
+<path d="M640 453L635.5 444L644.5 444Z" fill="#e3a04f"/>
+<line x1="1056" y1="364" x2="1056" y2="445.8" stroke="#e3a04f" stroke-width="1.5"/>
+<path d="M1056 453L1051.5 444L1060.5 444Z" fill="#e3a04f"/>
+</svg>

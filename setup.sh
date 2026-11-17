@@ -12,8 +12,9 @@ export MOTTORI_INSTANCE="$ROOT"
 cd "$ROOT"
 say() { python3 "$ROOT/tools/i18n.py" "$@"; }
 DOC_LANG="$(python3 -c 'import sys; sys.path.insert(0, "tools"); import i18n; print(i18n.language())')"
-DOC_SUFFIX=""
-[ "$DOC_LANG" = "ko" ] && DOC_SUFFIX=".ko"
+# Korean seeds live at the same relative path under ko/ (ko/templates/X.md translates templates/X.md).
+TEMPLATE_DIR="templates"
+[ "$DOC_LANG" = "ko" ] && TEMPLATE_DIR="ko/templates"
 
 NAME=""; CONTEXT=""; FORCE=0
 while [ $# -gt 0 ]; do
@@ -72,9 +73,9 @@ fi
 # own data protection.
 ORIGIN="$(git remote get-url origin 2>/dev/null || true)"
 
-python3 - "$NAME" "$CONTEXT" "$ORIGIN" <<'PY'
+python3 - "$NAME" "$CONTEXT" "$ORIGIN" "$DOC_LANG" <<'PY'
 import datetime, json, os, shutil, sys
-name, context, origin = sys.argv[1], sys.argv[2], sys.argv[3]
+name, context, origin, lang = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 dst = "system/memory-config.json"
 cfg = json.load(open("templates/memory-config.json", encoding="utf-8"))
 # Validate the final config with the same schema authority before writing.
@@ -83,11 +84,12 @@ import memlib as config_schema
 from i18n import t
 
 def legacy_watermark():
-    """Migration 전에 존재한 tracked journal의 마지막 사건 시각.
+    """Return the newest event time among journal rows that existed before the migration.
 
-    벽시계 migration 시각을 초 단위로 저장하면 바로 뒤 setup log가 같은 초에 legacy로
-    빨려 들어간다. 기존 행 자체의 max timestamp를 경계로 쓰면 old/new 집합이 정확히 갈린다.
-    malformed 행이 있으면 경계를 추측하지 않고 migration을 중단한다.
+    A wall-clock migration time stored at one-second resolution would pull the setup event
+    logged right after it, within the same second, into the legacy set. The newest timestamp of
+    the existing rows splits old and new rows exactly. A malformed row stops the migration
+    instead of guessing a boundary.
     """
     # Read all existing public and private journal rows with the canonical strict parser,
     # regardless of legacy visibility routing.
@@ -106,7 +108,7 @@ def legacy_watermark():
 
 
 def validate_legacy_threads(data, schema):
-    """visibility provenance가 없던 v1~v3 thread의 자동 공개 승격을 거부한다."""
+    """Refuse to promote v1-v3 threads to public automatically: they carry no visibility provenance."""
     if schema < 4 and data.get("threads"):
         raise ValueError(t("setup.legacy_threads"))
 
@@ -171,6 +173,8 @@ if had_old:
 cfg["instance"]["name"] = name
 cfg["instance"]["context"] = context
 cfg["instance"]["remote_allowlist"] = [origin] if origin else []
+# Save the install language so tool output does not change with the locale of a later shell.
+cfg["instance"]["lang"] = lang
 # Validate the fully merged config before writing.
 config_schema._validate_config_shape(cfg)
 json.dump(cfg, open(dst, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
@@ -186,15 +190,15 @@ if [ -n "$ORIGIN" ] && [ "$CONTEXT" = "work" ]; then
 fi
 
 if [ ! -f "$RULES" ]; then
-  cp "templates/instance-rules${DOC_SUFFIX}.md" "$RULES"
+  cp "$TEMPLATE_DIR/instance-rules.md" "$RULES"
   say setup.rules_created "path=$RULES"
 fi
 if [ ! -f system/decisions.md ]; then
-  cp "templates/decisions${DOC_SUFFIX}.md" system/decisions.md
+  cp "$TEMPLATE_DIR/decisions.md" system/decisions.md
   say setup.decisions_created
 fi
 if [ ! -f system/rituals.local.md ]; then
-  cp "templates/rituals.local${DOC_SUFFIX}.md" system/rituals.local.md
+  cp "$TEMPLATE_DIR/rituals.local.md" system/rituals.local.md
   say setup.rituals_created
 fi
 
@@ -203,10 +207,11 @@ mkdir -p state _private/state
 if [ ! -f _private/transcribe-prompts.json ] && [ -f templates/transcribe-prompts.json ]; then
   cp templates/transcribe-prompts.json _private/transcribe-prompts.json
 fi
-python3 tools/now.py log "[system/state] 인스턴스 세팅: $NAME ($CONTEXT) — 킷 클론 후 초기화" >/dev/null
+# Journal bodies follow the instance language; tools/now.py validates and routes them.
+python3 tools/now.py log "[system/state] $(say setup.journal_initialized "name=$NAME" "context=$CONTEXT")" >/dev/null
 # Create an initial local event so the overlay is present from the first render; record only
 # setup state.
-python3 tools/now.py log --private "[system/state] local overlay 초기화 — setup ($NAME)" >/dev/null
+python3 tools/now.py log --private "[system/state] $(say setup.journal_local_initialized "name=$NAME")" >/dev/null
 python3 tools/now.py render >/dev/null
 # Create the baseline before linkcheck, then record linkcheck success before doctor inspects its
 # evidence.

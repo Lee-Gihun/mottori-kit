@@ -2,6 +2,7 @@
 """install_hooks.sh regressions in disposable Git repositories."""
 import hashlib
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -18,7 +19,8 @@ def fixture():
     root = tempfile.mkdtemp(prefix="install-hooks-fixture-")
     subprocess.run(["git", "init", "-q", root], check=True)
     os.makedirs(os.path.join(root, "tools"))
-    for name in ("install_hooks.sh", "precommit-hook.sh"):
+    # i18n.py supplies the localized lines; without it the installer prints English fallbacks.
+    for name in ("install_hooks.sh", "precommit-hook.sh", "i18n.py"):
         shutil.copy2(os.path.join(HERE, name), os.path.join(root, "tools", name))
     return root
 
@@ -160,12 +162,39 @@ def test_template_change_after_install_is_owned_drift_not_foreign():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_english_output_and_fallback_without_catalog():
+    """English instances read English lines; a fixture without i18n.py still prints English."""
+    hangul = re.compile("[\uac00-\ud7a3]")
+    for with_catalog in (True, False):
+        root = fixture()
+        try:
+            if not with_catalog:
+                os.remove(os.path.join(root, "tools", "i18n.py"))
+            lang = "en" if with_catalog else "ko"
+            results = [run(root, "--check", lang=lang), run(root, "--repair", lang=lang),
+                       run(root, "--check", lang=lang)]
+            hook = hook_path(root)
+            os.chmod(hook, 0o644)
+            results += [run(root, "--check", lang=lang), run(root, "--repair", lang=lang)]
+            with open(hook, "w", encoding="utf-8") as f:
+                f.write("#!/bin/sh\necho foreign\n")
+            results += [run(root, "--check", lang=lang), run(root, "--repair", lang=lang)]
+            text = "".join(r.stdout + r.stderr for r in results)
+            assert not hangul.search(text), text
+            assert results[0].stdout.startswith("missing: ") and results[2].stdout.startswith("current: ")
+            assert "template sha256: " in results[3].stdout and "backup: " in results[4].stdout
+            assert results[-1].returncode == 2 and "foreign pre-commit/pre-push" in results[-1].stderr
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+
 TESTS = [
     test_repair_then_check_installs_exact_executable,
     test_template_change_after_install_is_owned_drift_not_foreign,
     test_check_reports_owned_drift_and_repair_backs_it_up,
     test_foreign_precommit_aborts_without_overwrite,
     test_failed_repair_restores_current_hook_and_preserves_missing_hook,
+    test_english_output_and_fallback_without_catalog,
 ]
 
 

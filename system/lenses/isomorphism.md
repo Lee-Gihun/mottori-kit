@@ -1,5 +1,5 @@
-<!-- source: isomorphism.ko.md sha256:7d9d255a5dd5bbc3a77f92caa7435d5ca0d5689b20a13e460ab81157528ee869 source-of-truth: ko -->
-Korean: `isomorphism.ko.md`
+<!-- source: ko/system/lenses/isomorphism.md sha256:7d9d255a5dd5bbc3a77f92caa7435d5ca0d5689b20a13e460ab81157528ee869 source-of-truth: ko -->
+Korean: `ko/system/lenses/isomorphism.md`
 
 # Structure mapping lens
 

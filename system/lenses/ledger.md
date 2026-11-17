@@ -1,5 +1,5 @@
-<!-- source: ledger.ko.md sha256:710dbb11306b3913da1021a5de254f8c2ac00e8ad10c09960889d959230eff6a source-of-truth: ko -->
-Korean: `ledger.ko.md`
+<!-- source: ko/system/lenses/ledger.md sha256:710dbb11306b3913da1021a5de254f8c2ac00e8ad10c09960889d959230eff6a source-of-truth: ko -->
+Korean: `ko/system/lenses/ledger.md`
 
 # Ledger lens
 

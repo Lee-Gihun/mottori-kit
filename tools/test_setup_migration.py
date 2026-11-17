@@ -135,7 +135,8 @@ def test_fresh_setup_creates_v4_config_and_now():
         assert vis["legacy_cutoff"] is None
         assert vis["legacy_public_tracks"] == []
         assert os.path.isfile(os.path.join(root, "state", "NOW.md"))
-        assert "인스턴스 세팅" in text(root, "state/NOW.md")
+        now_text = text(root, "state/NOW.md")
+        assert "인스턴스 세팅" in now_text or "instance set up" in now_text, now_text
     finally:
         shutil.rmtree(parent, ignore_errors=True)
 

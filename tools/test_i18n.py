@@ -168,12 +168,46 @@ def test_language_selection():
                 os.environ[name] = value
 
 
+def test_configured_language_beats_locale():
+    """The language saved at install wins over the locale, and MOTTORI_LANG wins over both."""
+    import json
+    import tempfile
+    saved = {name: os.environ.get(name) for name in ("MOTTORI_LANG", "LANG", "LC_ALL", "MOTTORI_INSTANCE")}
+    try:
+        with tempfile.TemporaryDirectory() as root:
+            os.makedirs(os.path.join(root, "system"))
+            with open(os.path.join(root, "system", "memory-config.json"), "w", encoding="utf-8") as f:
+                json.dump({"instance": {"lang": "ko"}}, f)
+            os.environ["MOTTORI_INSTANCE"] = root
+            os.environ.pop("MOTTORI_LANG", None)
+            os.environ["LANG"] = "en_US.UTF-8"
+            os.environ.pop("LC_ALL", None)
+            i18n._CONFIGURED.clear()
+            check("the saved install language beats an English locale", i18n.language() == "ko")
+            os.environ["MOTTORI_LANG"] = "en"
+            check("MOTTORI_LANG beats the saved language", i18n.language() == "en")
+            os.environ.pop("MOTTORI_LANG", None)
+            with open(os.path.join(root, "system", "memory-config.json"), "w", encoding="utf-8") as f:
+                json.dump({"instance": {"lang": "fr"}}, f)
+            i18n._CONFIGURED.clear()
+            check("an unknown saved language falls back to the locale", i18n.language() == "en")
+    finally:
+        i18n._CONFIGURED.clear()
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
 def test_sessionstart_fallback_is_bilingual():
+    # Static hook JSON cannot follow the instance language, so its fallback is English only.
+    # The name is kept because records cite tests by name.
     for rel in ((".claude", "settings.json"), (".codex", "hooks.json")):
         payload = json.load(open(os.path.join(ROOT, *rel), encoding="utf-8"))
         command = payload["hooks"]["SessionStart"][0]["hooks"][0]["command"]
-        check("bilingual fallback: " + rel[0],
-              "상태 자동 주입이 실패했다" in command and "State injection failed" in command,
+        check("English fallback: " + rel[0],
+              "State injection failed" in command and not HANGUL.search(command),
               command)
 
 
@@ -186,6 +220,7 @@ if __name__ == "__main__":
     run_test(test_korean_compatibility, __file__)
     run_test(test_catalog_complete, __file__)
     run_test(test_language_selection, __file__)
+    run_test(test_configured_language_beats_locale, __file__)
     run_test(test_sessionstart_fallback_is_bilingual, __file__)
     total = PASSED + len(FAILED)
     skipped = f" · not applicable {len(SKIPPED)}" if SKIPPED else ""

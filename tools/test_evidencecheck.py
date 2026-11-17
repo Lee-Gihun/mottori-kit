@@ -54,9 +54,9 @@ def _fixture():
     return tmp, root
 
 
-def _run(root, *args):
+def _run(root, *args, lang="ko"):
     env = dict(os.environ, MOTTORI_TEST_LOG=str(root / "test-runs.log"),
-               MOTTORI_TEST_RUN_ID=RUN_ID)
+               MOTTORI_TEST_RUN_ID=RUN_ID, MOTTORI_LANG=lang)
     return subprocess.run(
         [sys.executable, str(CHECKER), "--tree", str(root), *args],
         capture_output=True,
@@ -622,9 +622,13 @@ def test_gate_consumes_evidencecheck_issues_end_to_end():
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
-        env = dict(os.environ)
+        env = dict(os.environ, MOTTORI_LANG="ko")
         env.pop("MOTTORI_INSTANCE", None)
         env.pop("CLAUDE_PROJECT_DIR", None)
+        # This test exercises the release gate: cited suites, evidencecheck, and the commit hook
+        # rejecting a missing evidence target. The installed-instance fixture carries instance
+        # config, which the gate would otherwise judge as session scope, where none of these run.
+        env["MOTTORI_GATE_SCOPE"] = "release"
         for command in (["git", "init", "-q"], ["git", "add", "-A"]):
             step = subprocess.run(command, cwd=repo, capture_output=True, text=True, env=env)
             assert step.returncode == 0, step.stdout + step.stderr
@@ -747,8 +751,31 @@ def test_english_context_uses_same_evidence_boundary():
         tmp.cleanup()
 
 
+def test_issue_ids_do_not_depend_on_language():
+    """The gate stores issue IDs; only the display column may follow the language."""
+    tmp, root = _fixture()
+    try:
+        (root / "test-runs.log").unlink()
+        (root / "CHANGELOG.md").write_text("## v0.6\n\n### [Note] bare\n\nno marker\n", encoding="utf-8")
+        ids = {}
+        for lang in ("ko", "en"):
+            issues = _run(root, "--issues", lang=lang)
+            assert issues.returncode == 0, issues.stdout + issues.stderr
+            ids[lang] = [line.split("\t", 1)[0] for line in issues.stdout.splitlines()]
+        assert ids["ko"] == ids["en"] and len(ids["en"]) == 4, ids
+        english = _run(root, lang="en")
+        assert "no run evidence" in english.stdout, english.stdout
+        assert not re.search("[가-힣]", english.stdout + english.stderr), english.stdout
+        helped = subprocess.run([sys.executable, str(CHECKER), "--help"], capture_output=True, text=True,
+                                env=dict(os.environ, MOTTORI_LANG="en"))
+        assert helped.returncode == 0 and not re.search("[가-힣]", helped.stdout), helped.stdout
+    finally:
+        tmp.cleanup()
+
+
 TESTS = [
     test_english_context_uses_same_evidence_boundary,
+    test_issue_ids_do_not_depend_on_language,
     test_defined_but_not_run_is_issue,
     test_run_log_allows_test_marker,
     test_missing_run_log_fails_closed,

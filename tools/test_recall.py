@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""recall.py, memlib transcript discovery, and Codex root-thread regressions."""
+"""recall.py and memlib transcript discovery regressions."""
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -12,7 +13,6 @@ from testlib import run_test
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RECALL = os.path.join(HERE, "recall.py")
-ROOT_THREAD = os.path.join(HERE, "codex_root_thread.py")
 
 
 def fixture():
@@ -25,7 +25,8 @@ def fixture():
 
 
 def env(root, home):
-    return dict(os.environ, MOTTORI_INSTANCE=root, HOME=home)
+    # Assertions below read Korean output; English output is covered by its own test.
+    return dict(os.environ, MOTTORI_INSTANCE=root, HOME=home, MOTTORI_LANG="ko")
 
 
 def run(script, root, home, *args):
@@ -125,28 +126,6 @@ def test_sessions_default_is_40():
         assert "(40/45개 최신순 표시" in result.stdout
     finally:
         shutil.rmtree(base, ignore_errors=True)
-
-
-def test_codex_root_thread_uses_authored_turn_count():
-    base, root, home = fixture()
-    try:
-        write_rollout(home, "root", root, [
-            ("user", "first authored"),
-            ("user", "[Claude Code가 delegated prompt"),
-            ("user", "<environment_context>injected</environment_context>"),
-            ("user", "second authored"),
-        ], session_id="owner-root")
-        write_rollout(home, "competitor", root, [("user", "one authored")],
-                      session_id="competitor")
-        write_rollout(home, "agent", root,
-                      [("user", f"agent {i}") for i in range(8)], subagent=True,
-                      session_id="agent")
-        result = run(ROOT_THREAD, root, home)
-        assert result.returncode == 0, result.stderr
-        assert result.stdout.strip() == "owner-root"
-    finally:
-        shutil.rmtree(base, ignore_errors=True)
-
 
 
 def write_claude(home, root, name, rows):
@@ -376,6 +355,228 @@ def test_eval_matches_record_id_not_same_minute():
 
 
 
+def mangle(path):
+    return "".join(c if c.isascii() and (c.isalnum() or c == "-") else "-" for c in path)
+
+
+def claude_row(text, ident, stamp="2026-09-17T00:00:00Z"):
+    return {"type": "user", "uuid": ident, "sessionId": "fixture", "timestamp": stamp,
+            "message": {"content": text}}
+
+
+def test_missing_transcript_dir_never_borrows_another_project():
+    base, root, home = fixture()
+    try:
+        # A different project whose folder name merely ends with this instance's basename.
+        foreign = os.path.join(home, ".claude", "projects",
+                               "-Users-someoneelse-clientwork-" + mangle(os.path.basename(root)))
+        os.makedirs(foreign)
+        with open(os.path.join(foreign, "s1.jsonl"), "w", encoding="utf-8") as f:
+            f.write(json.dumps(claude_row("OTHER-PROJECT secret words", "x")) + "\n")
+        code = ("import sys; sys.path.insert(0, %r); import memlib; print(memlib.TRANSCRIPTS)"
+                % HERE)
+        got = subprocess.run([sys.executable, "-c", code], env=env(root, home),
+                             capture_output=True, text=True)
+        assert got.stdout.strip() == os.path.join(home, ".claude", "projects", mangle(root)), got
+        for lang, notice in (("ko", "이 폴더의 Claude 대화 기록이 아직 없다"),
+                             ("en", "No Claude conversation records exist for this folder yet")):
+            result = subprocess.run([sys.executable, RECALL, "find", "OTHER-PROJECT"], cwd=root,
+                                    env=dict(env(root, home), MOTTORI_LANG=lang),
+                                    capture_output=True, text=True)
+            assert result.returncode == 0, result.stderr
+            assert "secret words" not in result.stdout, result.stdout
+            assert notice in result.stdout, result.stdout
+        rows = json_find(root, home, "OTHER-PROJECT")
+        assert rows == [], rows
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_regex_special_characters_fall_back_to_literal_text():
+    base, root, home = fixture()
+    try:
+        write_claude(home, root, "owner", [claude_row("I mostly write C++ these days", "cpp")])
+        result = run(RECALL, root, home, "find", "C++")
+        assert result.returncode == 0, result.stderr
+        assert "Traceback" not in result.stderr and "C++ these days" in result.stdout, result
+        rows = json_find(root, home, "C++")
+        assert [r["message_id"] for r in rows] == ["cpp"], rows
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_zero_hits_reports_scope_and_suggests_rewording():
+    base, root, home = fixture()
+    try:
+        write_claude(home, root, "owner", [claude_row("기차표를 예매했다", "a"),
+                                           claude_row("두 번째 발화", "b")])
+        for lang, needles in (
+                ("ko", ["찾은 범위에서", "파일 1개", "메시지 2개", "다른 언어"]),
+                ("en", ["searched scope", "1 file(s)", "2 message(s)", "other language"])):
+            result = subprocess.run([sys.executable, RECALL, "find", "train ticket"], cwd=root,
+                                    env=dict(env(root, home), MOTTORI_LANG=lang),
+                                    capture_output=True, text=True)
+            assert result.returncode == 0, result.stderr
+            for needle in needles:
+                assert needle in result.stdout, (needle, result.stdout)
+            assert "기록에 없다" not in result.stdout
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def cwd_row(text, ident, cwd, session="fixture", stamp="2026-09-17T00:00:00Z"):
+    row = claude_row(text, ident, stamp)
+    row["sessionId"] = session
+    if cwd is not None:
+        row["cwd"] = cwd
+    return row
+
+
+def test_claude_records_from_another_folder_with_the_same_store_name_are_excluded():
+    """Folder names that encode to one Claude store key must not share their conversations."""
+    base, _root, home = fixture()
+    try:
+        for mine_name, other_name in (("한글", "다른"), ("a_b", "a-b")):
+            mine = os.path.join(base, mine_name)
+            other = os.path.join(base, other_name)
+            os.makedirs(mine, exist_ok=True)
+            os.makedirs(other, exist_ok=True)
+            assert mangle(mine) == mangle(other), (mine, other)
+            write_claude(home, mine, "own-" + mine_name,
+                         [cwd_row("공유열쇠 MINE " + mine_name, "m-" + mine_name, mine, "own-s")])
+            # The other folder's session lands in the very same store directory.
+            write_claude(home, other, "foreign-" + other_name,
+                         [cwd_row("공유열쇠 FOREIGN " + other_name, "f-" + other_name, other,
+                                  "foreign-s"),
+                          claude_row("공유열쇠 FOREIGN-NOCWD " + other_name, "g-" + other_name)])
+            rows = json_find(mine, home, "공유열쇠 ")
+            texts = sorted(r["text"] for r in rows)
+            assert texts == ["공유열쇠 MINE " + mine_name], (mine_name, texts)
+            listing = run(RECALL, mine, home, "sessions")
+            assert "foreign-" + other_name not in listing.stdout, listing.stdout
+            assert "own-" + mine_name in listing.stdout, listing.stdout
+            everything = json_find(mine, home, "공유열쇠 FOREIGN ", "--all-instances")
+            assert len(everything) == 1, everything
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_claude_records_of_a_declared_previous_root_are_kept():
+    base, root, home = fixture()
+    try:
+        alias = os.path.join(base, "예전_이름")
+        stranger = os.path.join(base, "예전-이름")
+        write_alias_config(root, alias)
+        write_claude(home, alias, "old", [cwd_row("별칭열쇠 OLD", "old", alias, "old-s")])
+        write_claude(home, stranger, "stranger",
+                     [cwd_row("별칭열쇠 STRANGER", "st", stranger, "st-s")])
+        write_claude(home, root, "new", [cwd_row("별칭열쇠 NEW", "new", os.path.join(root, "sub"),
+                                                 "new-s")])
+        texts = sorted(r["text"] for r in json_find(root, home, "별칭열쇠"))
+        assert texts == ["별칭열쇠 NEW", "별칭열쇠 OLD"], texts
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_claude_records_without_working_folder_are_kept_and_counted():
+    base, root, home = fixture()
+    try:
+        # A whole file without any working-folder field is the old record form: keep it.
+        write_claude(home, root, "legacy", [claude_row("옛기록열쇠 legacy", "legacy")])
+        # Inside a file that names folders, a line without one follows its own session.
+        write_claude(home, root, "mixed", [
+            claude_row("옛기록열쇠 before-confirm", "early", "2026-09-17T00:00:00Z"),
+            cwd_row("옛기록열쇠 confirmed", "conf", root, "fixture", "2026-09-17T00:01:00Z"),
+            cwd_row("옛기록열쇠 elsewhere", "else", os.path.join(base, "elsewhere"), "other-s"),
+            {**claude_row("옛기록열쇠 orphan", "orphan"), "sessionId": "other-s"},
+        ])
+        texts = sorted(r["text"] for r in json_find(root, home, "옛기록열쇠"))
+        assert texts == ["옛기록열쇠 before-confirm", "옛기록열쇠 confirmed",
+                         "옛기록열쇠 legacy"], texts
+        for lang, needle in (("ko", "작업 폴더 정보가 없어"), ("en", "no working-folder field")):
+            e = dict(env(root, home), MOTTORI_LANG=lang)
+            zero = subprocess.run([sys.executable, RECALL, "find", "없는낱말"], cwd=root, env=e,
+                                  capture_output=True, text=True)
+            lines = [line for line in zero.stdout.splitlines() if needle in line]
+            assert len(lines) == 1 and "1" in lines[0], zero.stdout
+            listing = subprocess.run([sys.executable, RECALL, "sessions"], cwd=root, env=e,
+                                     capture_output=True, text=True)
+            lines = [line for line in listing.stdout.splitlines() if needle in line]
+            assert len(lines) == 1 and "1" in lines[0], listing.stdout
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_default_output_stays_under_the_cap_with_a_long_query():
+    base, root, home = fixture()
+    try:
+        write_claude(home, root, "owner", [claude_row("짧은 발화", "a")])
+        for lang in ("ko", "en"):
+            e = dict(env(root, home), MOTTORI_LANG=lang)
+            for query in ("가" * 4500, "(" + "나" * 4500):
+                result = subprocess.run([sys.executable, RECALL, "find", query], cwd=root, env=e,
+                                        capture_output=True, text=True)
+                assert result.returncode == 0, result.stderr
+                size = len(result.stdout.encode("utf-8"))
+                assert size <= 4000, (lang, size)
+                assert query[:20] in result.stdout, result.stdout[:200]
+        # A matching query of the same length is also printed within the cap.
+        long_text = "다" * 4500
+        write_claude(home, root, "owner", [claude_row(long_text, "long")])
+        result = run(RECALL, root, home, "find", long_text)
+        assert result.returncode == 0 and "■ " in result.stdout, result.stdout[:200]
+        assert len(result.stdout.encode("utf-8")) <= 4000
+        # --full keeps the query as typed.
+        result = run(RECALL, root, home, "find", "가" * 4500, "--full")
+        assert len(result.stdout.encode("utf-8")) > 4000
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_function_default_order_matches_cli():
+    import inspect
+    import recall
+    assert inspect.signature(recall.find).parameters["order"].default == "score"
+
+
+def eval_corpus(home, root, count=12, words=True):
+    rows = []
+    for i in range(count):
+        body = (f"marker{i:02d}alpha marker{i:02d}beta " if words else "")
+        rows.append(claude_row(body + "가 " * 120, f"m{i}", f"2026-09-17T00:{i:02d}:00Z"))
+    write_claude(home, root, "owner", rows)
+
+
+def test_eval_recall_runs_to_completion():
+    base, root, home = fixture()
+    try:
+        eval_corpus(home, root)
+        result = run(os.path.join(HERE, "eval_recall.py"), root, home,
+                     "--n", "3", "--band", "rare", "--quiet")
+        assert result.returncode == 0, result.stdout + result.stderr
+        metrics = os.path.join(root, "_private", "state", "metrics-recall.jsonl")
+        rec = json.loads(open(metrics, encoding="utf-8").read().splitlines()[-1])
+        assert rec["n"] == 3 and rec["hits"] == 3 and rec["rate"] == 1.0, rec
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_eval_recall_without_queries_is_unmeasured_not_zero():
+    base, root, home = fixture()
+    try:
+        eval_corpus(home, root, words=False)
+        result = run(os.path.join(HERE, "eval_recall.py"), root, home,
+                     "--n", "3", "--band", "rare", "--quiet")
+        assert result.returncode != 0, result.stdout
+        assert "hit@" not in result.stdout, result.stdout
+        assert "unmeasured" in result.stdout or "측정 못 함" in result.stdout, result.stdout
+        metrics = os.path.join(root, "_private", "state", "metrics-recall.jsonl")
+        rec = json.loads(open(metrics, encoding="utf-8").read().splitlines()[-1])
+        assert rec["rate"] is None and rec["status"] == "unmeasured" and rec["n"] == 0, rec
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
 def test_display_time_preserves_source_timezone():
     import recall
     assert recall._local_time("2026-10-08T12:00:00Z") == recall._local_time("2026-10-08T21:00:00+09:00")
@@ -383,13 +584,115 @@ def test_display_time_preserves_source_timezone():
     assert recall._local_time("unknown") == "unknown"
 
 
+def cap_corpus(home, root, count=30):
+    """Many long matches, as a common word produces in a real transcript store."""
+    rows = []
+    for i in range(count):
+        body = f"상한카나리 {i:02d} " + "긴 한국어 문장이 이어진다 " * 40
+        rows.append(owner_row(body, f"cap{i:02d}", stamp=f"2026-09-17T00:{i:02d}:00Z"))
+    write_claude(home, root, "owner", rows)
+
+
+def test_default_output_is_capped_and_says_how_to_see_more():
+    base, root, home = fixture()
+    try:
+        cap_corpus(home, root)
+        result = run(RECALL, root, home, "find", "상한카나리", "--max", "30")
+        assert result.returncode == 0, result.stderr
+        size = len(result.stdout.encode("utf-8"))
+        assert size <= 4096, size
+        shown = result.stdout.count("■ ")
+        assert 1 <= shown < 30, result.stdout
+        last = result.stdout.rstrip("\n").splitlines()[-1]
+        assert "--full" in last and str(30 - shown) in last, last
+        # The compact form keeps the locator and an excerpt, not neighbouring messages.
+        assert "owner.jsonl:" in result.stdout and " | " not in result.stdout, result.stdout
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_default_output_reports_matches_beyond_max():
+    base, root, home = fixture()
+    try:
+        cap_corpus(home, root, count=5)
+        result = run(RECALL, root, home, "find", "상한카나리", "--max", "2")
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.count("■ ") == 2, result.stdout
+        last = result.stdout.rstrip("\n").splitlines()[-1]
+        assert "3" in last and "--full" in last, last
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_full_keeps_previous_output_shape():
+    base, root, home = fixture()
+    try:
+        cap_corpus(home, root)
+        result = run(RECALL, root, home, "find", "상한카나리", "--max", "30", "--full")
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.count("■ 매치 ") == 30, result.stdout[:400]
+        assert len(result.stdout.encode("utf-8")) > 4096
+        assert "  id:" in result.stdout and " | " in result.stdout
+        assert "--full" not in result.stdout
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_explicit_around_shows_neighbours_in_compact_output():
+    base, root, home = fixture()
+    try:
+        rows = [owner_row("앞 문맥 메시지", "n0", stamp="2026-09-17T00:00:00Z"),
+                owner_row("이웃카나리 본문", "n1", stamp="2026-09-17T00:01:00Z"),
+                owner_row("뒤 문맥 메시지", "n2", stamp="2026-09-17T00:02:00Z")]
+        write_claude(home, root, "owner", rows)
+        plain = run(RECALL, root, home, "find", "이웃카나리")
+        assert "앞 문맥" not in plain.stdout, plain.stdout
+        result = run(RECALL, root, home, "find", "이웃카나리", "--around", "1")
+        assert result.returncode == 0, result.stderr
+        assert "앞 문맥" in result.stdout and "뒤 문맥" in result.stdout, result.stdout
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_english_output_has_no_hangul():
+    base, root, home = fixture()
+    try:
+        for i in range(3):
+            write_rollout(home, f"session-{i:02d}", root,
+                          [("user", f"english canary {i}"), ("assistant", "english canary reply")])
+        english = dict(env(root, home), MOTTORI_LANG="en")
+        outputs = []
+        for args in (("sessions", "--max", "1"), ("find", "canary", "--full"), ("find", "canary"),
+                     ("find", "absent-word"), ("find", "--help"), ("sessions", "--max", "0")):
+            result = subprocess.run([sys.executable, RECALL, *args], cwd=root, env=english,
+                                    capture_output=True, text=True)
+            outputs.append(result.stdout + result.stderr)
+        text = "\n".join(outputs)
+        assert "(1/3 shown, newest first" in text, text
+        assert "■ hit 1 · " in text and "--max must be 1 or more" in text, text
+        assert not re.search("[가-힣]", text.replace(root, "<root>")), text
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_agent_dispatch_prefix_is_recognised_in_both_languages():
+    import importlib
+    sys.path.insert(0, HERE)
+    recall = importlib.import_module("recall")
+    for text in ("[Claude Code가 보낸 요청]", "[Claude Code requested a review]",
+                 "너는 Codex다.", "Claude다。", "FRESH_WORKER run"):
+        assert recall._AGENT_TRANSPORT.search(text), text
+    assert not recall._AGENT_TRANSPORT.search("ordinary owner words")
+
+
 TESTS = [
+    test_english_output_has_no_hangul,
+    test_agent_dispatch_prefix_is_recognised_in_both_languages,
     test_display_time_preserves_source_timezone,
     test_transcript_directory_mangling,
     test_other_cwd_rollout_is_excluded_by_default,
     test_authored_only_excludes_agents_and_system_injection,
     test_sessions_default_is_40,
-    test_codex_root_thread_uses_authored_turn_count,
     test_claude_text_and_legacy_content_blocks,
     test_summary_cannot_occupy_user_score_slot,
     test_codex_injection_cannot_occupy_user_score_slot,
@@ -401,6 +704,20 @@ TESTS = [
     test_claude_meta_transport_is_not_owner_but_quoted_feedback_survives,
     test_locator_and_context_point_to_original_record,
     test_eval_matches_record_id_not_same_minute,
+    test_missing_transcript_dir_never_borrows_another_project,
+    test_regex_special_characters_fall_back_to_literal_text,
+    test_zero_hits_reports_scope_and_suggests_rewording,
+    test_function_default_order_matches_cli,
+    test_eval_recall_runs_to_completion,
+    test_eval_recall_without_queries_is_unmeasured_not_zero,
+    test_default_output_is_capped_and_says_how_to_see_more,
+    test_default_output_reports_matches_beyond_max,
+    test_full_keeps_previous_output_shape,
+    test_explicit_around_shows_neighbours_in_compact_output,
+    test_claude_records_from_another_folder_with_the_same_store_name_are_excluded,
+    test_claude_records_of_a_declared_previous_root_are_kept,
+    test_claude_records_without_working_folder_are_kept_and_counted,
+    test_default_output_stays_under_the_cap_with_a_long_query,
 ]
 
 

@@ -99,12 +99,12 @@ def test_fresh_install_rejects_malformed_summaries():
         run_fresh_judge("doctor", 0, "{broken json\n"),
     )
     ok("X12 malformed summaries -> 3/3 unmeasurable FAIL",
-       all(r.returncode != 0 and "측정불능" in (r.stdout + r.stderr) for r in malformed),
+       all(r.returncode != 0 and "unmeasurable" in (r.stdout + r.stderr) for r in malformed),
        "\n".join(r.stdout + r.stderr for r in malformed))
 
     abnormal = run_fresh_judge("doctor", 7, valid_doctor)
     ok("X12 nonzero doctor with FAIL 0 is unmeasurable FAIL",
-       abnormal.returncode != 0 and "측정불능" in (abnormal.stdout + abnormal.stderr),
+       abnormal.returncode != 0 and "unmeasurable" in (abnormal.stdout + abnormal.stderr),
        abnormal.stdout + abnormal.stderr)
 
     normal_link = run_fresh_judge("linkcheck", 0, "[linkcheck] broken: 0\n")
@@ -536,7 +536,7 @@ try:
     print("json", d.get("decision") == "block" and isinstance(d.get("reason"), str) and bool(d.get("reason")))
 except Exception as e:
     print("json", False, repr(out[:120]))
-# resume 경로: 예외여도 pending 유지 + UserPromptSubmit 경고 JSON
+# Resume path: even after an exception, pending stays set and a UserPromptSubmit warning JSON is printed.
 gate._mark(gate.DIRTY())
 buf = io.StringIO(); sys.stdout = buf
 rc2 = gate.cmd_resume()
@@ -585,7 +585,8 @@ def test_now_renders_unspecified_personal_pointer():
         now = open(os.path.join(root, "state", "NOW.md"), encoding="utf-8").read() \
             if os.path.exists(os.path.join(root, "state", "NOW.md")) else ""
         ok("M fresh NOW says 정본 미지정, never `None`",
-           "정본 미지정" in now and "`None`" not in now, (now[:300] or r.stderr[-300:]))
+           ("정본 미지정" in now or "canonical not set" in now) and "`None`" not in now,
+           (now[:300] or r.stderr[-300:]))
     finally:
         shutil.rmtree(root, ignore_errors=True)
 

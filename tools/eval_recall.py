@@ -19,14 +19,16 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import memlib as M
+import recall
+from i18n import STRINGS, t
 
 METRICS = os.path.join(M.ROOT, "_private", "state", "metrics-recall.jsonl")
 
 # Exclude common or structurally unhelpful query tokens.
-STOP = set("그리고 그런데 그래서 하지만 이거 저거 그거 이건 저건 그건 있다 없다 한다 된다 "
-           "the and for that this with from have been will你 그럼 근데 아니 네가 내가 우리 "
-           "너무 정말 진짜 조금 많이 이제 지금 다시 그냥 좀더 같이 대해 위해 통해".split())
-TOKEN = re.compile(r"[가-힣]{2,}|[A-Za-z][A-Za-z0-9_.-]{3,}")
+# Transcripts mix languages, so both stop lists apply regardless of the output language.
+STOP = set(" ".join(STRINGS["eval_recall.stopwords"].values()).split())
+# Query tokens: runs of two or more Hangul syllables, or Latin words of four or more characters.
+TOKEN = re.compile(r"[\uac00-\ud7a3]{2,}|[A-Za-z][A-Za-z0-9_.-]{3,}")
 
 
 def _records(limit_files=1):
@@ -35,7 +37,6 @@ def _records(limit_files=1):
     This sampling scope is intentionally unchanged; it is not an archive-coverage
     or cross-runtime benchmark. Those are separate planted-item regressions.
     """
-    import recall
     files = [p for _, kind, p in recall._source_files({"claude"}) if kind == "claude-jsonl"]
     files.sort(key=os.path.getmtime, reverse=True)
     paths = set(files[:limit_files])
@@ -86,7 +87,7 @@ def run(n=20, max_hits=8, seed=20260824, quiet=False, band="topic"):
     records = _records()
     turns = [(m["timestamp"][:16], m["role"], m["text"]) for m in records]
     if len(turns) < n * 2:
-        print(f"전사 발화가 부족하다 ({len(turns)}개). 세션을 더 쌓고 다시 재라.")
+        print(t("eval_recall.too_few", count=len(turns)))
         return 1
     df = _doc_freq(turns)
     rnd = random.Random(seed)                        # Use a fixed seed so repeated measurements sample the same messages.
@@ -103,7 +104,7 @@ def run(n=20, max_hits=8, seed=20260824, quiet=False, band="topic"):
                             "--max", str(max_hits), "--around", "0", "--json"],
                            capture_output=True, text=True, cwd=M.ROOT)
         # Stable IDs, not display timestamps, identify the target original.
-        want = __import__("recall")._kst(ts)
+        want = recall._local_time(message["timestamp"])
         found = r.returncode == 0 and _retrieved_id(r.stdout, message["record_id"])
         if found:
             hits += 1
@@ -111,26 +112,33 @@ def run(n=20, max_hits=8, seed=20260824, quiet=False, band="topic"):
             misses.append({"ts": ts, "role": role, "q": q, "record_id": message["record_id"],
                            "head": text[:70].replace("\n", " ")})
         if not quiet:
-            print(f"  {'찾음' if found else '실패'}  {want}  /{q[:46]}/")
+            print(f"  {t('eval_recall.found') if found else t('eval_recall.missed')}  {want}  /{q[:46]}/")
 
     tried = n - skipped
-    rate = hits / tried if tried else 0.0
+    # With no query tried there is no hit rate; recording 0.0 would read as total failure.
+    rate = round(hits / tried, 3) if tried else None
     rec = {"date": __import__("datetime").datetime.now().strftime("%Y-%m-%dT%H:%M"),
-           "band": band, "n": tried, "hits": hits, "rate": round(rate, 3), "max_hits": max_hits,
+           "band": band, "n": tried, "hits": hits, "rate": rate, "max_hits": max_hits,
+           "status": "measured" if tried else "unmeasured",
            "seed": seed, "corpus_turns": len(turns), "skipped": skipped,
            "misses": misses[:5]}
     os.makedirs(os.path.dirname(METRICS), exist_ok=True)
     with open(METRICS, "a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    if not tried:
+        print("\n" + t("eval_recall.unmeasured", band=band, skipped=skipped))
+        print(t("eval_recall.recorded", path=os.path.relpath(METRICS, M.ROOT)))
+        return 1
 
-    print(f"\n[{band}] hit@{max_hits} = {hits}/{tried} ({rate:.0%}) · 코퍼스 발화 {len(turns)}개"
-          + (f" · 질의어 못 뽑음 {skipped}개" if skipped else ""))
+    print("\n" + t("eval_recall.summary", band=band, max_hits=max_hits, hits=hits, tried=tried,
+                    rate=f"{rate:.0%}", turns=len(turns))
+          + (t("eval_recall.skipped", count=skipped) if skipped else ""))
     if misses:
-        print(f"\n실패 {len(misses)}건 (소스·파서·출처·순위·표현 차이 원인 분류 대상):")
+        print("\n" + t("eval_recall.misses", count=len(misses)))
         for m in misses[:5]:
             print(f"  {m['ts']} [{m['role']}] /{m['q'][:40]}/  {m['head']}")
-    print(f"\n기록: {os.path.relpath(METRICS, M.ROOT)}")
-    print("이 수치는 **바닥**이다 — 질의어를 원문에서 뽑았으므로 표현 불일치는 안 쟀다.")
+    print("\n" + t("eval_recall.recorded", path=os.path.relpath(METRICS, M.ROOT)))
+    print(t("eval_recall.floor"))
     return 0
 
 
@@ -141,6 +149,6 @@ if __name__ == "__main__":
     ap.add_argument("--seed", type=int, default=20260824)
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--band", choices=list(BANDS), default="topic",
-                    help="질의어 난이도. rare=희귀토큰(쉬움) · topic=주제어(실사용)")
+                    help=t("eval_recall.help_band"))
     a = ap.parse_args()
     sys.exit(run(a.n, a.max_hits, a.seed, a.quiet, a.band))

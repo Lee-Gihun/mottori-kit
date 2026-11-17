@@ -1,5 +1,5 @@
-<!-- source: incentive.ko.md sha256:81471a1afbe2dca3f1eae44b648ec291a51cb4c6bc08eb63e2fa1e7d4c996488 source-of-truth: ko -->
-Korean: `incentive.ko.md`
+<!-- source: ko/system/lenses/incentive.md sha256:81471a1afbe2dca3f1eae44b648ec291a51cb4c6bc08eb63e2fa1e7d4c996488 source-of-truth: ko -->
+Korean: `ko/system/lenses/incentive.md`
 
 # Incentive lens
 

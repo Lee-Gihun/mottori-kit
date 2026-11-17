@@ -4,6 +4,7 @@ import datetime
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -91,8 +92,8 @@ def _root():
     return root
 
 
-def _run(root, *args):
-    env = dict(os.environ, MOTTORI_INSTANCE=str(root))
+def _run(root, *args, lang="ko"):
+    env = dict(os.environ, MOTTORI_INSTANCE=str(root), MOTTORI_LANG=lang)
     return subprocess.run(
         [sys.executable, str(RECEIPTS), *args], cwd=root, env=env,
         text=True, capture_output=True,
@@ -163,8 +164,14 @@ def test_show_meta_summary_and_receipt():
         run = root / "_private" / "work" / "runs" / "success-codex"
         (run / "result.txt").write_text(long_result, encoding="utf-8")
         meta = json.loads((run / "meta.json").read_text(encoding="utf-8"))
+        # The clipped receipt names `show` as the way back to the full text, so show never clips.
+        clipped = fresh_worker._receipt(meta, long_result)
+        assert "python3 tools/receipts.py show success-codex" in clipped
         replay = _run(root, "show", "success-codex")
-        assert replay.stdout.split("RECEIPT\n", 1)[1] == fresh_worker._receipt(meta, long_result)
+        shown = replay.stdout.split("RECEIPT\n", 1)[1]
+        assert shown == fresh_worker._receipt(meta, long_result, max_bytes=None)
+        assert shown.endswith("result:\n" + long_result)
+        assert shown.split("result:\n", 1)[0] == clipped.split("result:\n", 1)[0]
 
         missing = _run(root, "show", "../outside")
         assert missing.returncode == 1 and "run을 찾을 수 없다" in missing.stderr
@@ -244,18 +251,20 @@ def test_aggregate_eight_runs_into_one_bounded_wave_receipt():
         shutil.rmtree(root, ignore_errors=True)
 
 
-def test_ledger_and_worker_receipt_limits_share_the_exact_boundary():
+def test_receipt_format_has_one_implementation():
+    sys.path.insert(0, str(HERE))
+    import receipts
+    assert not hasattr(receipts, "_receipt") and not hasattr(receipts, "_clip_utf8")
+
+
+def test_preserved_and_capture_failures_count_as_failures():
     root = _root()
     try:
-        sys.path.insert(0, str(HERE))
-        import fresh_worker
-        import receipts
-        assert receipts.RECEIPT_MAX_BYTES == fresh_worker.RECEIPT_MAX_BYTES == 4096
-        run = root / "_private" / "work" / "runs" / "success-codex"
-        meta = json.loads((run / "meta.json").read_text(encoding="utf-8"))
-        body = "x" * 20000
-        assert len(receipts._receipt(meta, body).encode("utf-8")) <= 4096
-        assert len(fresh_worker._receipt(meta, body).encode("utf-8")) <= 4096
+        _fixture(root, "capture-failed", "codex", "artifact-capture-failed",
+                 {"input": 1, "output": 1, "total": 2}, "capture prompt", 0)
+        result = _run(root, "list")
+        assert result.returncode == 0, result.stderr
+        assert "failures=2" in result.stdout
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -283,10 +292,25 @@ def test_doctor_recent_runs_threshold():
         shutil.rmtree(root, ignore_errors=True)
 
 
-TESTS = [test_list_table_and_totals, test_list_json_since_and_runtime_filters,
+def test_english_output_has_no_hangul():
+    root = _root()
+    try:
+        outputs = [_run(root, *args, lang="en") for args in (
+            ("list",), ("cost",), ("show", "missing"), ("aggregate", "success-codex", "failed-claude"),
+            ("list", "--since", "7x"), ("aggregate",) + tuple(f"r{i}" for i in range(9)))]
+        text = "\n".join(run.stdout + run.stderr for run in outputs)
+        assert "total runs=3 tokens=150/30/180 failures=1" in text, text
+        assert "run not found: missing" in text and "daily histogram" in text, text
+        assert not re.search("[가-힣]", text), text
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+TESTS = [test_list_table_and_totals, test_english_output_has_no_hangul, test_list_json_since_and_runtime_filters,
          test_show_meta_summary_and_receipt, test_cost_runtime_totals_and_daily_histogram,
          test_aggregate_eight_runs_into_one_bounded_wave_receipt,
-         test_ledger_and_worker_receipt_limits_share_the_exact_boundary,
+         test_receipt_format_has_one_implementation,
+         test_preserved_and_capture_failures_count_as_failures,
          test_doctor_recent_runs_threshold]
 
 

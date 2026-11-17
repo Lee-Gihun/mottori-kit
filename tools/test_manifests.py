@@ -21,20 +21,11 @@ ROOT = Path(__file__).resolve().parent.parent
 REVIEW = ROOT / "system" / "review-manifest.yaml"
 MATRIX = ROOT / "system" / "enforcement-matrix.yaml"
 # Kept in step with tools/manifest_build.py: an independent oracle for the builder's path inventory.
-DELIVERY_PREFIXES = ("tools/", "system/", "templates/", ".github/workflows/", ".claude/commands/")
+DELIVERY_PREFIXES = ("tools/", "system/", "templates/", ".github/workflows/", ".claude/commands/", "ko/")
 MANIFEST_REL = "system/review-manifest.yaml"
 APPROVAL_FILE = Path("system/gate-definition-approvals.md")
 
 
-def locale_paths() -> set[str]:
-    paths = {path.relative_to(ROOT).as_posix() for path in ROOT.glob("*.ko.md")}
-    for base in (ROOT / "system", ROOT / "templates", ROOT / ".claude" / "commands"):
-        if base.is_dir():
-            paths.update(path.relative_to(ROOT).as_posix() for path in base.rglob("*.ko.md"))
-    instance_locales = {
-        "system/decisions.ko.md", "system/instance-rules.ko.md", "system/rituals.local.ko.md"
-    }
-    return {path for path in paths if path not in instance_locales and not path.startswith("system/debate/_")}
 KINDS = {"rule", "evidence", "tool", "hook", "template", "generated", "gate-definition"}
 OWNERS = {"kit", "instance"}
 
@@ -79,7 +70,6 @@ def expected_paths() -> set[str]:
     # the dispatcher's patch without indexing it either: untracked files under the delivery prefixes count.
     paths.add(MANIFEST_REL)
     paths.update(untracked_paths())
-    paths.update(locale_paths())
     return {path for path in paths if (ROOT / path).is_file() and is_text(ROOT / path)}
 
 
@@ -113,7 +103,7 @@ def test_new_files_are_within_delivery_prefixes(problems: "Problems") -> None:
         candidate = ROOT / path
         if not candidate.is_file() or not is_text(candidate):
             continue
-        inside = path.startswith(DELIVERY_PREFIXES) or path in locale_paths() or path == MANIFEST_REL
+        inside = path.startswith(DELIVERY_PREFIXES) or path == MANIFEST_REL
         problems.add(inside, f"new file outside the delivery prefixes {DELIVERY_PREFIXES}: {path} "
                              "(a worker clone or fresh-install fixture cannot see it before it is committed; "
                              "extend DELIVERY_PREFIXES in tools/manifest_build.py and tools/test_manifests.py)")

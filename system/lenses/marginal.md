@@ -1,5 +1,5 @@
-<!-- source: marginal.ko.md sha256:e34921feb48d7cca47079f90b192cf7a11384a22fad4dd4bc8ee693f61d33c42 source-of-truth: ko -->
-Korean: `marginal.ko.md`
+<!-- source: ko/system/lenses/marginal.md sha256:e34921feb48d7cca47079f90b192cf7a11384a22fad4dd4bc8ee693f61d33c42 source-of-truth: ko -->
+Korean: `ko/system/lenses/marginal.md`
 
 # Marginal value lens
 

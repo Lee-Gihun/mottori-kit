@@ -1,10 +1,10 @@
-<!-- source: PRD-session-memory.ko.md sha256:93942220ec5851af2a6fc3af6428d94fbe7cd3036cda5d480921d09932cc2a1f source-of-truth: ko -->
+<!-- source: ko/system/PRD-session-memory.md sha256:aab484b157048165d3adbe21c4fc54f425f7ca866a588eb17b2e3817d7b184ea source-of-truth: ko -->
 # PRD — Memory for continuing and improving work
 
 > **Status: current engine requirements, revised 2026-10-08.** This is not an implementation-complete declaration. Unmet requirements and observation methods belong in `design-memory-runtime.md#verification`.
-> The Korean `.ko.md` is the source of truth. This English `.md` is a translation bound to that source's content hash.
+> The Korean `ko/system/PRD-session-memory.md` is the source of truth. This English file is a translation bound to that source's content hash.
 > Role: what the user must be able to rely on when starting a session, returning to a deep thread, and improving the system autonomously.
-> Claim authority and data boundaries belong in `PRD-info-architecture.ko.md`; technical structure belongs in `design-memory-runtime.md`.
+> Claim authority and data boundaries belong in `ko/system/PRD-info-architecture.md`; technical structure belongs in `design-memory-runtime.md`.
 
 <a id="purpose"></a>
 ## 1. Three situations the user needs supported
@@ -122,14 +122,16 @@ Observe recovery, retrieval, injection, behavior, and effect separately on the c
 
 This section is the **current contract** for byte and capability references in existing documents and decision records. Implementation is described in `design-memory-runtime.md#worker`.
 
-- Isolate broad reading, audits, and cross-runtime discussion in fresh, ephemeral workers. Do not provide resume, runtime fallback, public trace landing, or a write-capable Claude adapter. The worker itself does not own a scheduler.
-- The receipt returned to the main session is **at most 4,096 UTF-8 bytes**. Preserve the exact prompt snapshot, event stream, stderr, final result, and content hashes in a self-contained private run record under `_private/work/runs/`. Native session persistence is zero.
+- Isolate broad reading, audits, and cross-runtime discussion in fresh, ephemeral workers. Do not provide resume, runtime fallback, public trace landing, or a write-capable Claude adapter. The worker itself does not own a scheduler. `tools/ask_codex.sh --resume <SID>` is outside this contract: it calls `codex exec resume` directly, with no run record, receipt cap, or feature lockdown, and needs an explicit thread id.
+- The receipt returned to the main session is **at most 4,096 UTF-8 bytes**; bytes track the caller's token cost evenly across languages. The header puts the verdict, the worker's unknowns (if any), and `full: python3 tools/receipts.py show <run-id>` before the body. A longer result keeps its beginning, cut on a UTF-8 boundary, and the cut repeats that command. Preserve the exact prompt snapshot, event stream, stderr, final result, and content hashes in a self-contained private run record under `_private/work/runs/`. Native session persistence is zero.
 - Claude is **read-only (`Read|Glob|Grep`)**; Codex uses a **workspace-write sandbox**. Record capabilities in the receipt and metadata. Claude emitting an edit proposal is different from having file-write permission. State changes, sending, and committing belong to the dispatcher's authority.
 - Both adapters disable connectors, web, command network access, configured plugins, and fan-out, and do not depend on hooks. Dispatch identifies AGENTS and the required public/local canonical paths. Claude uses safe mode and a strict empty MCP configuration; Codex ignores user configuration and disables the relevant features.
 - Metadata v2 records `kit_rev`, `kit_rev_source`, `repo_rev`, `kit_dirty`, `engine_sha256`, `kit_sync`, `agents_sha256`, `harness_sha256`, `usage`, `read_scope`, and `scope`. Missing usage is null; an absent write-set check is unchecked. A scope violation changes run status only with `--strict-scope`. Do not describe post-hoc detection as prevention.
 - A wave's aggregate receipt accepts at most eight runs, preserving input order, and totals at most 4,096 UTF-8 bytes. Each row includes run ID, verdict, evidence location, and unknowns. Do not turn an unreported value into an assertion of absence.
 
 - Worktree output delivery must complete before cleanup. A failed or incomplete artifact capture returns exit 5 and preserves the worktree; termination during capture also preserves it. This failure takes precedence over strict-scope exit 4, while `scope.status` still records any scope violation. Read-material copies are not output artifacts.
+- A prompt that names a model-send deny path, or is stored under one, is refused before any run starts, even when the text forbids that path. This is a text check, not a read sandbox. State a prohibition in words, such as "the private folder".
+- `--expect PATH` (repeatable, inside the workspace) is the minimal completion contract: after the run each path must be a non-empty regular file. A missing or empty one turns a success into `expected-output-missing` with exit 6, records `expect:` in metadata and the receipt header, and makes the receipt verdict INCONCLUSIVE. Without `--expect` nothing changes; read-only reviews need not use it.
 - Provider credentials remain instance-owned. The worker environment removes the other provider's credential variables; saved Claude authentication is injected only into Claude. The environment policy is part of harness identity. `read_scope` is optional self-report and does not establish a read sandbox.
 
 <a id="106-current-contract-pilot"></a>

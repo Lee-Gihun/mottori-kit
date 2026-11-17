@@ -9,6 +9,8 @@ import tempfile
 from testlib import run_test
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# The assertions below match the Korean check labels.
+os.environ["MOTTORI_LANG"] = "ko"
 sys.path.insert(0, HERE)
 import memlib as M
 import importlib
@@ -50,6 +52,9 @@ def fixture_tracker_drift(tmp):
 def run():
     tmp = tempfile.mkdtemp(prefix="memcheck-fixture-")
     failures = []
+    # The labels below are now.py's Korean check output; pin the language so they stay comparable.
+    old_lang = os.environ.get("MOTTORI_LANG")
+    os.environ["MOTTORI_LANG"] = "ko"
     try:
         # --- Stale index fixture ---
         mem = fixture_8_8_stale_index(tmp)
@@ -59,9 +64,9 @@ def run():
             now.check(memory_dir=mem, root=os.path.join(tmp, "empty"))
         out1 = buf.getvalue()
         if "[인덱스 휘발성]" in out1:
-            print("픽스처 1 (8/8 낡은 인덱스): ✓ 검출")
+            print("fixture 1 (stale 8/8 index): ✓ detected")
         else:
-            failures.append("픽스처 1: 인덱스 휘발성 미검출\n" + out1)
+            failures.append("fixture 1: stale index not detected\n" + out1)
 
         # --- Track drift fixture ---
         root, state = fixture_tracker_drift(tmp)
@@ -76,18 +81,22 @@ def run():
         finally:
             M.STATE, M.TRACKS = orig_state, orig_tracks
         if "[정본 낙후] demo/tracker.md" in out2:
-            print("픽스처 2 (tracker 드리프트): ✓ 검출")
+            print("fixture 2 (tracker drift): ✓ detected")
         else:
-            failures.append("픽스처 2: 정본 낙후 미검출\n" + out2)
+            failures.append("fixture 2: stale canonical track not detected\n" + out2)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+        if old_lang is None:
+            os.environ.pop("MOTTORI_LANG", None)
+        else:
+            os.environ["MOTTORI_LANG"] = old_lang
 
     if failures:
-        print("\n실패:")
+        print("\nfailures:")
         for f in failures:
             print(" ", f)
         return 1
-    print("전 픽스처 통과")
+    print("all fixtures passed")
     return 0
 
 

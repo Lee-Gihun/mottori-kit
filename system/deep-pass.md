@@ -1,5 +1,5 @@
-<!-- source: deep-pass.ko.md sha256:3cc07864f4b5037cc955305aa0efe9805d6df7a1af68d012eeaec30f330f1b38 source-of-truth: ko -->
-Korean: `deep-pass.ko.md`
+<!-- source: ko/system/deep-pass.md sha256:3cc07864f4b5037cc955305aa0efe9805d6df7a1af68d012eeaec30f330f1b38 source-of-truth: ko -->
+Korean: `ko/system/deep-pass.md`
 
 # Deep pass
 

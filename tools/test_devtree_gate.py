@@ -51,19 +51,26 @@ def fixture_tree():
         shutil.copy2(ROOT / rel, target)
     marker = "`test:tools/test_devtree_probe.py::test_probe`"
     files = {
-        ".gitignore": "_private/\nstate/\nsystem/memory-config.json\n",
+        ".gitignore": "_private/\nstate/\nnotes/\nsystem/memory-config.json\n",
         "README.md": "# Synthetic gate fixture\n",
         "system/kit-decisions.md": "### DR-001 fixture\nContext: " + marker + ".\n",
         "CHANGELOG.md": "## v0\n\n### [Note] fixture\nEvidence: " + marker + ".\n",
         "system/enforcement-matrix.md": (
             "| Contract | Status | Evidence |\n|---|---|---|\n"
             "| fixture | ENFORCED | " + marker + " |\n"),
+        # The probe stands in for the distribution self-checks (translation hashes, manifests,
+        # Hangul placement) that reject ordinary user edits in an installed copy.
         "tools/test_devtree_probe.py": (
             "from pathlib import Path\nfrom testlib import run_test\n"
             "def test_probe():\n"
             "    root = Path(__file__).resolve().parents[1]\n"
             "    assert (root / 'README.md').read_text() == '# Synthetic gate fixture\\n'\n"
+            "    assert not (root / 'notes').exists()\n"
+            "    assert sorted(p.name for p in (root / 'system').glob('*.md')) == "
+            "['enforcement-matrix.md', 'kit-decisions.md']\n"
             "if __name__ == '__main__':\n    run_test(test_probe, __file__)\n"),
+        # setup.sh with templates/ and no instance config marks a kit development tree.
+        "setup.sh": "#!/usr/bin/env bash\n",
     }
     for rel, content in files.items():
         path = root / rel
@@ -76,6 +83,163 @@ def fixture_tree():
                      "commit", "-qm", "synthetic gate fixture"]):
         subprocess.run(command, cwd=root, env=env, check=True, capture_output=True, text=True)
     return outer, root
+
+
+STOP = json.dumps({"session_id": "x", "stop_hook_active": False, "hook_event_name": "Stop"})
+
+
+def gate_hook(root, command, payload=STOP):
+    """Run one gate hook command the way Claude Code does: JSON on stdin."""
+    return subprocess.run(
+        [sys.executable, str(root / "tools" / "gate.py"), command], cwd=root,
+        env=fixture_env(root), input=payload, capture_output=True, text=True,
+    )
+
+
+def block_reason(result):
+    """Return the Stop block reason, or None when the hook let the turn end."""
+    assert result.returncode == 0, result.stdout + result.stderr
+    if not result.stdout.strip():
+        return None
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block", result.stdout
+    return decision["reason"]
+
+
+def installed_tree():
+    """Turn the fixture into an installed instance: instance config present, state rendered."""
+    outer, root = fixture_tree()
+    config = json.loads((root / "templates" / "memory-config.json").read_text(encoding="utf-8"))
+    config["instance"].update({"name": "fixture", "context": "personal"})
+    config["tracks"] = []
+    (root / "system" / "memory-config.json").write_text(json.dumps(config), encoding="utf-8")
+    for args in (("log", "[system/state] installed fixture"), ("render",)):
+        run(root, str(root / "tools" / "now.py"), *args, check=True)
+    run(root, str(root / "tools" / "gate.py"), "baseline", check=True)
+    return outer, root
+
+
+def run_log(root):
+    log = root / ".git" / "devtree-runs.log"
+    return log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+
+
+def test_installed_check_runs_no_cited_suite():
+    outer, root = installed_tree()
+    try:
+        log = root / ".git" / "devtree-runs.log"
+        log.write_text("", encoding="utf-8")
+        run(root, str(root / "tools" / "gate.py"), "dirty", check=True)
+        assert block_reason(gate_hook(root, "check")) is None
+        assert run_log(root) == [], run_log(root)
+    finally:
+        shutil.rmtree(outer, ignore_errors=True)
+
+
+def test_installed_user_edits_do_not_block_but_broken_links_do():
+    outer, root = installed_tree()
+    try:
+        (root / "notes").mkdir()
+        (root / "notes" / "meeting.md").write_text("# 회의 메모\n", encoding="utf-8")
+        (root / "system" / "team-notes.md").write_text("# team notes\n", encoding="utf-8")
+        with (root / "README.md").open("a", encoding="utf-8") as readme:
+            readme.write("\nlocal note\n")
+        gate_hook(root, "dirty", json.dumps({"tool_input": {"file_path": str(root / "README.md")}}))
+        assert block_reason(gate_hook(root, "check")) is None
+        with (root / "README.md").open("a", encoding="utf-8") as readme:
+            readme.write("[gone](missing-target.md)\n")
+        gate_hook(root, "dirty", "{}")
+        reason = block_reason(gate_hook(root, "check"))
+        assert reason and "README.md" in reason and "missing-target.md" in reason, reason
+    finally:
+        shutil.rmtree(outer, ignore_errors=True)
+
+
+def test_installed_check_sees_shell_edits_without_marker():
+    outer, root = installed_tree()
+    try:
+        assert block_reason(gate_hook(root, "check")) is None
+        readme = root / "README.md"
+        readme.write_text("# Synthetic gate fixture\n[gone](first-missing.md)\n", encoding="utf-8")
+        reason = block_reason(gate_hook(root, "check"))
+        assert reason and "first-missing.md" in reason, reason
+        readme.write_text("# Synthetic gate fixture\nrepaired\n", encoding="utf-8")
+        assert block_reason(gate_hook(root, "check")) is None
+        # README stays " M" in git status; only its size and mtime reveal the second edit.
+        readme.write_text("# Synthetic gate fixture\n[gone](second-missing.md)\n", encoding="utf-8")
+        reason = block_reason(gate_hook(root, "check"))
+        assert reason and "second-missing.md" in reason, reason
+    finally:
+        shutil.rmtree(outer, ignore_errors=True)
+
+
+def test_dirty_ignores_edits_outside_the_instance_root():
+    outer, root = installed_tree()
+    try:
+        marker = root / ".git" / "mottori-gate-dirty"
+        elsewhere = outer / "elsewhere.md"
+        gate_hook(root, "dirty", json.dumps({"tool_input": {"file_path": str(elsewhere)}}))
+        assert not marker.exists()
+        gate_hook(root, "dirty", json.dumps({"tool_input": {"notebook_path": str(elsewhere)}}))
+        assert not marker.exists()
+        gate_hook(root, "dirty", json.dumps({"tool_input": {"file_path": str(root / "README.md")}}))
+        assert marker.exists()
+        marker.unlink()
+        gate_hook(root, "dirty", "not json")
+        assert marker.exists(), "an unreadable payload must still mark the turn"
+    finally:
+        shutil.rmtree(outer, ignore_errors=True)
+
+
+def test_checker_failure_reason_names_the_checker():
+    outer, root = installed_tree()
+    try:
+        (root / "tools" / "linkcheck.py").write_text("import sys\nsys.exit(7)\n", encoding="utf-8")
+        gate_hook(root, "dirty", "{}")
+        reason = block_reason(gate_hook(root, "check"))
+        assert reason and "linkcheck" in reason and "exit=7" in reason, reason
+        assert len(reason) < 600, reason
+    finally:
+        shutil.rmtree(outer, ignore_errors=True)
+
+
+def test_resume_reports_the_last_block_reason():
+    outer, root = installed_tree()
+    try:
+        (root / "README.md").write_text("[gone](resume-missing.md)\n", encoding="utf-8")
+        gate_hook(root, "dirty", "{}")
+        assert block_reason(gate_hook(root, "check"))
+        log = root / ".git" / "devtree-runs.log"
+        log.write_text("", encoding="utf-8")
+        resumed = gate_hook(root, "resume", "{}")
+        assert resumed.returncode == 0, resumed.stderr
+        context = json.loads(resumed.stdout)["hookSpecificOutput"]["additionalContext"]
+        assert "resume-missing.md" in context, context
+        assert (root / ".git" / "mottori-gate-pending").exists()
+    finally:
+        shutil.rmtree(outer, ignore_errors=True)
+
+
+def test_devtree_precommit_and_release_run_cited_suites():
+    outer, root = fixture_tree()
+    try:
+        run(root, str(root / "tools" / "gate.py"), "baseline", check=True)
+        log = root / ".git" / "devtree-runs.log"
+        for command in ("precommit", "release"):
+            log.write_text("", encoding="utf-8")
+            result = run(root, str(root / "tools" / "gate.py"), command)
+            assert result.returncode == 0, command + result.stdout + result.stderr
+            assert any(line.endswith(" tools/test_devtree_probe.py::test_probe")
+                       for line in run_log(root)), (command, run_log(root))
+        # An explicit scope overrides the tree-shape decision.
+        log.write_text("", encoding="utf-8")
+        env = dict(fixture_env(root), MOTTORI_GATE_SCOPE="session")
+        session = subprocess.run([sys.executable, str(root / "tools" / "gate.py"), "precommit"],
+                                 cwd=root, env=env, capture_output=True, text=True)
+        assert session.returncode == 0, session.stdout + session.stderr
+        assert run_log(root) == [], run_log(root)
+    finally:
+        shutil.rmtree(outer, ignore_errors=True)
 
 
 def check_output(root, *extra):
@@ -243,6 +407,13 @@ TESTS = [
     test_partial_install_without_config_fails_closed,
     test_private_only_partial_install_without_config_fails_closed,
     test_selfcheck_warns_with_both_different_issue_sets,
+    test_installed_check_runs_no_cited_suite,
+    test_installed_user_edits_do_not_block_but_broken_links_do,
+    test_installed_check_sees_shell_edits_without_marker,
+    test_dirty_ignores_edits_outside_the_instance_root,
+    test_checker_failure_reason_names_the_checker,
+    test_resume_reports_the_last_block_reason,
+    test_devtree_precommit_and_release_run_cited_suites,
 ]
 
 

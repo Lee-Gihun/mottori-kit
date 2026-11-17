@@ -84,7 +84,10 @@ def _run(token, hooks_enabled):
     codex = shutil.which("codex")
     if not codex:
         raise FileNotFoundError(i18n.t("hookdiag.codex_missing"))
-    cmd = [codex, "exec", "--ignore-user-config", "--ephemeral", "--json",
+    # The user config stays loaded: Codex records project trust there, and an untrusted project
+    # runs no project hooks, so ignoring it would fail the positive case on every real install.
+    # Connectors and other external features are switched off one by one below instead.
+    cmd = [codex, "exec", "--ephemeral", "--json",
            "-C", ROOT, "-s", "read-only", "--config", 'web_search="disabled"',
            "--config", "mcp_servers={}", "--config", "agents.enabled=false"]
     for feature in CODEX_EXTERNAL_FEATURES:

@@ -1,5 +1,5 @@
-<!-- source: feedback-loop.ko.md sha256:3235005ef57ccc05dc338281f8583aa76b49936b4655a3e10922ff108a4fbd07 source-of-truth: ko -->
-Korean: `feedback-loop.ko.md`
+<!-- source: ko/system/lenses/feedback-loop.md sha256:3235005ef57ccc05dc338281f8583aa76b49936b4655a3e10922ff108a4fbd07 source-of-truth: ko -->
+Korean: `ko/system/lenses/feedback-loop.md`
 
 # Feedback loop lens
 

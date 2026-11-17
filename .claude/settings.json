@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/now.py\" hook-context 2>/dev/null || printf '%s' '{\"hookSpecificOutput\": {\"hookEventName\": \"SessionStart\", \"additionalContext\": \"[kit] 상태 자동 주입이 실패했다 (now.py 없음 또는 오류). `python3 tools/doctor.py`로 진단하고, 그동안은 state/NOW.md와 존재할 때 _private/state/NOW.md를 함께 읽어라. local overlay 부재는 unavailable이지 상태 없음이 아니다. State injection failed (now.py is missing or errored). Run `python3 tools/doctor.py`; until fixed, read state/NOW.md together with _private/state/NOW.md when it exists. A missing local overlay means unavailable, not no state.\"}}'"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/now.py\" hook-context 2>/dev/null || printf '%s' '{\"hookSpecificOutput\": {\"hookEventName\": \"SessionStart\", \"additionalContext\": \"[kit] State injection failed (now.py is missing or errored). Run `python3 tools/doctor.py`; until fixed, read state/NOW.md together with _private/state/NOW.md when it exists. A missing local overlay means unavailable, not no state.\"}}'"
           }
         ]
       },
@@ -23,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/now.py\" precompact --runtime claude 2>/dev/null || date \"+%FT%T precompact 훅 실패\" >> \"$CLAUDE_PROJECT_DIR/state/.hook-errors.log\""
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/now.py\" precompact --runtime claude 2>/dev/null || date \"+%FT%T precompact hook failed\" >> \"$CLAUDE_PROJECT_DIR/state/.hook-errors.log\""
           }
         ]
       }
@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/gate.py\" resume 2>/dev/null || true"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/gate.py\" resume 2>>\"$CLAUDE_PROJECT_DIR/state/.hook-errors.log\" || { rc=$?; echo \"$(date '+%FT%T') UserPromptSubmit gate resume hook failed (tools/gate.py resume, rc=$rc)\" >> \"$CLAUDE_PROJECT_DIR/state/.hook-errors.log\"; }"
           }
         ]
       }
@@ -53,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/gate.py\" dirty 2>/dev/null || true"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/gate.py\" dirty 2>>\"$CLAUDE_PROJECT_DIR/state/.hook-errors.log\" || { rc=$?; echo \"$(date '+%FT%T') PostToolUse gate dirty hook failed (tools/gate.py dirty, rc=$rc)\" >> \"$CLAUDE_PROJECT_DIR/state/.hook-errors.log\"; }"
           }
         ]
       }
@@ -63,7 +63,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/gate.py\" check 2>/dev/null || true"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/gate.py\" check 2>>\"$CLAUDE_PROJECT_DIR/state/.hook-errors.log\" || { rc=$?; echo \"$(date '+%FT%T') Stop gate check hook failed (tools/gate.py check, rc=$rc)\" >> \"$CLAUDE_PROJECT_DIR/state/.hook-errors.log\"; }"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/deliver.py\" hook 2>>\"$CLAUDE_PROJECT_DIR/state/.hook-errors.log\" || { rc=$?; echo \"$(date '+%FT%T') Stop delivery check hook failed (tools/deliver.py hook, rc=$rc)\" >> \"$CLAUDE_PROJECT_DIR/state/.hook-errors.log\"; }"
           }
         ]
       }

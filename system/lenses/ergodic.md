@@ -1,5 +1,5 @@
-<!-- source: ergodic.ko.md sha256:8fc84bda2d5fc23efb2a1902f59a877cd484ff1f4840c0f1dbf310e3260220de source-of-truth: ko -->
-Korean: `ergodic.ko.md`
+<!-- source: ko/system/lenses/ergodic.md sha256:8fc84bda2d5fc23efb2a1902f59a877cd484ff1f4840c0f1dbf310e3260220de source-of-truth: ko -->
+Korean: `ko/system/lenses/ergodic.md`
 
 # Ergodicity lens
 

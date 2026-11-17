@@ -1,210 +1,266 @@
-# AI와 큰 작업을 할 때의 사고 프레임
+<!-- source: ko/system/WORKING-WITH-AI.md sha256:22d045862d371bca63b9a027c4cedbc4166a40ecef8c1ff9bcf686f096300650 source-of-truth: ko -->
+Korean: `ko/system/WORKING-WITH-AI.md`
 
-작성 2026-08-15. 출처는 논문 레이더 실행(660편, 26시간, 한도 3회, 플랫폼 1회 교체)의 사후 분석이다.
-이 문서는 그 프로젝트 문서가 아니라 **다음 작업을 주문하고 설계할 때 쓰는 프레임**이다.
+# A frame for large work with AI
 
-읽는 순서: §0을 먼저 읽고, 주문 직전에 §7 체크리스트만 다시 본다.
+Written 2026-08-15. It comes from a post-mortem of the "paper radar" run. The paper radar was a task in the
+original workspace that read all 660 arXiv papers and lab outputs from four months and measured the evidence level
+of each field (26 hours, hit the usage limit 3 times, switched the execution platform once).
+This document is not that project's documentation. It is **a frame for ordering and designing the next task**.
 
----
-
-## 0. 전제 — 무엇이 실제로 달라졌나
-
-인간이 만든 지식 관행은 거의 전부 **읽기가 비싸다**는 제약 위에 세워졌다.
-초록이 있는 이유, 리뷰 논문이 있는 이유, 임팩트 팩터가 있는 이유, 지도교수의 추천이 있는 이유가
-전부 같다. 다 읽을 수 없으니 읽기 전에 걸러야 했다.
-
-지금 바뀐 것은 **읽기와 검증이 동시에 싸졌다**는 것이다. 여전히 비싼 것은 두 가지뿐이다.
-**사람의 주의력**과 **질문의 해상도.**
-
-그래서 인간 관행을 빠르게 흉내내는 것은 최적이 아니다. 그건 사라진 제약을 상속하는 것이다.
-Cochrane systematic review는 50편에 12개월을 쓰는데, 그 절차의 절반(검색 전 질문 고정,
-추출 전 스크리닝)은 읽기가 비싸서 생긴 것이다. 그 절반은 버려도 된다.
-
-**다만 규모 자체가 요구하는 두 개는 남는다: 성공 지표를 먼저 정하는 것, 중단을 정상 상태로 놓는 것.**
+Reading order: read §0 first, then reread only the §7 checklist right before placing an order.
 
 ---
 
-## 1. 읽기가 싸지면 질문이 "뭘 읽을까"에서 "뭘 잴까"로 바뀐다
+## 0. Premise: what actually changed
 
-> **요약이 아니라 계측기를 주문하라. 읽기 목록은 계측의 부산물로 떨어진다.**
+Almost every human knowledge practice was built on the constraint that **reading is expensive**. Abstracts,
+review papers, impact factors, and an advisor's recommendations all exist for the same reason. Nobody could read
+everything, so filtering had to come before reading.
 
-"어떤 20편을 읽어야 하나"는 읽기가 비싸서 생긴 질문이다. 새 질문은 **이 대상의 어떤 성질을
-측정하고 싶은가**이다.
+What changed now is that **reading and verification became cheap at the same time**. Only two things are still
+expensive: **human attention** and **the resolution of the question.**
 
-레이더에서 실제로 나온 계측값 세 개, 전부 전수 독해가 있어야만 존재한다:
+So imitating human practice faster is not optimal. It inherits a constraint that has disappeared. A Cochrane
+systematic review spends 12 months on 50 papers, and half of its procedure (fixing the question before searching,
+screening before extraction) exists because reading was expensive. That half can be dropped.
 
-- 고유 벤치마크 이름 2,157종, 그중 **2편 이상이 쓴 것은 5% 미만** → 리더보드 숫자의 비교 가능성 자체가 없다
-- 편수 2위인 agents 분야의 평균 증거 등급이 하위권 → 열기와 근거가 어긋난 자리가 그 분야다
-- 보고된 수치 5,915개를 원문에 역추적, **근거 없는 것 3개** → 이 코퍼스를 얼마나 믿을지의 실측치
+**Two things that scale itself demands remain: decide the success measure first, and treat interruption as a
+normal state.**
 
-**작동 증상:** 산출물에 "이 대상 전체에 대해 참인 수치"가 하나도 없으면 요약을 주문한 것이다.
+---
 
-## 2. 병목은 노력이 아니라 질문의 해상도로 이동했다
+## 1. When reading is cheap, the question changes from "what to read" to "what to measure"
 
-> **넓이는 공짜다. 공짜가 아닌 것은 모호함이다.**
+> **Order an instrument, not a summary. The reading list falls out as a by-product of measurement.**
+
+"Which 20 papers should I read" is a question created by expensive reading. The new question is **which property
+of this object you want to measure**.
+
+Three measurements the radar actually produced, each of which exists only because everything was read:
+
+- 2,157 distinct benchmark names, of which **fewer than 5% were used by two or more papers**. So leaderboard
+  numbers cannot be compared with each other
+- The agents field, second by paper count, had a mean evidence grade near the bottom. That field is where interest
+  and evidence diverge most
+- 5,915 reported numbers traced back to their originals, **3 without support**. This is a measured value for how
+  far to trust this corpus
+
+**Symptom:** if the output contains no "number that is true of this whole object", you ordered a summary.
+
+## 2. The bottleneck moved from effort to the resolution of the question
+
+> **Breadth is free. What is not free is vagueness.**
 >
-> 여기서 “공짜”는 계산 비용이 0이라는 뜻이 아니다. 이 실행에서 사람의 선별 범위가 병목이
-> 아니었고, 질문의 모호함이 재작업을 만든 병목이었다는 비교 표현이다.
+> "Free" here does not mean zero compute cost. It is a comparison: in this run, the range of human screening was
+> not the bottleneck, and the vagueness of the question was the bottleneck that caused rework.
 
-기계는 질문의 해상도를 그대로 실행한다. "모든 논문 정리해줘"는 정확히 그 해상도로 실행되어
-아카이브가 되었다. 흐릿한 질문을 던지고 진행하면서 감을 잡는 것은 읽기가 비쌀 때만 통했다.
+A machine executes a question at exactly its resolution. "Organize all the papers" ran at exactly that resolution
+and became an archive. Asking a blurry question and getting a feel for it along the way only worked when reading
+was expensive.
 
-**"좁게 물어라"가 아니다.** 범위는 크게 잡되, **답이 측정 가능한 형태로 나오는 질문**을 던져라.
+**This is not "ask narrowly".** Keep the scope large, but ask **a question whose answer comes out in measurable
+form**.
 
-- 나쁨: "최근 4개월 논문 다 정리해줘"
-- 좋음: "최근 4개월 전수 읽고, **이 분야가 자기 주장을 어떻게 검증하는지** 재줘. 서로 반증하는 쌍을 다 찾아줘."
+- Bad: "Organize all papers from the last 4 months"
+- Good: "Read everything from the last 4 months and measure **how this field verifies its own claims**. Find every
+  pair of papers that refute each other."
 
-## 3. 코퍼스 크기와 산출물 크기를 분리하라
+## 3. Separate corpus size from output size
 
-> **다 읽는 것과 다 보여주는 것은 다른 결정이다.**
+> **Reading everything and showing everything are different decisions.**
 
-레이더의 실제 오류가 이것이었다. 660편을 읽은 것은 옳았고, 660편짜리 산출물로 낸 것이 틀렸다.
-같은 코퍼스에 다른 렌더링이면 됐다.
+This was the radar's actual error. Reading 660 papers was right. Delivering a 660-item output was wrong. The same
+corpus with a different rendering would have worked.
 
-그래서 **읽기 예산을 먼저 말하는 것**은 여전히 유효한데 이유가 다르다. 코퍼스를 줄이려는 게 아니라
-**출력 형식을 정하려고** 말하는 것이다. "주당 5편"이면 660편을 다 읽되 산출물은 4주 커리큘럼이어야 한다.
+So **stating a reading budget first** is still valid, but for a different reason. It is not to shrink the corpus.
+It is **to decide the output format**. With "5 papers a week", read all 660, but the output must be a four-week
+curriculum.
 
-**작동 증상:** 산출물의 항목 수가 네가 소비할 수 있는 수의 10배를 넘으면 렌더링을 잘못한 것이다.
+**Symptom:** if the output has more than 10 times as many items as you can consume, the rendering is wrong.
 
-## 4. 그럴듯함은 신호가 아니다. 반증 가능한 것만 신호다
+## 4. Plausibility is not a signal. Only what is falsifiable is a signal
 
-> **모든 산출물이 그럴듯하다. 정보를 나르는 것은 틀릴 수 있었는데 확인된 것뿐이다.**
+> **Every output is plausible. What carries information is only what could have been wrong and was checked.**
 
-레이더에서 값어치가 가장 높았던 것들은 전부 이 범주다.
+Everything of highest value in the radar was in this category.
 
-- 숫자 감사에서 근거 없는 수치 3건을 잡아 고침 (판정 에이전트가 PDF를 400dpi로 렌더해 마커 픽셀을
-  격자선에 대고 쟀다)
-- substantive 오류 신고 4건 중 **2건을 오탐으로 판정하고 고치지 않음** (프롬프트에 "고칠 것을
-  지어내지 말라"와 "not-an-error도 정당한 결과"를 명시해둔 덕)
-- 스키마에 `증명하지 않은 것` · `논문이 스스로 말하지 않은 한계` 칸을 강제
+- A number audit caught and fixed 3 unsupported numbers (the judging agent rendered a PDF at 400 dpi and measured
+  marker pixels against grid lines)
+- Of 4 substantive error reports, **2 were judged false positives and left unfixed** (thanks to the prompt stating
+  "do not invent things to fix" and "not-an-error is a legitimate result")
+- The schema forced the fields `what was not proven` and `limits the paper did not state itself`
 
-> **규칙: 산출물이 스스로를 망신줄 수 있는 칸을 하나 넣어라. 그 칸이 비면 나머지도 못 믿는다.**
+> **Rule: put in one field where the output can embarrass itself. If that field is empty, the rest cannot be
+> trusted either.**
 
-부속 규칙 둘. 2026-08-24 이식 작업에서 둘 다 물렸다.
+Two attached rules. Both bit during the porting work on 2026-08-24.
 
-- **"확인 못 함"이라고 쓰는 것은 면책이 아니라 미결 작업이다.** 주석에 적어두면 처리한 기분이
-  드는데 처리된 것은 없다. 불확실을 남길 거면 그것을 닫는 테스트를 같이 만들거나, 다시 마주치는
-  자리(체크리스트·계측기)에 넣어라. *(실측: 경로 규칙이 특정 문자에서 미검증이라고 docstring에
-  써두고 그대로 배포했다. 나중에 재보니 실제로 틀린 규칙이었다.)*
-- **표본이 한 성질을 공유하면 규칙이 아니라 우연일 수 있다.** 일반화하기 전에 "이 표본 전부가
-  가진 것 중 모집단에는 없는 것"을 물어라. 그리고 그걸 깨는 표본을 **만들어서** 재라.
-  *(실측: 프로젝트 키 12개로 맹글링 규칙을 세웠는데 12개가 전부 영숫자 경로였다. 규칙은
-  `[/_]`였고 실제는 `[^A-Za-z0-9-]`였다. 공백이나 점이 든 경로에서 조용히 빈 결과가 났을 것이다.)*
+- **Writing "not verified" is not a release from liability. It is open work.** Writing it in a comment feels like
+  handling it, but nothing has been handled. If you leave an uncertainty, build the test that closes it, or put it
+  where it will be met again (a checklist or an instrument). *(Measured: a docstring said a path rule was
+  unverified for certain characters, and it shipped as is. Measured later, the rule was actually wrong.)*
+- **If a sample shares one property, a pattern may be chance, not a rule.** Before generalizing, ask "what does
+  every item in this sample have that the population does not". Then **build** a sample that breaks it and
+  measure. *(Measured: a name-mangling rule was set from 12 project keys, and all 12 were alphanumeric paths. The
+  rule was `[/_]`. The actual one was `[^A-Za-z0-9-]`. Paths with spaces or dots would have silently produced
+  empty results.)*
 
-- **신고 판정은 present(행동이 있었나)와 effective(결과를 바꿀 수 있었나)를 분리해 적고**, 판정 불가는 UNCLEAR로 두며 UNCLEAR는 상위 판정을 올리지 않는다 (2609.07925 App. F.4; DR-053).
+- **Record report verdicts with present (did the behavior happen) and effective (could it change the result)
+  separated**. Leave an undecidable verdict as UNCLEAR, and UNCLEAR does not raise the higher-level verdict
+  (paper 2609.07925 appendix F.4).
 
-## 5. 대화는 휘발성 매체다
+## 5. Conversation is a volatile medium
 
-> **남아야 하는 것은 전부 파일로 떨어지고, "남은 게 뭔지"를 그 파일들로부터 다시 계산하는 도구가 있어야 한다.**
+> **Everything that must survive lands in files, and a tool must recompute "what is left" from those files.**
 
-레이더가 한도 3회와 플랫폼 교체 1회를 넘긴 유일한 이유다. 진행 상태를 모델의 머리가 아니라
-디스크에 뒀고 상태 재계산 도구 한 줄이 남은 것을 다시 계산한다.
+This is the only reason the radar survived 3 usage limits and 1 platform switch. Progress state lived on disk, not
+in the model's head, and one line of a state recomputation tool recomputes what is left.
 
-이건 운영 디테일이 아니라 **장기 AI 작업을 가능하게 하는 전제 조건**이다. 없으면 한 세션을 못 넘고,
-있으면 무한히 이어붙일 수 있다.
+This is not an operational detail. It is **the precondition that makes long AI work possible**. Without it, work
+cannot outlive one session. With it, work can be continued indefinitely.
 
-**광역 독해·감사·런타임 토론은 무한 마스터 안에서 직접 돌리지 않는다 (KIT-DR-007).**
-`python3 tools/fresh_worker.py --runtime claude|codex <프롬프트파일>`로 fresh+ephemeral worker에
-맡기면 전체 event stream은 `_private/work/runs/`에 남고, 마스터에는 bounded receipt만 돌아온다.
-정확한 byte·capability 계약은 `PRD-session-memory.md` §10.5가 정본이다. 작은 대화·단일 파일
-수정까지 위임하면 오히려 왕복이 늘므로, 예상 tool 결과가 receipt 예산을 넘는 작업에만 쓴다.
-두 adapter는 user connector와 fan-out을 닫으므로 필요한 NOW·서류철·원문 경로를 prompt에 직접 쓴다.
+**Do not run broad reading, audits, or cross-runtime debates directly inside the endless main session (the
+master) (KIT-DR-007).** Hand them to a worker with
+`python3 tools/fresh_worker.py --runtime claude|codex <prompt-file>`. The worker starts fresh with no earlier
+conversation and leaves no session behind. The full run record stays in `_private/work/runs/`, and only a short
+receipt with a size limit (verdict, what was not verified, location of the full text) returns to the master
+session. `PRD-session-memory.md` §10.5 is the source of truth for the exact receipt size limit and the capabilities
+a worker gets. Delegating a small conversation or a one-file edit only adds round trips, so use it only for work
+whose tool output would likely exceed the receipt limit. Both the Claude and Codex launch modes block user
+connectors and spawning further workers, so write the needed NOW, dossier, and original paths directly into the
+order.
 
-부속 규칙 세 개, 전부 레이더에서 실제로 물렸다:
+Three attached rules, all of which actually bit in the radar:
 
-- **한 항목 끝날 때마다 쓴다.** 모아뒀다 마지막에 쓰면 중단 시 전부 잃는다.
-- **신선도를 mtime으로 판정하지 마라.** 재생성기가 내용이 같아도 파일을 다시 쓰면 자기 시계를 흔들어
-  스스로를 무효화한다. 레이더에서 워처가 DIGEST를 2분마다 다시 써서 최종 review 178편이
-  provisional로 오분류됐다. **동결 대상은 내용 해시로 판정하고, 재생성기는 내용이 같으면 쓰지 않는다.**
-- **의존성을 실제보다 넓게 잡지 마라.** barrier 하나를 잘못 묶어 가장 값싼 산출물(한국어 서술본 113편)이
-  가장 값비싼 단계(재고 660편)를 막고 있었다.
+- **Write after each item finishes.** If you collect results and write at the end, an interruption loses
+  everything.
+- **Do not judge freshness by mtime.** If a regenerator rewrites a file even when content is unchanged, it shakes
+  its own clock and invalidates itself. In the radar, a watcher rewrote DIGEST every 2 minutes, and 178 papers in
+  the final review were misclassified as provisional. **Judge frozen targets by content hash, and have
+  regenerators skip writing when content is unchanged.**
+- **Do not draw dependencies wider than they are.** One wrongly tied barrier made the cheapest output (113 Korean
+  narrative write-ups) block the most expensive stage (re-review of 660 papers).
 
-**발주 형태는 넷이다** (2609.02264: 유효 토폴로지 ≈6개, 간선 수와 토큰은 음의 상관; DR-053): Claude read-only fresh worker / Codex workspace-write fresh worker / 토론 라운드(append) / 딥패스 좌석(세션 안). 정원 레인·sync는 인스턴스 확장이다. 새 구조가 필요하면 기존 형태를 먼저 쓰고, 새 격리 요구가 있을 때만 예외를 설명한다. 워커 수·왕복 수는 비용 대리변수가 아니다. 실제 토큰(`meta.json` usage)·시간·판정 변화로 잰다.
+**There are four forms of order.** A read-only Claude worker, a Codex worker that can write to a work copy, a debate
+round (one turn appended to the debate file at a time), and a role the session takes directly inside a deep pass.
+Other forms such as garden cleanup or sync are added separately by an instance. When a new structure seems
+needed, use an existing form first, and explain an exception only when there is a new isolation requirement
+(paper 2609.02264: about six connection structures were actually useful, and the number of connections between
+agents was negatively correlated with token use). Worker count and round trips do not stand in for cost. Measure
+with actual tokens (usage in `meta.json`), time, and changes in verdicts.
 
-## 6. 사람은 앞이 아니라 뒤에 선다
+**Use workers to gather information, and let the main session write the result.** A team that gave workers only
+the planning matched the score of a team that handed over everything, at half the cost, and sub-agents did better
+only on work with clear inputs and outputs (papers 2610.17471, 2609.09233). **In the order, write what the worker
+may change, what it may only read, what it must deliver, and what it must not touch.** Writing these four fields
+cut unrequested additions from 56 to 22, and naming the specific files in scope worked where a vague warning such
+as "work may overlap" did not (papers 2611.01265, 2610.07261).
 
-> **앞에서 거르면 규모를 잃는다. 뒤에서 판정하면 규모를 지키면서 방향을 얻는다.**
+**Close the job.** When state lives on disk, the disk only grows. When a job starts, put one page at the top of
+its folder (`STATE.md` or `README.md`). It says what the job is, its current status, where to start reading, and
+what may be deleted. Make temporary copies and intermediate outputs in one place only (under `tmp/`). When the
+job ends, write "done" and the date on that page, together with what to keep (results, evidence, how to rerun)
+and what may be deleted. Whoever dispatched the work deletes the temporary copies it made. Anything that cannot
+be rebuilt from something else, such as transcripts, journals, decision records, and manuscripts, is never
+deleted automatically. Put what you would delete or compress in a list and ask the owner. *(Why: when finished
+and running jobs, and originals and copies, are not told apart, nobody knows what to clear when the disk fills
+up, and finished work cannot be found again. `decision:KIT-DR-027`.)*
 
-사람이 사전 필터로 들어가면 AI가 전수를 읽을 수 있다는 이점이 사라진다. 그런데 사람만 할 수 있는
-역할이 하나 있고 그것은 **캘리브레이션**이다.
+## 6. People stand at the back, not the front
 
-"이 목록 승인해줘"가 아니라 **"이 셋 중 뭐가 실제로 네 일을 바꿨나."** 5분이면 되고,
-**시스템 전체에서 AI가 생성하지 않은 유일한 신호**다.
+> **Filtering at the front loses scale. Judging at the back keeps scale and gains direction.**
 
-이게 없으면 선별 기준은 영원히 AI가 쓴 기준이고, 그게 사람 기준과 얼마나 다른지 아무도 모른다.
+If a person enters as a pre-filter, the advantage that AI can read everything disappears. But there is one role
+only a person can play, and it is **calibration**.
 
-## 7. 주문 전 체크리스트
+Not "approve this list" but **"which of these three actually changed your work."** It takes five minutes, and it
+is **the only signal in the whole system not generated by AI**.
 
-주문하기 직전에 이것만 본다. 여섯 개 다 답할 수 있으면 해상도가 충분하다.
+Without it, the selection criterion stays an AI-written criterion forever, and nobody knows how far it is from a
+human one.
 
-1. **뭘 재나?** 이 대상 전체에 대해 참인 수치가 최소 하나 나오나
-2. **내 소비량은?** (코퍼스 크기가 아니라 **산출물 형식**을 정하는 값)
-3. **틀릴 수 있는 칸은 뭐지?** 산출물이 스스로를 망신줄 수 있는 필드
-4. **중단되면 어디서 이어붙나?** 상태가 어느 파일에 떨어지고 무엇이 남은 일을 계산하나
-5. **성공은 뭐로 아나?** 6개월 뒤 무엇이 달라져 있으면 성공인가
-6. **수치 계보를 남기나?** 아래 한 줄
+## 7. Checklist before ordering
 
-> **수치 계보.** 중요한 정량 주장마다 값·단위·대상·기간·정의·원자료 위치(또는 계산식)를 남긴다.
-> **같은 추정대상의 경쟁값은 시점·범위·분모와 함께 보존하고, 화해 전에는 하나를 고르지 않는다.**
-> 비율은 가능하면 분자와 분모를, 불가능하면 `분모 미확인`을 명시한다.
+Look at only this right before ordering. If you can answer all six, the resolution is sufficient.
+
+1. **What does it measure?** Does at least one number come out that is true of the whole object
+2. **How much can I consume?** (the value that sets the **output format**, not the corpus size)
+3. **Which field can be wrong?** The field where the output can embarrass itself
+4. **Where does it resume after an interruption?** Which file the state lands in, and what computes the remaining
+   work
+5. **How will success be known?** What would be different in six months if it succeeded
+6. **Does it keep number lineage?** The line below
+
+> **Number lineage.** For every important quantitative claim, keep the value, unit, object, period, definition,
+> and location of the raw data (or the formula).
+> **Keep competing values for the same estimand together with their time, scope, and denominator, and do not pick
+> one before they are reconciled.** For a ratio, state the numerator and denominator when possible, and otherwise
+> write `denominator unverified`.
 >
-> *(Why: 관측 — 한 코퍼스를 놓고 원저자·수집 단계·검토 단계에서 같은 방향의 수치 왜곡이 나왔다.
-> 메커니즘 — 더 깔끔한 문장이 되는 값이 선택되고, 단계를 지날수록 같은 방향으로 누적된다.
-> 차단 지점 — 수치를 산출물에 옮기는 순간. **주의:** 세 단계는 같은 코퍼스와 서사를 공유하므로
-> 상관된 관측이다. "지배적 편향"이나 "독립적 재현"이라고 부르지 않는다 — 한 실행으로는 못 말한다.)*
+> *(Why: observation. On one corpus, the original authors, the collection stage, and the review stage distorted
+> numbers in the same direction. Mechanism. The value that makes a cleaner sentence gets chosen, and the
+> distortion accumulates in the same direction stage by stage. Blocking point. The moment a number is copied into
+> an output. **Caution:** the three stages share the same corpus and narrative, so they are correlated
+> observations. Do not call this a "dominant bias" or an "independent replication". One run cannot say that.)*
 
-**"두 값이 있으면 둘 다"는 같은 추정대상의 경쟁값일 때만 맞다.** 서로 다른 지표 둘을 나란히
-놓는 것은 비교 가능성을 만들지 않는다. 계산으로 만든 값에는 원문 줄번호가 아니라 **입력 위치와
-계산식**이 필요하다.
+**"If there are two values, keep both" is right only for competing values of the same estimand.** Putting two
+different metrics side by side does not create comparability. A computed value needs **its input locations and
+formula**, not a line number in an original.
 
-### 주문 템플릿
+### Order template
 
 ```
-[대상]을 전수로 읽고 [측정하고 싶은 성질]을 재줘.
-넓이는 줄이지 마. 대신 산출물은 내가 [소비 가능량]만 소비할 수 있게 렌더링해줘.
-항목마다 "틀렸다면 어디서 드러나는지"를 같이 적어줘.
-진행 상태는 디스크에 두고, 남은 일을 다시 계산하는 도구를 같이 만들어줘.
-다 되면 내가 [N]개 보고 어느 게 실제로 쓸모 있었는지 표시할게. 그걸로 순위 다시 매기자.
+Read all of [object] and measure [the property you want to measure].
+Do not reduce the breadth. Instead, render the output so that I only have to consume [consumable amount].
+For each item, also write "where it would show if it were wrong".
+Keep progress on disk, and also build a tool that recomputes the remaining work.
+When it is done, I will look at [N] items and mark which were actually useful. We will rerank with that.
 ```
 
-## 8. 상속하지 말 것
+## 8. Do not inherit
 
-읽기가 비쌌던 시절의 유물이다. 그대로 가져오면 새로 생긴 능력을 버리게 된다.
+These are relics of the era when reading was expensive. Carrying them over discards the newly gained capability.
 
-- 검색 전에 질문 고정 (넓게 훑고 질문이 데이터에서 나오게 두는 편이 낫다)
-- 추출 전 초록 스크리닝 (**초록이 아니라 본문으로 걸러야 선별이 근거를 갖는다**)
-- 사람의 사전 승인 게이트
-- "중요한 것만 깊게" 라는 배분 (깊이는 이제 싸다. 비싼 건 사람의 주의력이고 그건 산출물 쪽 문제다)
+- Fixing the question before searching (it is better to sweep broadly and let the question come from the data)
+- Abstract screening before extraction (**selection has grounds only when it filters on the body, not the
+  abstract**)
+- A person's pre-approval gate
+- The allocation "go deep only on what matters" (depth is cheap now. What is expensive is human attention, and that
+  is an output-side problem)
 
-## 9. 이번에 검증된 것 (버리지 말 것)
+## 9. What was verified this time (do not discard)
 
-- **다른 런타임·다른 하네스·논문의 성공법을 통째로 옮기지 않는다.** 대상 런타임의 실패 지점 하나를 고치고 양쪽을 재검증한다 (2609.09134 §3.3: 통째 모방 −14.9pt, 실패 턴 교정 +1.7pt; DR-053).
+- **Do not transplant another runtime's, another harness's, or a paper's success method wholesale.** Fix one
+  failure point of the target runtime and re-verify both sides (paper 2609.09134 §3.3: wholesale imitation lost
+  14.9 points, fixing only the failed turns gained 1.7 points).
 
-- 상태를 디스크에 두기, `status.py` 같은 재계산 도구
-- **재고를 클러스터로 묶어서** 하기. 5편을 한 에이전트가 같이 보면 혼자 읽어서는 절대 안 보이는
-  논문 간 충돌이 나온다. 이번 작업 최고 산출물이 여기서 나왔다
-- 구멍을 먼저 밝히는 PROVENANCE. 레이더의 신뢰성은 자기가 못 본 것을 밝히는 데서 나온다
-- 숫자 역추적과 개별 판정
-- **stage 경계.** 서술본 작성자가 기존 분석의 오류를 의심했을 때 직접 고치지 않고 신고만 하게 했더니,
-  그중 2건이 오탐이었고 멀쩡한 분석이 안 망가졌다
-- 진행 중 사람이 따라볼 수 있는 라이브 페이지 (진행 페이지 패턴: 진행 바 + in-flight +
-  **최근 산출물을 내용째로** 최신순)
-- **결정론 검사기가 없는 큰 작업에서, 산출물을 만든 실행이 유일한 검증자가 되지 않는다.** 같은 모델의
-  별도 호출은 독립 corroboration으로 세지 않는다 (2609.01481 §3.4.3 구현 테스트/독립 QA 분리;
-  2026-09-03·09-06 실측: Codex 독립 검토가 각각 1건·33건의 결함을 잡음. DR-052)
+- State on disk, and a recomputation tool such as `status.py`
+- **Re-review in clusters.** When one agent looks at 5 papers together, conflicts between papers appear that
+  reading alone would never show. The best output of this work came from here
+- PROVENANCE that states the gaps first. The radar's reliability comes from stating what it did not see
+- Tracing numbers back and judging each one
+- **Stage boundaries.** When the narrative writer suspected errors in an existing analysis, it was allowed only to
+  report, not to fix. 2 of those reports were false positives, and the sound analysis was not damaged
+- A live page a person can follow during the run (progress page pattern: progress bar, in-flight items, and
+  **recent outputs with their content**, newest first)
+- **In large work without a deterministic checker, the run that produced the output is not its only verifier.** A
+  separate call to the same model does not count as independent confirmation (paper 2609.01481 §3.4.3: separates
+  implementation tests from independent quality checks. Measured in the original workspace on 2026-09-03 and
+  09-06: review by Codex, a different model, caught 1 and 33 defects respectively)
 
 ---
 
-## 부록 — 이 프레임이 나온 실행
+## Appendix: the run this frame came from
 
-그 실행은 660편(arXiv 482 + 랩 산출물 178), 소스 8곳, 26시간, 한도 3회, Codex 1회 교체.
-방법론·도구·확인된 구멍·자기 검증 결과는 그 실행의 HANDOFF와 PROVENANCE·QA 문서에 남아 있다
-(원본 워크스페이스 소재 — 이 킷에는 프레임만 실었다).
+That run covered 660 papers (482 from arXiv and 178 lab outputs), 8 sources, 26 hours, 3 usage limits, and 1
+switch to Codex. Its methods, tools, confirmed gaps, and self-verification results remain in that run's HANDOFF,
+PROVENANCE, and QA documents (they are in the original workspace. This kit carries only the frame).
 
-## 규범·수치 근거 연결
+## Links to normative and numeric grounds
 
-이 문서의 명령형 문장은 위 부록의 660편 실행에서 관찰한 실패를 다음 광역 작업에서
-반복하지 않기 위한 절차다. 660, 482, 178, 26시간, 3회, 1회는 모집단에 대한
-일반 주장이 아니라 그 단일 실행의 계보값이며, 원문 HANDOFF·PROVENANCE·QA는 원본
-워크스페이스에 있어 이 킷에서는 독립 재검증할 수 없다. 문서 안의 작은 숫자 예시는
-작동 방식을 보이는 장난감 값이지 임계값이나 모집단 추정치가 아니다.
+The imperative sentences in this document are procedures for not repeating, in the next broad task, the failures
+observed in the 660-paper run in the appendix above. 660, 482, 178, 26 hours, 3 times, and 1 time are lineage
+values of that single run, not general claims about a population. The original HANDOFF, PROVENANCE, and QA are in
+the original workspace and cannot be independently re-verified in this kit. The small numeric examples in this
+document are toy values that show how something works, not thresholds or population estimates.

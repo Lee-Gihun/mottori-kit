@@ -8,11 +8,18 @@ closed. IDs prefixed with ~ are advisory time-based findings.
 Block newly introduced issues and removed checkers. Tighten the baseline when issues
 disappear; only an explicit baseline command may adopt a new set.
 
-Stop hooks cover Write, Edit, and NotebookEdit. Precommit checks the staged tree; resume
-reports pending work after missed or interrupted hooks. Local hooks cannot prevent
---no-verify.
+Two scopes. The session scope (linkcheck, now-check) runs at the end of a turn and needs no
+test suites. The release scope adds evidencecheck, manifest, and the cited test suites; it
+guards the kit distribution and runs at precommit in a kit development tree, under CI, and on
+`gate.py release`. An installed instance's precommit uses the session scope plus the staged
+privacy check. MOTTORI_GATE_SCOPE=release|session overrides the tree-shape decision.
 
-Commands: dirty, check, resume, precommit, selfcheck, approve-adoption, baseline, status.
+Stop runs when an edit marker or an unresolved block remains, or when the working tree
+fingerprint differs from the last pass, so shell edits are seen too. Resume only repeats the
+last block reason; it never measures. Local hooks cannot prevent --no-verify.
+
+Commands: dirty, check, resume, precommit, release, selfcheck, approve-adoption, baseline,
+status.
 """
 import contextlib
 import fcntl
@@ -46,6 +53,12 @@ CHECKS = [
     # Check generated manifests against the staged tree in kit distributions.
     ("manifest", [sys.executable, os.path.join(HERE, "manifest_build.py"), "--issues"]),
 ]
+SESSION, RELEASE = "session", "release"
+SCOPE_ENV = "MOTTORI_GATE_SCOPE"
+# A turn-end check must stay within seconds; the distribution self-checks and cited suites take a
+# minute and judge the kit, not the user's turn.
+SESSION_CHECKERS = ("linkcheck", "now-check")
+CAUSE_LIMIT = 300
 TEST_EVIDENCE_ACTIVE = "MOTTORI_TEST_EVIDENCE_ACTIVE"
 TEST_LOG_ENV = "MOTTORI_TEST_LOG"
 TEST_RUN_ID_ENV = "MOTTORI_TEST_RUN_ID"
@@ -82,6 +95,7 @@ DIRTY = lambda: _ephem("mottori-gate-dirty")
 PENDING = lambda: _ephem("mottori-gate-pending")     # A blocked check remains pending until revalidated.
 LOCK = lambda: _ephem("mottori-gate-lock")
 SIGNING_KEY = lambda: _ephem("mottori-gate-key")
+FINGERPRINT = lambda: _ephem("mottori-gate-fingerprint")   # Working tree identity at the last pass.
 
 
 def _approval_path():
@@ -118,8 +132,16 @@ def _lock(timeout=150):
         f.close()
 
 
+# Cause of the most recent failed measurement, and per checker for the current measure() call.
+# Block reasons carry these one-line causes; the output tails stay on stderr only.
+_last_cause = None
+CAUSES = {}
+
+
 def _measurement_failure(reason, *outputs):
     """Keep the failure cause and bounded subprocess tails on stderr."""
+    global _last_cause
+    _last_cause = reason[:CAUSE_LIMIT]
     print("[gate] " + reason[:1000], file=sys.stderr)
     for output in outputs:
         if output:
@@ -168,13 +190,28 @@ def _issues(cmd, cwd=None, instance=None, extra_env=None):
     return gated
 
 
+# Variables that pin Git to one repository, worktree, index, or object store.
+_GIT_PINNING_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
+                    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "GIT_PREFIX")
+
+
+def _unpinned_git_env():
+    """Return the environment without Git pinning variables, so Git resolves from its cwd."""
+    return {k: v for k, v in os.environ.items() if k not in _GIT_PINNING_ENV}
+
+
 def _ensure_git_tree(tree):
     """Give an extracted staged tree local Git metadata before support files are created."""
-    # Give the extracted tree its own Git metadata before tests can resolve the parent
-    # repository.
+    # Give the extracted tree its own Git metadata before tests can resolve the parent repository.
+    # A commit hook exports variables that pin Git to the outer commit: GIT_DIR in a linked
+    # worktree, and an absolute GIT_INDEX_FILE for a pathspec or -a commit. The probe and the
+    # fixture must not inherit them. Otherwise the probe accepts the outer repository, and the
+    # fixture adds and commits through the outer index: it rewrites the index being committed.
+    env = _unpinned_git_env()
     try:
         git_probe = subprocess.run(
             ["git", "-C", tree, "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+            env=env,
         )
     except Exception as error:
         _measurement_failure(f"evidence Git probe could not run: {type(error).__name__}: {error}")
@@ -191,7 +228,7 @@ def _ensure_git_tree(tree):
     for command in fixture_commands:
         try:
             initialized = subprocess.run(
-                command, cwd=tree, env=os.environ, capture_output=True, text=True
+                command, cwd=tree, env=env, capture_output=True, text=True
             )
         except Exception as error:
             _measurement_failure(f"evidence Git setup could not run: {type(error).__name__}: {error}")
@@ -216,6 +253,18 @@ def _cited_test_ids(tree):
     return suites, ids
 
 
+_FAILED_TEST = re.compile(r"^\s*(?:FAIL|✗)\s*:?\s+([A-Za-z_][A-Za-z0-9_]*)", re.M)
+
+
+def _failed_test_names(output):
+    """Return failing test function names from the suites' FAIL/✗ report lines."""
+    names = []
+    for match in _FAILED_TEST.finditer(output):
+        if match.group(1) not in names:
+            names.append(match.group(1))
+    return names
+
+
 def _refresh_test_evidence(tree):
     """Run cited suites under a fresh ID; RAN records prove invocation, not success."""
     if not _ensure_git_tree(tree):
@@ -237,7 +286,8 @@ def _refresh_test_evidence(tree):
     except OSError as error:
         _measurement_failure(f"test evidence log unavailable: {type(error).__name__}: {error}")
         return log_path, False
-    env = dict(os.environ, **{
+    # Suites run git in the extracted tree; a commit hook's pinning must not reach them either.
+    env = dict(_unpinned_git_env(), **{
         TEST_LOG_ENV: log_path,
         TEST_RUN_ID_ENV: run_id,
         TEST_EVIDENCE_ACTIVE: "1",
@@ -245,7 +295,7 @@ def _refresh_test_evidence(tree):
     })
     for rel in ordered:
         if not os.path.isfile(os.path.join(tree, rel)):
-            print(f"[gate] test evidence suite missing: {rel}", file=sys.stderr)
+            _measurement_failure(f"test evidence suite missing: {rel}")
             return log_path, False
         try:
             result = subprocess.run(
@@ -257,14 +307,15 @@ def _refresh_test_evidence(tree):
                                  error.stdout, error.stderr)
             return log_path, False
         except Exception as error:
-            print(f"[gate] test evidence suite could not run: {rel}: "
-                  f"{type(error).__name__}: {error}", file=sys.stderr)
+            _measurement_failure(f"test evidence suite could not run: {rel}: "
+                                 f"{type(error).__name__}: {error}")
             return log_path, False
         if result.returncode != 0:
-            tail = (result.stdout + result.stderr).strip().splitlines()[-12:]
-            print(
-                f"[gate] test evidence suite failed: {rel}: " + " | ".join(tail),
-                file=sys.stderr,
+            failed = _failed_test_names(result.stdout + "\n" + result.stderr)
+            _measurement_failure(
+                f"test evidence suite failed: {rel}: exit={result.returncode}"
+                + (": " + ", ".join(failed[:3]) if failed else ""),
+                result.stdout, result.stderr,
             )
             return log_path, False
     os.environ[TEST_LOG_ENV] = log_path
@@ -272,16 +323,67 @@ def _refresh_test_evidence(tree):
     return log_path, True
 
 
-def measure(tree=None, filelist=None):
+def _role_scope():
+    """Return the scope for precommit, baseline, and the inspection commands.
+
+    A kit development tree guards the distribution, so it runs the release scope. The tree-shape
+    test is the one the pre-push hook and doctor already use; an explicit MOTTORI_GATE_SCOPE wins.
+    An unknown value falls back to the stricter release scope.
+    """
+    requested = os.environ.get(SCOPE_ENV, "").strip().lower()
+    if requested in (SESSION, RELEASE):
+        return requested
+    if requested:
+        print(f"[gate] unknown {SCOPE_ENV}={requested!r}; using {RELEASE}", file=sys.stderr)
+        return RELEASE
+    from pathlib import Path
+    import enforce
+    return RELEASE if enforce.is_presetup_kit_tree(Path(M.ROOT)) else SESSION
+
+
+def _in_scope(base, scope):
+    """Restrict a baseline to the checkers a scope measures, so an unmeasured checker is neither
+    reported as removed nor dropped from the saved baseline. Release keeps every entry so a
+    checker deleted from CHECKS still blocks.
+    """
+    if scope == RELEASE:
+        return dict(base)
+    return {name: issues for name, issues in base.items() if name in SESSION_CHECKERS}
+
+
+def _merged(base, cur, state, scope):
+    """Return the baseline to save. A session measurement keeps the release-only checkers'
+    entries it did not measure. A release measurement covers every checker, so it replaces the
+    whole set; that is how an explicit baseline migrates away a removed checker.
+    """
+    merged = {}
+    if scope == SESSION and state == "ok":
+        known = {name for name, _cmd in CHECKS}
+        merged = {name: set(issues) for name, issues in base.items()
+                  if name in known and name not in SESSION_CHECKERS}
+    merged.update(cur)
+    return merged
+
+
+def measure(tree=None, filelist=None, scope=RELEASE):
+    global _last_cause
     out = {}
+    CAUSES.clear()
     checked_tree = tree or M.ROOT
-    _test_log, test_evidence_ok = _refresh_test_evidence(checked_tree)
-    for name, cmd in CHECKS:
+    checks = [(name, cmd) for name, cmd in CHECKS if scope == RELEASE or name in SESSION_CHECKERS]
+    test_evidence_ok, evidence_cause = True, None
+    if scope == RELEASE:
+        _last_cause = None
+        _test_log, test_evidence_ok = _refresh_test_evidence(checked_tree)
+        evidence_cause = _last_cause
+    for name, cmd in checks:
+        _last_cause = None
         c = list(cmd)
         if tree and name == "linkcheck":
             c += ["--tree", tree] + (["--filelist", filelist] if filelist else [])
         if name == "evidencecheck" and not test_evidence_ok:
             out[name] = None
+            CAUSES[name] = evidence_cause or "test evidence unavailable"
             continue
         if tree and name == "evidencecheck":
             # Use staged checkers and documents; resolve run evidence and instance decisions
@@ -310,6 +412,8 @@ def measure(tree=None, filelist=None):
             )
         else:
             out[name] = _issues(c, cwd=tree if tree else None)
+        if out[name] is None:
+            CAUSES[name] = _last_cause or "no result"
     return out
 
 
@@ -466,7 +570,8 @@ def _verdict(cur, base, state):
     """
     dead = sorted(k for k, v in cur.items() if v is None)
     if dead:
-        return t("gate.checker_dead", items=", ".join(dead)), False
+        items = ", ".join(f"{k} ({CAUSES[k][:CAUSE_LIMIT]})" if CAUSES.get(k) else k for k in dead)
+        return t("gate.checker_dead", items=items), False
     if state == "corrupt":
         return t("gate.baseline_corrupt", path=BASELINE), False
     if state == "absent":
@@ -503,7 +608,34 @@ def _mark(p, val="1"):
     open(p, "w").write(val)
 
 
+def _edit_outside_root():
+    """True only when the PostToolUse payload names a file outside this instance.
+
+    An unreadable or absent payload counts as inside, so a malformed hook still marks the turn.
+    """
+    try:
+        if sys.stdin is None or sys.stdin.isatty():
+            return False
+        import select
+        # A manual call from a script may inherit a stdin that never closes; do not wait on it.
+        if not select.select([sys.stdin], [], [], 1.0)[0]:
+            return False
+        payload = json.loads(sys.stdin.read() or "null")
+        tool_input = payload.get("tool_input") or {}
+        path = tool_input.get("file_path") or tool_input.get("notebook_path")
+        if not isinstance(path, str) or not path:
+            return False
+        if not os.path.isabs(path):
+            path = os.path.join(payload.get("cwd") or M.ROOT, path)
+        root = os.path.realpath(M.ROOT)
+        return os.path.commonpath([os.path.realpath(path), root]) != root
+    except Exception:
+        return False
+
+
 def cmd_dirty():
+    if _edit_outside_root():
+        return 0
     with _lock(timeout=150) as got:
         # Keep the dirty marker even when the lock cannot be acquired.
         _mark(DIRTY(), str(time.time_ns()))
@@ -534,13 +666,13 @@ def _load_adoption_approval(cur, new_issues):
     """Load an immutable-control-plane approval bound to this baseline and measurement."""
     path = APPROVAL()
     if path is None:
-        return None, "Git control plane이 없어 채택 승인 경계를 세울 수 없다"
+        return None, t("gate.approval_no_control_plane")
     try:
         document = json.load(open(path, encoding="utf-8"))
     except OSError:
-        return None, f"승인물이 없다: {path}"
+        return None, t("gate.approval_missing", path=path)
     except (TypeError, ValueError):
-        return None, f"승인물이 JSON이 아니다: {path}"
+        return None, t("gate.approval_not_json", path=path)
     required = {"schema_version", "baseline_sha256", "target_issues_sha256", "adoptions",
                 "payload_sha256", "signature"}
     if not isinstance(document, dict) or set(document) != required \
@@ -549,22 +681,22 @@ def _load_adoption_approval(cur, new_issues):
             or not all(isinstance(document.get(key), str) and document[key]
                        for key in ("baseline_sha256", "target_issues_sha256",
                                    "payload_sha256", "signature")):
-        return None, f"승인물 형식이 잘못됐다: {path}"
+        return None, t("gate.approval_malformed", path=path)
     payload = _approval_payload(document["baseline_sha256"], document["target_issues_sha256"],
                                 document["adoptions"])
     if not hmac.compare_digest(hashlib.sha256(payload).hexdigest(), document["payload_sha256"]):
-        return None, "승인물 payload hash가 맞지 않는다"
+        return None, t("gate.approval_payload_hash")
     try:
         key = open(SIGNING_KEY(), "rb").read()
     except OSError:
-        return None, "승인물 서명 키를 읽을 수 없다"
+        return None, t("gate.approval_key_unreadable")
     signature = hmac.new(key, payload, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(signature, document["signature"]):
-        return None, "승인물 서명이 맞지 않는다"
+        return None, t("gate.approval_signature")
     if not hmac.compare_digest(document["baseline_sha256"], _file_sha256(BASELINE)):
-        return None, "승인물이 현재 baseline에 결속되지 않았다"
+        return None, t("gate.approval_not_bound_baseline")
     if not hmac.compare_digest(document["target_issues_sha256"], _issues_sha256(cur)):
-        return None, "승인물이 현재 이슈 집합에 결속되지 않았다"
+        return None, t("gate.approval_not_bound_issues")
     requested = [f"{row['checker']}:{row['issue_id']}" for row in document["adoptions"]]
     return _resolve_adoptions(requested, new_issues)
 
@@ -572,38 +704,40 @@ def _load_adoption_approval(cur, new_issues):
 def cmd_approve_adoption(adopt_qualified_ids=()):
     """Write the dispatcher approval under .git, outside fresh-worker write authority."""
     if not _root_ok():
-        print(f"승인 root 불일치: M.ROOT={M.ROOT} vs 도구 위치={SELF_ROOT}", file=sys.stderr)
+        print(t("gate.approve_root_mismatch", root=M.ROOT, self_root=SELF_ROOT), file=sys.stderr)
         return 1
     if not os.path.exists(SIGNING_KEY()):
-        print("승인할 수 없다: baseline이 봉인되지 않았다")
+        print(t("gate.approve_refused", reason=t("gate.approve_unsealed")))
         return 1
     base, state = _load_baseline()
     if state != "ok":
-        print(f"승인할 수 없다: baseline {state}")
+        print(t("gate.approve_refused", reason=f"baseline {state}"))
         return 1
-    cur = measure()
+    scope = _role_scope()
+    base = _in_scope(base, scope)
+    cur = measure(scope=scope)
     dead = [checker for checker, issue_ids in cur.items() if issue_ids is None]
     if dead:
-        print(f"승인할 수 없다: 검사기 실패: {', '.join(dead)}")
+        print(t("gate.approve_refused", reason=t("gate.approve_checkers_failed", checkers=", ".join(dead))))
         return 1
     new_issues = {checker: sorted(cur[checker] - base.get(checker, set()))
                   for checker in cur}
     new_issues = {checker: issue_ids for checker, issue_ids in new_issues.items() if issue_ids}
     adopted, error = _resolve_adoptions(adopt_qualified_ids, new_issues)
     if error:
-        print("승인할 수 없다: " + error)
+        print(t("gate.approve_refused", reason=error))
         return 1
     effective_base = {checker: set(issue_ids) for checker, issue_ids in base.items()}
     for checker, issue_id in adopted:
         effective_base.setdefault(checker, set()).add(issue_id)
     reason, _advance = _verdict(cur, effective_base, "ok")
     if reason:
-        print("승인할 수 없다: " + reason)
+        print(t("gate.approve_refused", reason=reason))
         return 1
     approval = _approval_document(cur, adopted)
     path = APPROVAL()
     if path is None:
-        print("승인할 수 없다: Git control plane이 없다")
+        print(t("gate.approve_refused", reason=t("gate.approve_no_control_plane")))
         return 1
     tmp = path + ".tmp"
     try:
@@ -614,10 +748,10 @@ def cmd_approve_adoption(adopt_qualified_ids=()):
     except OSError as error:
         with contextlib.suppress(OSError):
             os.remove(tmp)
-        print(f"승인물을 쓸 수 없다: {path}: {error}")
+        print(t("gate.approve_write_failed", path=path, error=error))
         return 1
-    print("채택 승인 저장: " + ", ".join(f"{checker}:{issue_id}"
-                                         for checker, issue_id in adopted))
+    print(t("gate.approve_saved", items=", ".join(f"{checker}:{issue_id}"
+                                                  for checker, issue_id in adopted)))
     return 0
 
 
@@ -628,18 +762,20 @@ def _cmd_baseline_locked():
     unstaged = subprocess.run(["git", "-C", M.ROOT, "diff", "--quiet", "--"],
                               capture_output=True)
     if os.path.exists(SIGNING_KEY()) and (staged.returncode != 0 or unstaged.returncode != 0):
-        print("기준선을 못 세운다 — sealed 설치의 tracked tree가 clean하지 않다")
+        print(t("gate.baseline_refused", reason=t("gate.baseline_dirty_sealed")))
         return 1
-    cur = measure()
+    scope = _role_scope()
+    cur = measure(scope=scope)
     dead = [k for k, v in cur.items() if v is None]
     if dead:
-        print(f"기준선을 못 세운다 — 검사기 실패: {', '.join(dead)}")
+        print(t("gate.baseline_refused", reason=t("gate.approve_checkers_failed", checkers=", ".join(dead))))
         return 1
     adopted = []
+    full_base, full_state = _load_baseline()
     if os.path.exists(SIGNING_KEY()):
-        base, state = _load_baseline()
+        base, state = _in_scope(full_base, scope), full_state
         if state == "corrupt":
-            print("기준선을 못 세운다 — sealed baseline이 손상됐다")
+            print(t("gate.baseline_refused", reason=t("gate.baseline_corrupt")))
             return 1
         if state == "absent":
             pass
@@ -650,32 +786,33 @@ def _cmd_baseline_locked():
             if new_issues:
                 adopted, adoption_error = _load_adoption_approval(cur, new_issues)
                 if adoption_error:
-                    print("기준선을 못 세운다 — " + adoption_error)
+                    print(t("gate.baseline_refused", reason=adoption_error))
                     return 1
             effective_base = {checker: set(issue_ids) for checker, issue_ids in base.items()}
             for checker, issue_id in adopted:
                 effective_base.setdefault(checker, set()).add(issue_id)
             reason, _advance = _verdict(cur, effective_base, "ok")
             if reason:
-                print("기준선을 못 세운다 — " + reason)
+                print(t("gate.baseline_refused", reason=reason))
                 return 1
-    _save_baseline(cur, adopted)
+    _save_baseline(_merged(full_base, cur, full_state, scope), adopted)
     for p in (PENDING(),):
         with contextlib.suppress(OSError):
             os.remove(p)
     suffix = (" · adopted " + ", ".join(issue_id for _checker, issue_id in adopted)
               if adopted else "")
-    print("기준선 저장: " + " · ".join(f"{k} {len(v)}건" for k, v in cur.items()) + suffix)
+    counts = " · ".join(t("gate.count", name=k, count=len(v)) for k, v in cur.items())
+    print(t("gate.baseline_saved", counts=counts, suffix=suffix))
     return 0
 
 
 def cmd_baseline():
     if not _root_ok():
-        print(f"실행 root 불일치: M.ROOT={M.ROOT} vs 도구 위치={SELF_ROOT}", file=sys.stderr)
+        print(t("gate.run_root_mismatch", root=M.ROOT, self_root=SELF_ROOT), file=sys.stderr)
         return 1
     with _lock() as got:
         if not got:
-            print("기준선을 못 세운다: gate lock을 얻지 못했다")
+            print(t("gate.baseline_no_lock"))
             return 1
         return _cmd_baseline_locked()
 
@@ -683,11 +820,11 @@ def cmd_baseline():
 def cmd_seal_baseline():
     """Upgrade a measured legacy baseline to an HMAC-sealed document during hook repair."""
     if not _root_ok():
-        print("baseline seal root 불일치", file=sys.stderr)
+        print(t("gate.seal_root_mismatch"), file=sys.stderr)
         return 1
     base, state = _load_baseline()
     if state != "ok":
-        print(f"baseline seal 거부: baseline {state}", file=sys.stderr)
+        print(t("gate.seal_refused", state=state), file=sys.stderr)
         return 1
     key_path = SIGNING_KEY()
     if not os.path.exists(key_path):
@@ -702,13 +839,17 @@ def cmd_seal_baseline():
 
 def cmd_status():
     base, state = _load_baseline()
-    cur = measure()
-    print(f"root      : {M.ROOT}" + ("" if _root_ok() else f"  (!! 도구 위치 {SELF_ROOT}와 불일치)"))
+    scope = _role_scope()
+    cur = measure(scope=scope)
+    print(f"scope     : {scope}")
+    print(f"root      : {M.ROOT}" + ("" if _root_ok() else t("gate.status_root_mismatch", self_root=SELF_ROOT)))
     print(f"dirty     : {os.path.exists(DIRTY())}  ({DIRTY()})")
     print(f"pending   : {os.path.exists(PENDING())}")
-    print(f"기준선    : {state} — " + " · ".join(f"{k} {len(v)}건" for k, v in base.items()))
-    print("현재      : " + " · ".join(
-        f"{k} {'측정실패' if v is None else str(len(v)) + '건'}" for k, v in cur.items()))
+    print(t("gate.status_baseline", state=state,
+            counts=" · ".join(t("gate.count", name=k, count=len(v)) for k, v in base.items())))
+    print(t("gate.status_current", counts=" · ".join(
+        t("gate.measure_failed", name=k) if v is None else t("gate.count", name=k, count=len(v))
+        for k, v in cur.items())))
     for k, v in cur.items():
         for i in sorted(v or [])[:10]:
             print(f"  {k}  {i}")
@@ -722,40 +863,55 @@ def cmd_check():
             payload = json.loads(sys.stdin.read() or "{}")
         except Exception:
             payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
         if not _root_ok():
             return _block(t("gate.root_block", root=M.ROOT, tool=SELF_ROOT))
         if not (os.path.exists(DIRTY()) or os.path.exists(PENDING())):
-            return 0
+            # Shell edits and already-modified files leave no marker; the fingerprint sees them.
+            fingerprint = _worktree_fingerprint()
+            if fingerprint is not None and fingerprint == _read(FINGERPRINT()):
+                return 0
 
         with _lock() as got:
             if not got:
                 return _block(t("gate.lock_block"))
             token = _read(DIRTY())
+            # Taken before measuring, so an edit made during measurement differs next time.
+            fingerprint = _worktree_fingerprint()
             base, state = _load_baseline()
-            cur = measure()
+            cur = measure(scope=SESSION)
             # Do not clear a marker created by an edit during measurement.
             moved = _read(DIRTY()) != token
-            reason, advance = _verdict(cur, base, state)
+            reason, advance = _verdict(cur, _in_scope(base, SESSION), state)
             if advance and not moved:
-                _save_baseline(cur)
+                _save_baseline(_merged(base, cur, state, SESSION))
             if reason:
-                # Keep unresolved failures pending so the next Stop rechecks them.
-                _mark(PENDING())
+                # Keep unresolved failures pending so the next Stop rechecks them, and keep the
+                # reason so the next prompt can repeat it without measuring.
+                _mark(PENDING(), reason)
                 if not moved:
                     with contextlib.suppress(OSError):
                         os.remove(DIRTY())
+                if payload.get("stop_hook_active") is True:
+                    # Claude calls Stop again after a hook blocks the first stop. Re-blocking that
+                    # retry spends the turn without revealing a new finding; pending remains.
+                    M.log_run("gate", "reentrant-pass@Stop", ok=True)
+                    return 0
                 M.log_run("gate", "blocked@Stop")
                 return _block(reason)
             if not moved:
                 for p in (DIRTY(), PENDING()):
                     with contextlib.suppress(OSError):
                         os.remove(p)
+                if fingerprint is not None:
+                    _mark(FINGERPRINT(), fingerprint)
             M.log_run("gate", "pass@Stop", ok=True)
             return 0
     except Exception as e:
         # Treat gate exceptions as failed measurement and retain pending state.
         with contextlib.suppress(Exception):
-            _mark(PENDING())
+            _mark(PENDING(), t("gate.self_failed", error_type=type(e).__name__))
         with contextlib.suppress(Exception):
             M.log_run("gate", f"error@Stop:{type(e).__name__}")
         return _block(t("gate.self_failed", error_type=type(e).__name__))
@@ -769,50 +925,64 @@ def _read(p):
 
 
 def cmd_resume():
-    """Report pending work at UserPromptSubmit without blocking the new instruction.
-    Interrupted turns and unresolved failures remain eligible for later Stop checks.
+    """Repeat the last block reason at UserPromptSubmit without measuring or blocking.
+
+    The prompt hook has a short runtime limit and stalls the model while it runs, so measurement
+    is left to the next Stop, which still sees the dirty and pending markers.
     """
     try:
         if not _root_ok():
             return 0
-        if not (os.path.exists(DIRTY()) or os.path.exists(PENDING())):
+        reason = _read(PENDING())
+        if reason is None:
             return 0
-        with _lock(timeout=30) as got:
-            if not got:
-                return 0
-            token = _read(DIRTY())
-            base, state = _load_baseline()
-            cur = measure()
-            moved = _read(DIRTY()) != token
-            reason, advance = _verdict(cur, base, state)
-            if advance and not moved:
-                _save_baseline(cur)
-            if reason:
-                _mark(PENDING())
-                if not moved:
-                    with contextlib.suppress(OSError):
-                        os.remove(DIRTY())
-                M.log_run("gate", "resume-warn")
-                print(json.dumps({"hookSpecificOutput": {
-                    "hookEventName": "UserPromptSubmit",
-                    "additionalContext": t("gate.resume_failed", reason=reason)}},
-                    ensure_ascii=False))
-                return 0
-            if not moved:
-                for p in (DIRTY(), PENDING()):
-                    with contextlib.suppress(OSError):
-                        os.remove(p)
-            return 0
+        reason = reason.strip()
+        if not reason or reason == "1":
+            # Markers written before reasons were stored carry no text.
+            reason = t("gate.resume_unknown")
+        M.log_run("gate", "resume-warn")
+        print(json.dumps({"hookSpecificOutput": {
+            "hookEventName": "UserPromptSubmit",
+            "additionalContext": t("gate.resume_failed", reason=reason)}},
+            ensure_ascii=False))
+        return 0
     except Exception as e:
-        # Report failure without blocking the prompt; keep pending state for the next Stop.
-        with contextlib.suppress(Exception):
-            _mark(PENDING())
         with contextlib.suppress(Exception):
             print(json.dumps({"hookSpecificOutput": {
                 "hookEventName": "UserPromptSubmit",
                 "additionalContext": t("gate.resume_self_failed", error_type=type(e).__name__)}},
                 ensure_ascii=False))
         return 0
+
+
+def _worktree_fingerprint():
+    """Hash git status plus each listed file's size and nanosecond mtime, or None if Git fails.
+
+    Status alone repeats " M" when a modified file is edited again; the stat fields change.
+    """
+    listed = subprocess.run(
+        ["git", "-C", M.ROOT, "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+        capture_output=True,
+    )
+    if listed.returncode != 0:
+        return None
+    digest = hashlib.sha256(listed.stdout)
+    entries = listed.stdout.split(b"\0")
+    index = 0
+    while index < len(entries):
+        entry = entries[index]
+        index += 1
+        if len(entry) < 4:
+            continue
+        if entry[:1] in (b"R", b"C"):
+            index += 1               # The rename or copy source follows as its own field.
+        path = entry[3:]
+        try:
+            info = os.lstat(os.path.join(M.ROOT, os.fsdecode(path)))
+            digest.update(b"\0%s\0%d\0%d" % (path, info.st_size, info.st_mtime_ns))
+        except OSError:
+            digest.update(b"\0%s\0-" % path)
+    return digest.hexdigest()
 
 
 def _staged_tools_compile(tmp):
@@ -862,28 +1032,28 @@ def _staged_markdown_paths():
 def cmd_precommit():
     """Check the index that will be committed and fail closed when measurement is incomplete."""
     if not _root_ok():
-        print(f"[gate] 실행 root 불일치 ({M.ROOT} vs {SELF_ROOT}). 커밋을 막는다.", file=sys.stderr)
+        print(t("gate.precommit_root_mismatch", root=M.ROOT, self_root=SELF_ROOT), file=sys.stderr)
         return 1
     tmp = tempfile.mkdtemp(prefix="mottori-gate-")
     try:
         r = subprocess.run(["git", "-C", M.ROOT, "checkout-index", "-a", "--prefix", tmp + "/"],
                            capture_output=True, text=True)
         if r.returncode != 0:
-            print(f"[gate] index를 꺼내지 못했다: {r.stderr.strip()[:200]}", file=sys.stderr)
+            print(t("gate.precommit_checkout_failed", error=r.stderr.strip()[:200]), file=sys.stderr)
             return 1
         if not _ensure_git_tree(tmp):
-            print("[gate] index 임시 트리에 Git metadata를 만들지 못했다", file=sys.stderr)
+            print(t("gate.precommit_no_git_tree"), file=sys.stderr)
             return 1
         bad = _staged_tools_compile(tmp)
         if bad:
-            print("[gate] index의 파이썬 도구가 깨져 있다: " + ", ".join(bad), file=sys.stderr)
-            print("  검사기가 깨진 채 커밋되면 이 게이트 자체가 무력해진다.", file=sys.stderr)
+            print(t("gate.precommit_broken_tools", tools=", ".join(bad)), file=sys.stderr)
+            print(t("gate.precommit_broken_tools_why"), file=sys.stderr)
             return 1
         enforce_cmd = [sys.executable, os.path.join(HERE, "enforce.py"),
                        "--issues", "--index", "--root", M.ROOT]
         absolute_issues = _issues(enforce_cmd, cwd=M.ROOT)
         if absolute_issues is None:
-            print("[gate] staged privacy enforcement를 측정하지 못했다", file=sys.stderr)
+            print(t("gate.precommit_privacy_unmeasured"), file=sys.stderr)
             return 1
         if absolute_issues:
             print("[gate] absolute staged violation: "
@@ -899,18 +1069,34 @@ def cmd_precommit():
             filelist.write("".join(path + "\n" for path in paths))
 
         base, state = _load_baseline()
-        cur = measure(tree=tmp, filelist=fl)
-        reason, _ = _verdict(cur, base, state)
+        scope = _role_scope()
+        cur = measure(tree=tmp, filelist=fl, scope=scope)
+        reason, _ = _verdict(cur, _in_scope(base, scope), state)
         if reason:
             print("[gate] " + reason, file=sys.stderr)
             return 1
         M.log_run("gate", "precommit-pass", ok=True)
         return 0
     except Exception as e:
-        print(f"[gate] 게이트 자신이 실패했다: {e}. 커밋을 막는다.", file=sys.stderr)
+        print(t("gate.precommit_crashed", error=e), file=sys.stderr)
         return 1
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def cmd_release():
+    """Run the release scope on the working tree against the baseline; read-only."""
+    if not _root_ok():
+        print(t("gate.release_root_mismatch", root=M.ROOT, self_root=SELF_ROOT), file=sys.stderr)
+        return 1
+    base, state = _load_baseline()
+    cur = measure(scope=RELEASE)
+    reason, _ = _verdict(cur, base, state)
+    if reason:
+        print("[gate] " + reason, file=sys.stderr)
+        return 1
+    print("release gate: pass · " + " · ".join(f"{k} {len(v)}" for k, v in cur.items()))
+    return 0
 
 
 def _gated_issue_ids(measured):
@@ -949,8 +1135,9 @@ def cmd_selfcheck():
         with open(filelist, "w", encoding="utf-8") as output:
             output.write("".join(path + "\n" for path in paths))
 
-        direct = measure()
-        precommit = measure(tree=tmp, filelist=filelist)
+        scope = _role_scope()
+        direct = measure(scope=scope)
+        precommit = measure(tree=tmp, filelist=filelist, scope=scope)
         dead_direct = sorted(name for name, value in direct.items() if value is None)
         dead_precommit = sorted(name for name, value in precommit.items() if value is None)
         if dead_direct or dead_precommit:
@@ -979,7 +1166,7 @@ def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
     if cmd == "baseline":
         if len(sys.argv) != 2:
-            print("사용: gate.py baseline", file=sys.stderr)
+            print(t("gate.usage_baseline"), file=sys.stderr)
             return 2
         return cmd_baseline()
     if cmd == "approve-adoption":
@@ -987,18 +1174,16 @@ def main():
         args = sys.argv[2:]
         while args:
             if len(args) < 2 or args[0] != "--adopt" or not args[1]:
-                print("사용: gate.py approve-adoption --adopt <checker:issue-id> ...",
-                      file=sys.stderr)
+                print(t("gate.usage_adopt"), file=sys.stderr)
                 return 2
             requested.append(args[1])
             args = args[2:]
         if not requested:
-            print("사용: gate.py approve-adoption --adopt <checker:issue-id> ...",
-                  file=sys.stderr)
+            print(t("gate.usage_adopt"), file=sys.stderr)
             return 2
         return cmd_approve_adoption(requested)
     return {"dirty": cmd_dirty, "check": cmd_check, "resume": cmd_resume,
-            "precommit": cmd_precommit,
+            "precommit": cmd_precommit, "release": cmd_release,
             "seal-baseline": cmd_seal_baseline,
             "status": cmd_status, "selfcheck": cmd_selfcheck}.get(cmd, cmd_status)()
 

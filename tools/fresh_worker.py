@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import unicodedata
 import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -27,9 +28,13 @@ import worker_batch as B
 
 ROOT = M.ROOT
 RUN_ROOT = os.path.join(ROOT, "_private", "work", "runs")
+# Bytes, not characters: a Hangul character and three or four ASCII characters cost about the same
+# tokens, so a byte cap bounds the caller's context cost evenly across languages.
 RECEIPT_MAX_BYTES = 4096
+RECEIPT_LINE_MAX_BYTES = 512
 WRAPPER_RESULT_MISSING = 3
 WRAPPER_CAPTURE_FAILED = 5
+WRAPPER_EXPECT_MISSING = 6
 RESULT_CONTRACT_PREFIX = "RESULT_JSON: "
 RESULT_VERDICTS = {"PASS", "FAIL", "INCONCLUSIVE"}
 ENGINE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -131,36 +136,36 @@ def _reject_symlink_components(path):
     try:
         rel = os.path.relpath(absolute, root)
     except ValueError:
-        raise InputError("prompt path가 workspace 밖이다")
+        raise InputError(_text("worker.prompt_outside"))
     if rel == os.pardir or rel.startswith(os.pardir + os.sep):
-        raise InputError("prompt path가 workspace 밖이다")
+        raise InputError(_text("worker.prompt_outside"))
     current = root
     for part in rel.split(os.sep):
         current = os.path.join(current, part)
         try:
             if stat.S_ISLNK(os.lstat(current).st_mode):
-                raise InputError("prompt path에 symlink component가 있다")
+                raise InputError(_text("worker.prompt_symlink"))
         except FileNotFoundError:
-            raise InputError("prompt file이 없다")
+            raise InputError(_text("worker.prompt_missing"))
 
 
 def read_prompt(path):
     source = os.path.abspath(os.path.expanduser(path) if os.path.isabs(path)
                              else os.path.join(ROOT, path))
     if not _inside_root(source):
-        raise InputError("prompt path가 workspace 밖이다")
+        raise InputError(_text("worker.prompt_outside"))
     _reject_symlink_components(source)
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(source, flags)
     except FileNotFoundError:
-        raise InputError("prompt file이 없다")
+        raise InputError(_text("worker.prompt_missing"))
     except OSError as e:
-        raise InputError(f"prompt file을 안전하게 열 수 없다: {type(e).__name__}")
+        raise InputError(_text("worker.prompt_unsafe_open", error_type=type(e).__name__))
     try:
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode):
-            raise InputError("prompt가 regular file이 아니다")
+            raise InputError(_text("worker.prompt_not_regular"))
         with os.fdopen(fd, "rb") as f:
             raw = f.read()
         fd = None
@@ -168,11 +173,11 @@ def read_prompt(path):
         if fd is not None:
             os.close(fd)
     if not raw:
-        raise InputError("prompt가 비어 있다")
+        raise InputError(_text("worker.prompt_empty"))
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
-        raise InputError("prompt가 UTF-8 text가 아니다")
+        raise InputError(_text("worker.prompt_not_utf8"))
     return source, text
 
 
@@ -210,48 +215,44 @@ def _private_refs(source, body):
     return found
 
 
-def _private_source_texts(refs):
-    """Snapshot named private text before a writable worker can alter it."""
-    sources = {}
-    for ref in refs:
-        path = os.path.join(ROOT, *ref.split("/"))
-        try:
-            if not os.path.isfile(path) or not _inside_root(path):
-                continue
-            with open(path, encoding="utf-8") as source_file:
-                text = source_file.read()
-        except (OSError, UnicodeError):
-            continue
-        if text:
-            sources[ref] = text
-    return sources
+# English text of the catalog messages below. sync_engine.sh copies this module without
+# tools/i18n.py, and an instance may hold an older catalog without these keys; the English text
+# keeps every refusal intact there. test_enforce.py pins these values to the catalog.
+FALLBACK_TEXT = {
+    "worker.prompt_outside": "prompt path is outside the workspace",
+    "worker.prompt_symlink": "prompt path has a symlink component",
+    "worker.prompt_missing": "prompt file does not exist",
+    "worker.prompt_unsafe_open": "cannot open the prompt file safely: {error_type}",
+    "worker.prompt_not_regular": "prompt is not a regular file",
+    "worker.prompt_empty": "prompt is empty",
+    "worker.prompt_not_utf8": "prompt is not UTF-8 text",
+    "worker.prefix_outside": "write-prefix is outside the workspace",
+    "worker.prefix_outside_or_root": "write-prefix is outside the workspace or the whole root",
+    "worker.prefix_symlink": "write-prefix has a symlink component",
+    "worker.parent_unmeasurable": "cannot measure the workspace parent: {error_type}",
+    "worker.git_failed": "git failed to run: {error_type}",
+    "worker.git_command_failed": "git {command} failed: {detail}",
+    "worker.worktree_cleanup_failed": "worktree cleanup failed: {detail}",
+    "worker.strict_scope_needs_prefix": "--strict-scope needs at least one --write-prefix",
+}
 
 
-def _egress_events(runtime, refs, source_texts, effective, result, rel_run):
-    """Describe private references sent to the model and verified run-record copies."""
-    events = [
-        {"kind": "model_send_reference", "source": ref, "destination": f"model:{runtime}"}
-        for ref in refs
-    ]
-    destinations = ((f"{rel_run}/prompt.md", effective),
-                    (f"{rel_run}/result.txt", result or ""))
-    for ref in refs:
-        for destination, content in destinations:
-            if ref in content:
-                events.append({
-                    "kind": "private_reference_copy",
-                    "source": ref,
-                    "destination": destination,
-                })
-    for ref, source_text in source_texts.items():
-        for destination, content in destinations:
-            if source_text in content:
-                events.append({
-                    "kind": "private_content_copy",
-                    "source": ref,
-                    "destination": destination,
-                })
-    return events
+def _text(key, **kw):
+    """Return catalog text in the instance language, or English when the catalog lacks it."""
+    try:
+        from i18n import t
+        return t(key, **kw)
+    except (ImportError, KeyError):
+        return FALLBACK_TEXT[key].format(**kw)
+
+
+def _private_ref_refusal(refs):
+    try:
+        from i18n import t
+    except ImportError:
+        # The synced engine cluster ships without i18n.py; keep the refusal itself intact.
+        return "model-send deny ref refused: " + refs
+    return t("worker.private_ref_refused", refs=refs)
 
 
 def _result_contract(result):
@@ -578,7 +579,9 @@ def _usage(runtime, stream_path):
 def _read_scope(result):
     """Keep the first read declaration and last unread marker; accept legacy Korean labels.
 
-    Declarations are optional self-reports and never validate actual reading.
+    Declarations are optional self-reports and never validate actual reading. The Korean labels
+    are written as escapes: "ilgeum" (read), "ilgi beomwi" (read scope), and
+    "kkeutkkaji mot ilgeun geot:" (not read to the end:).
     """
     if not result:
         return None
@@ -586,9 +589,9 @@ def _read_scope(result):
     unread = None
     for line in result.splitlines():
         text = line.strip().lstrip("\ufeff").strip()
-        if declared is None and text.startswith(("READ_SCOPE:", "읽음", "읽기 범위")):
+        if declared is None and text.startswith(("READ_SCOPE:", "\uc77d\uc74c", "\uc77d\uae30 \ubc94\uc704")):
             declared = text
-        if text.startswith(("UNREAD:", "끝까지 못 읽은 것:")):
+        if text.startswith(("UNREAD:", "\ub05d\uae4c\uc9c0 \ubabb \uc77d\uc740 \uac83:")):
             unread = text
     if declared is None and unread is None:
         return None
@@ -607,9 +610,9 @@ def _normalize_prefix(prefix, root=None):
     try:
         rel = os.path.relpath(absolute, root)
     except ValueError:
-        raise InputError("write-prefix가 workspace 밖이다")
+        raise InputError(_text("worker.prefix_outside"))
     if rel in (os.curdir, os.pardir) or rel.startswith(os.pardir + os.sep):
-        raise InputError("write-prefix가 workspace 밖이거나 루트 전체다")
+        raise InputError(_text("worker.prefix_outside_or_root"))
     current = root
     canonical = []
     parts = rel.split(os.sep)
@@ -630,7 +633,7 @@ def _normalize_prefix(prefix, root=None):
         canonical.append(part)
         try:
             if stat.S_ISLNK(os.lstat(current).st_mode):
-                raise InputError("write-prefix에 symlink component가 있다")
+                raise InputError(_text("worker.prefix_symlink"))
         except FileNotFoundError:
             canonical.extend(parts[i + 1:])
             break  # the rest may be created by the worker
@@ -694,7 +697,7 @@ def _workspace_snapshot(exclude_rel, root=None, include_git=False, include_paren
         try:
             names = os.listdir(parent)
         except OSError as error:
-            raise InputError(f"workspace parent를 측정할 수 없다: {type(error).__name__}")
+            raise InputError(_text("worker.parent_unmeasurable", error_type=type(error).__name__))
         own_name = os.path.basename(root)
         for name in names:
             if name == own_name:
@@ -771,14 +774,15 @@ def _git_process(args, cwd, input_bytes=None, timeout=30):
             timeout=timeout, check=False, env=_git_env(),
         )
     except (OSError, subprocess.TimeoutExpired) as e:
-        raise InputError(f"git 실행 실패: {type(e).__name__}")
+        raise InputError(_text("worker.git_failed", error_type=type(e).__name__))
 
 
 def _git_require(args, cwd, input_bytes=None):
     proc = _git_process(args, cwd, input_bytes=input_bytes)
     if proc.returncode != 0:
         detail = proc.stderr.decode("utf-8", errors="replace").strip()
-        raise InputError(f"git {' '.join(args[:2])} 실패: {detail or 'exit ' + str(proc.returncode)}")
+        raise InputError(_text("worker.git_command_failed", command=" ".join(args[:2]),
+                               detail=detail or "exit " + str(proc.returncode)))
     return proc.stdout
 
 
@@ -786,7 +790,7 @@ def _remove_worktree(worktree):
     proc = _git_process(["worktree", "remove", "--force", worktree], ROOT)
     if proc.returncode != 0:
         detail = proc.stderr.decode("utf-8", errors="replace").strip()
-        raise RuntimeError(f"worktree 정리 실패: {detail or proc.returncode}")
+        raise RuntimeError(_text("worker.worktree_cleanup_failed", detail=detail or proc.returncode))
 
 
 def _snapshot_read_materials(paths):
@@ -1025,46 +1029,183 @@ def _write_meta(path, meta):
     _private_write(path, json.dumps(meta, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
 
-def _receipt(meta, result):
-    patch_line = ""
-    worktree = meta.get("worktree") or {}
+def _utf8_prefix(text, max_bytes):
+    """Longest prefix of text within max_bytes that ends on a UTF-8 character boundary."""
+    return text.encode("utf-8")[:max(0, max_bytes)].decode("utf-8", errors="ignore")
+
+
+def _clip_line(text, max_bytes=RECEIPT_LINE_MAX_BYTES):
+    if len(text.encode("utf-8")) <= max_bytes:
+        return text
+    return _utf8_prefix(text, max_bytes - len("…".encode("utf-8"))) + "…"
+
+
+def _header_value(value):
+    """Show line breaks and other control characters in a header value as escapes.
+
+    Receipt readers split the header into "name: value" lines, so a raw line break inside a
+    value written by a worker could add a second verdict or a false full-text command.
+    """
+    out = []
+    for ch in str(value):
+        if ch in _HEADER_ESCAPES:
+            out.append(_HEADER_ESCAPES[ch])
+        elif unicodedata.category(ch) in ("Cc", "Zl", "Zp"):
+            code = ord(ch)
+            out.append(f"\\x{code:02x}" if code < 0x100 else f"\\u{code:04x}")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+_HEADER_ESCAPES = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}
+# Bytes kept for the start of a partly shown unknown, so a counted line never ends on a bare "; ".
+_UNKNOWN_MIN_START_BYTES = 24
+
+
+def _unknowns_line(unknowns, max_bytes=RECEIPT_LINE_MAX_BYTES):
+    """Join the worker's unknowns on one header line.
+
+    When they do not all fit, the line starts with the total and the number left out, then as
+    many whole items as fit and the start of the next one; a reader then knows that something
+    is missing even when the cut item was the important one.
+    """
+    items = [_header_value(item) for item in unknowns]
+    plain = "unknowns: " + "; ".join(items)
+    if len(plain.encode("utf-8")) <= max_bytes:
+        return plain
+    total = len(items)
+    for whole in range(total - 1, -1, -1):
+        shown = whole + 1
+        prefix = f"unknowns: {total} total, {total - shown} omitted; "
+        lead = prefix + "".join(item + "; " for item in items[:whole])
+        if whole == 0 or len(lead.encode("utf-8")) + _UNKNOWN_MIN_START_BYTES <= max_bytes:
+            return _clip_line(lead + items[whole], max_bytes)
+    return _clip_line(plain, max_bytes)
+
+
+def _expect_line(expect):
+    total = len(expect["paths"])
+    if not expect["missing"]:
+        return f"expect: {expect['present']}/{total} present"
+    missing = ", ".join(f"{_header_value(item['path'])} ({item['why']})"
+                        for item in expect["missing"])
+    return _clip_line(f"expect: missing {missing}; {expect['present']}/{total} present")
+
+
+def _receipt(meta, result, max_bytes=RECEIPT_MAX_BYTES):
+    """Render the caller-facing receipt; receipts.py show reuses it with max_bytes=None.
+
+    The decision fields come first: verdict, the worker's unknowns, and where the full text lives.
+    A long result keeps its beginning, so a cut can drop the RESULT_JSON tail but never the verdict.
+    """
+    def field(key):
+        value = meta.get(key)
+        return "-" if value is None else _header_value(value)
+
+    scope = meta.get("scope") if isinstance(meta.get("scope"), dict) else {}
+    worktree = meta.get("worktree") if isinstance(meta.get("worktree"), dict) else {}
+    expect = meta.get("expect") if isinstance(meta.get("expect"), dict) else None
+    run_id = _clip_line(_header_value(meta.get("run_id")
+                                      or os.path.basename(str(meta.get("run") or ""))
+                                      or "<run-id>"), 256)
+    show = f"python3 tools/receipts.py show {run_id}"
+    contract = _result_contract(result)
+    if expect is not None and expect["missing"]:
+        verdict = "INCONCLUSIVE (expected output missing)"
+    elif contract["valid"]:
+        verdict = contract["verdict"]
+    else:
+        verdict = f"INCONCLUSIVE ({_header_value(contract['error'])})"
+    head = ["FRESH_WORKER v1", f"verdict: {verdict}"]
+    if contract["valid"] and contract["unknowns"]:
+        head.append(_unknowns_line(contract["unknowns"]))
+    head.append(f"full: {show}")
+    if expect is not None:
+        head.append(_expect_line(expect))
+    head += [
+        f"run: {_clip_line(field('run'), 256)}",
+        f"runtime: {field('runtime')}",
+        f"capability: {field('capability')}",
+        f"status: {field('status')}",
+        f"process_exit: {field('process_exit')}",
+        f"wrapper_exit: {field('wrapper_exit')}",
+        f"prompt_sha256: {field('prompt_sha256')}",
+        f"stream_sha256: {field('stream_sha256')}",
+        f"result_sha256: {field('result_sha256')}",
+        f"result_bytes: {field('result_bytes')}",
+        f"scope: {_header_value(scope.get('status', '-'))} "
+        f"(changed {_header_value(scope.get('changed_count', '-'))}, "
+        f"violations {_header_value(scope.get('violation_count', '-'))})",
+    ]
     if worktree.get("mode") is not None:
-        patch_line = (
-            f"patch: {len(worktree['files'])} files "
-            f"(+{worktree['added']}/-{worktree['deleted']})\n"
-        )
-    egress_count = (meta.get("egress") or {}).get("private_ref_count", 0)
-    fixed = (
-        "FRESH_WORKER v1\n"
-        f"run: {meta['run']}\n"
-        f"runtime: {meta['runtime']}\n"
-        f"capability: {meta['capability']}\n"
-        f"status: {meta['status']}\n"
-        f"process_exit: {meta['process_exit']}\n"
-        f"wrapper_exit: {meta['wrapper_exit']}\n"
-        f"prompt_sha256: {meta['prompt_sha256']}\n"
-        f"stream_sha256: {meta['stream_sha256']}\n"
-        f"result_sha256: {meta['result_sha256']}\n"
-        f"result_bytes: {meta['result_bytes']}\n"
-        f"egress: {egress_count} private refs\n"
-        f"scope: {meta['scope']['status']} (changed {meta['scope']['changed_count']}, "
-        f"violations {meta['scope']['violation_count']})\n"
-        f"{patch_line}"
-        "result:\n"
-    )
-    room = RECEIPT_MAX_BYTES - len(fixed.encode("utf-8"))
-    if room < 128:
-        raise AssertionError("receipt fixed fields exceed byte budget")
+        head.append(f"patch: {len(worktree['files'])} files "
+                    f"(+{worktree['added']}/-{worktree['deleted']})")
+    fixed = "\n".join(head) + "\nresult:\n"
     body = result if result else "[final result unavailable; inspect the private run record]"
-    receipt = fixed + M.clip_utf8(body, room)
-    if len(receipt.encode("utf-8")) > RECEIPT_MAX_BYTES:
+    fixed_bytes = len(fixed.encode("utf-8"))
+    body_bytes = len(body.encode("utf-8"))
+    if max_bytes is None or fixed_bytes + body_bytes <= max_bytes:
+        return fixed + body
+
+    def marker(kept):
+        return (f"\n[truncated: kept the first {kept} of {body_bytes} bytes; "
+                f"full result: {show}]\n")
+
+    # The kept count is part of the marker, so size the marker for the widest count first.
+    room = max_bytes - fixed_bytes - len(marker(body_bytes).encode("utf-8"))
+    if room < 128:
+        raise AssertionError("receipt fixed fields exceed the byte budget")
+    kept = _utf8_prefix(body, room)
+    receipt = fixed + kept + marker(len(kept.encode("utf-8")))
+    if len(receipt.encode("utf-8")) > max_bytes:
         raise AssertionError("receipt byte budget calculation failed")
     return receipt
 
 
+def _expect_paths(paths):
+    """Validate --expect paths before any run: inside ROOT, also after resolving symlinks."""
+    root_real = os.path.realpath(ROOT)
+    checked = []
+    for path in paths:
+        if not path or "\0" in path:
+            raise InputError("--expect path is empty")
+        absolute = os.path.abspath(path if os.path.isabs(path) else os.path.join(ROOT, path))
+        rel = os.path.relpath(absolute, os.path.abspath(ROOT))
+        real = os.path.realpath(absolute)
+        if (rel in (os.curdir, os.pardir) or rel.startswith(os.pardir + os.sep)
+                or os.path.commonpath((real, root_real)) != root_real):
+            raise InputError("--expect path is outside the workspace: " + path)
+        rel = rel.replace(os.sep, "/")
+        if rel not in checked:
+            checked.append(rel)
+    return checked
+
+
+def _check_expect(workspace, paths):
+    """Each expected output must be a non-empty regular file that stays inside the workspace."""
+    workspace_real = os.path.realpath(workspace)
+    missing = []
+    for rel in paths:
+        full = os.path.join(workspace, *rel.split("/"))
+        real = os.path.realpath(full)
+        if os.path.commonpath((real, workspace_real)) != workspace_real:
+            why = "outside workspace"
+        elif not os.path.lexists(full):
+            why = "absent"
+        elif not os.path.isfile(full):
+            why = "not a file"
+        elif os.path.getsize(full) == 0:
+            why = "empty"
+        else:
+            continue
+        missing.append({"path": rel, "why": why})
+    return {"paths": list(paths), "present": len(paths) - len(missing), "missing": missing}
+
+
 def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
-                   worktree_meta, copied, egress_refs, egress_source_texts,
-                   write_prefixes=(), strict_scope=False, strict_egress=False, batch=None):
+                   worktree_meta, copied, write_prefixes=(), strict_scope=False, batch=None,
+                   expect=()):
     prefixes = [_normalize_prefix(p, root=workspace) for p in write_prefixes]
     rel_run = os.path.relpath(run_dir, ROOT).replace(os.sep, "/")
     for prefix in prefixes:
@@ -1086,7 +1227,6 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
     runtime_result_path = (os.path.join(workspace, f".mottori-worker-result-{run_id}")
                            if worktree_meta["mode"] is not None else result_path)
     meta_path = os.path.join(run_dir, "meta.json")
-    egress_path = os.path.join(run_dir, "egress.log")
     effective = _effective_prompt(runtime, body)
     _private_write(prompt_path, effective)
 
@@ -1106,13 +1246,6 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
         "harness_sha256": _harness_sha256(runtime, command, run_specific=(runtime_result_path,)),
         "usage": {"raw": None, "input": None, "output": None, "total": None},
         "read_scope": None,
-        "egress": {
-            "private_ref_count": len(egress_refs),
-            "private_refs": egress_refs,
-            "strict": strict_egress,
-            "log": f"{rel_run}/egress.log" if egress_refs else None,
-            "event_count": 0,
-        },
         "worktree": worktree_meta,
         "scope": {"prefixes": prefixes, "status": "running", "changed_count": 0, "changed": [],
                   "violation_count": 0, "violations": [], "files_scanned": len(before),
@@ -1163,7 +1296,7 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
                 process_exit = 127
     except BaseException:
         # A killed dispatcher still leaves a truthful running/partial record for later inspection.
-        meta["status"] = "interrupted"
+        meta["status"] = B.INTERRUPTED_STATUS
         meta["duration_seconds"] = round(time.monotonic() - t0, 3)
         meta["stream_sha256"] = _sha256(stream_path)
         meta["stderr_sha256"] = _sha256(stderr_path)
@@ -1188,15 +1321,6 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
         json.dumps(_result_contract(result), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
     )
 
-    egress_events = _egress_events(
-        runtime, egress_refs, egress_source_texts, effective, result, rel_run)
-    if egress_events:
-        _private_write(
-            egress_path,
-            "".join(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
-                    for event in egress_events),
-        )
-
     t_scope = time.monotonic()
     after = _workspace_snapshot(
         exclude_rel, root=workspace, include_git=strict_scope,
@@ -1218,6 +1342,8 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
         if worktree_meta.get("capture_status") == "complete":
             worktree_meta.pop("preserved_path", None)
 
+    expect_report = _check_expect(workspace, expect) if expect else None
+
     if worktree_meta.get("capture_status") in ("failed", "incomplete"):
         wrapper_exit = WRAPPER_CAPTURE_FAILED
         status_name = "artifact-capture-" + worktree_meta["capture_status"]
@@ -1237,6 +1363,16 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
     else:
         wrapper_exit = process_exit
         status_name = "success" if process_exit == 0 else "failed"
+    if expect_report is not None:
+        meta["expect"] = expect_report
+        # A run that otherwise succeeded did not deliver what the dispatcher asked for; earlier
+        # failures keep their own status and nonzero exit.
+        if expect_report["missing"] and status_name == "success":
+            wrapper_exit = WRAPPER_EXPECT_MISSING
+            status_name = "expected-output-missing"
+    if status_name not in B.FINISHED_STATUSES:
+        # Batch coverage and the receipt ledger classify runs by this shared list.
+        raise AssertionError(f"unregistered worker status: {status_name}")
 
     finished = datetime.datetime.now().astimezone()
     meta.update({
@@ -1252,10 +1388,6 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
         "result_bytes": os.path.getsize(result_path) if os.path.isfile(result_path) else 0,
         "usage": _usage(runtime, stream_path),
         "read_scope": _read_scope(result),
-        "egress": {
-            **meta["egress"],
-            "event_count": len(egress_events),
-        },
         "scope": scope,
     })
     _write_meta(meta_path, meta)
@@ -1324,21 +1456,20 @@ def run(*args, **kwargs):
             signal.signal(sig, handler)
 
 
-def _run(runtime, prompt_file, write_prefixes=(), strict_scope=False, strict_egress=False,
-        worktree_mode=None, batch_manifest=None, slot=None, read_materials=()):
+def _run(runtime, prompt_file, write_prefixes=(), strict_scope=False, worktree_mode=None,
+         expect=(), batch_manifest=None, slot=None, read_materials=()):
     if M.CONFIG_ERROR == "invalid":
         raise InputError("memory config validation failed: " + (M.CONFIG_ERROR_DETAIL or "unknown"))
     if strict_scope and not write_prefixes:
-        raise InputError("--strict-scope에는 하나 이상의 --write-prefix가 필요하다")
+        raise InputError(_text("worker.strict_scope_needs_prefix"))
     if read_materials and worktree_mode is None:
         raise InputError("--read-material requires an isolated --worktree")
     source, body = read_prompt(prompt_file)
-    egress_refs = _private_refs(source, body)
-    if egress_refs:
-        raise InputError(
-            "model-send deny ref를 기본 경로에서 거부했다: " + ", ".join(egress_refs))
-    egress_source_texts = _private_source_texts(egress_refs)
+    denied_refs = _private_refs(source, body)
+    if denied_refs:
+        raise InputError(_private_ref_refusal(", ".join(denied_refs)))
     batch = _batch_identity(batch_manifest, slot, source, body)
+    expect = _expect_paths(expect)
     material_snapshots = _snapshot_read_materials(read_materials)
     run_id, run_dir, started = _new_run(runtime)
     workspace = ROOT
@@ -1356,8 +1487,7 @@ def _run(runtime, prompt_file, write_prefixes=(), strict_scope=False, strict_egr
     try:
         receipt, wrapper_exit = _run_workspace(
             runtime, source, body, run_id, run_dir, started, workspace, worktree_meta, copied,
-            egress_refs, egress_source_texts, write_prefixes=write_prefixes,
-            strict_scope=strict_scope, strict_egress=strict_egress, batch=batch,
+            write_prefixes=write_prefixes, strict_scope=strict_scope, batch=batch, expect=expect,
         )
     finally:
         if worktree_mode is not None and worktree_meta.get("capture_status") not in (
@@ -1378,9 +1508,6 @@ def main(argv=None):
                     help="Require at least one --write-prefix and fail on prefix violations. In "
                          "worktree mode scope is measured inside the isolate and the original tree "
                          "is not writable by the worker.")
-    ap.add_argument("--strict-egress", action="store_true",
-                    help="Compatibility flag. Denied model-send references are always rejected "
-                         "before a run is created or a runtime is started.")
     ap.add_argument("--worktree", nargs="?", const="dirty", choices=("head", "dirty"),
                     help="Run in <run>/wt and extract patch.diff plus untracked.txt. 'head' starts "
                          "from HEAD; 'dirty' first applies the original tree's tracked git diff. "
@@ -1394,12 +1521,16 @@ def main(argv=None):
                          "manifest and source prompt hashes are recorded in meta.json v2.")
     ap.add_argument("--slot",
                     help="Expected slot name in --batch-manifest. Does not launch or schedule peers.")
+    ap.add_argument("--expect", action="append", default=[], metavar="PATH",
+                    help="ROOT-relative output the worker must leave as a non-empty file (repeatable). "
+                         "Checked after the run; a missing or empty one turns a success into "
+                         "expected-output-missing with exit 6 and an INCONCLUSIVE receipt verdict. "
+                         "Paths outside the workspace are rejected before the run.")
     ap.add_argument("prompt_file")
     args = ap.parse_args(argv)
     try:
         return run(args.runtime, args.prompt_file, write_prefixes=args.write_prefix,
-                   strict_scope=args.strict_scope, strict_egress=args.strict_egress,
-                   worktree_mode=args.worktree,
+                   strict_scope=args.strict_scope, worktree_mode=args.worktree, expect=args.expect,
                    batch_manifest=args.batch_manifest, slot=args.slot, read_materials=args.read_material)
     except InputError as e:
         print(f"fresh-worker input rejected: {e}", file=sys.stderr)

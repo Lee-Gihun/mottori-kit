@@ -8,6 +8,9 @@ import re
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from i18n import t  # noqa: E402
+
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TARGETS = ("system/kit-decisions.md", "CHANGELOG.md", "system/enforcement-matrix.md")
@@ -31,10 +34,10 @@ PAYLOAD = {
 
 def _args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tree", default=ROOT, help="검사할 트리 (기본: 도구가 속한 루트)")
-    parser.add_argument("--local-root", help="run과 인스턴스 DR을 찾을 로컬 루트")
-    parser.add_argument("--test-log", help="RAN 실행 증거 로그 (기본: 환경변수 또는 .git 로그)")
-    parser.add_argument("--issues", action="store_true", help="게이트용 안정 이슈 집합")
+    parser.add_argument("--tree", default=ROOT, help=t("evidencecheck.help_tree"))
+    parser.add_argument("--local-root", help=t("evidencecheck.help_local_root"))
+    parser.add_argument("--test-log", help=t("evidencecheck.help_test_log"))
+    parser.add_argument("--issues", action="store_true", help=t("evidencecheck.help_issues"))
     return parser.parse_args()
 
 
@@ -135,13 +138,25 @@ def _has_valid_marker(text, tree, local_root, namespace=None):
     )
 
 
+# Section labels of system/kit-decisions.md. Decision records exist in Korean and English, so
+# both are parser input. The Korean labels are written as escapes; in order they read: Decision,
+# Rejected alternatives, Side decisions, Verification, Safety and migration, Boundary, Reconsider,
+# References, Candidate sentences.
+_KO_STOP_LABELS = (
+    "\uacb0\uc815:", "\uae30\uac01 \ub300\uc548:", "\ubd80\uc218 \uacb0\uc815:", "\uac80\uc99d:",
+    "\uc548\uc804\uc131\xb7\ub9c8\uc774\uadf8\ub808\uc774\uc158:", "\uacbd\uacc4:",
+    "\uc7ac\uac80\ud1a0:", "\ucc38\uc870:", "\ud6c4\ubcf4\uc600\ub358 \ubb38\uc7a5\ub4e4:",
+)
+_KO_CONTEXT_LABEL = "\ub9e5\ub77d:"  # Context:
+# CHANGELOG heading tags of the Korean locale: [Required] and [Note].
+_KO_CHANGELOG_TAGS = ("[\ud574\uc57c \ud568]", "[\uc54c\uc544\ub458 \uac83]")
+
+
 def _required_issues(rel, text, tree, local_root):
     issues = {}
     if rel == "system/kit-decisions.md":
         starts = list(re.finditer(r"^###\s+(DR-\d{3})\b", text, re.M))
-        stop_labels = (
-            "결정:", "기각 대안:", "부수 결정:", "검증:", "안전성·마이그레이션:",
-            "경계:", "재검토:", "참조:", "후보였던 문장들:",
+        stop_labels = _KO_STOP_LABELS + (
             "Decision:", "Alternatives:", "Rejected alternatives:", "Verification:",
             "Safety and migration:", "Boundary:", "Reconsider:", "References:",
         )
@@ -151,7 +166,7 @@ def _required_issues(rel, text, tree, local_root):
             context = []
             collecting = False
             for line in lines:
-                if line.startswith(("맥락:", "Context:", "Reason:")):
+                if line.startswith((_KO_CONTEXT_LABEL, "Context:", "Reason:")):
                     collecting = True
                     context.append(line)
                     continue
@@ -166,14 +181,14 @@ def _required_issues(rel, text, tree, local_root):
             if not explicit_none and not _has_valid_marker(context_text, tree, local_root):
                 decision = start.group(1)
                 issue_id = f"required|kit-decisions|{decision}"
-                issues[issue_id] = f"필수 근거 표지 없음 {rel} {decision} 맥락 절"
+                issues[issue_id] = t("evidencecheck.required_context", path=rel, decision=decision)
 
     elif rel == "CHANGELOG.md":
         starts = list(re.finditer(r"^###\s+(.+)$", text, re.M))
         for idx, start in enumerate(starts):
             heading = start.group(1).strip().replace("`", "")
             # Accept English [Required]/[Note] headings and their Korean locale counterparts.
-            if not any(tag in heading for tag in ("[해야 함]", "[알아둘 것]", "[Required]", "[Action required]", "[Note]")):
+            if not any(tag in heading for tag in _KO_CHANGELOG_TAGS + ("[Required]", "[Action required]", "[Note]")):
                 continue
             end_candidates = [len(text)]
             next_h3 = starts[idx + 1].start() if idx + 1 < len(starts) else len(text)
@@ -185,7 +200,7 @@ def _required_issues(rel, text, tree, local_root):
             exempt = re.search(r"(?<![A-Za-z0-9_-])evidence:\s*none\b", section) is not None
             if not exempt and not _has_valid_marker(section, tree, local_root):
                 issue_id = f"required|CHANGELOG.md|{heading}"
-                issues[issue_id] = f"필수 근거 표지 없음 CHANGELOG.md {heading}"
+                issues[issue_id] = t("evidencecheck.required_changelog", heading=heading)
 
     elif rel == "system/enforcement-matrix.md":
         for line in text.splitlines():
@@ -197,7 +212,7 @@ def _required_issues(rel, text, tree, local_root):
             key = cells[0] if cells else "unknown"
             if not _has_valid_marker(line, tree, local_root, namespace="test"):
                 issue_id = f"required|enforcement-matrix|{key}"
-                issues[issue_id] = f"필수 test 표지 없음 {rel} ENFORCED 행 {key}"
+                issues[issue_id] = t("evidencecheck.required_test", path=rel, row=key)
     return issues
 
 
@@ -223,32 +238,31 @@ def check(tree, local_root=None, test_log=None):
             text = open(path, encoding="utf-8").read()
         except OSError:
             issue_id = f"missing-file|{rel}"
-            issues[issue_id] = f"검사 대상 파일 없음 {rel}"
+            issues[issue_id] = t("evidencecheck.missing_file", path=rel)
             continue
         for namespace, payload, line in _markers(text):
             marker_count += 1
             if not PAYLOAD[namespace].fullmatch(payload):
                 marker = f"{namespace}:{payload}"
                 issue_id = f"syntax|{rel}|{marker}"
-                issues[issue_id] = f"표지 문법 위반 {rel}:{line} {marker}"
+                issues[issue_id] = t("evidencecheck.syntax", where=f"{rel}:{line}", marker=marker)
                 continue
             marker = f"{namespace}:{payload}"
             exists = _local_exists(namespace, payload, tree, local_root)
             if exists is False:
                 issue_id = f"missing-local|{rel}|{marker}"
-                issues[issue_id] = f"로컬 ID 없음 {rel}:{line} {marker}"
+                issues[issue_id] = t("evidencecheck.missing_local", where=f"{rel}:{line}", marker=marker)
             elif namespace == "test":
                 if test_runs is None:
                     issue_id = f"missing-test-log|{rel}|{marker}"
-                    issues[issue_id] = (
-                        f"실행 증거 없음 {rel}:{line} {marker} log={test_log_path}"
-                    )
+                    issues[issue_id] = t("evidencecheck.no_run_evidence_log", where=f"{rel}:{line}",
+                                         marker=marker, log=test_log_path)
                 elif payload not in test_runs:
                     issue_id = f"not-run|{rel}|{marker}"
-                    issues[issue_id] = f"실행 증거 없음 {rel}:{line} {marker}"
+                    issues[issue_id] = t("evidencecheck.no_run_evidence", where=f"{rel}:{line}", marker=marker)
             elif exists is None:
                 review_id = f"~review|{rel}|{marker}"
-                reviews[review_id] = f"REVIEW 외부 존재 미판정 {rel}:{line} {marker}"
+                reviews[review_id] = t("evidencecheck.review", where=f"{rel}:{line}", marker=marker)
         issues.update(_required_issues(rel, text, tree, local_root))
     return sorted(issues.items()), sorted(reviews.items()), marker_count
 

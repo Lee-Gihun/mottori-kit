@@ -1,4 +1,4 @@
-Korean: `SETUP.ko.md`
+Korean: `ko/SETUP.md`
 
 # SETUP: How to configure this directory
 
@@ -234,8 +234,8 @@ wrong.
 ## 7. Connect Codex (optional)
 
 `AGENTS.md` is the single source of truth for shared rules. `CLAUDE.md` is an exact `@AGENTS.md` import. Codex
-reads `AGENTS.md` automatically, so both runtimes operate under the same rules. `AGENTS.ko.md` is the Korean
-locale surface.
+reads `AGENTS.md` automatically, so both runtimes operate under the same rules. `ko/AGENTS.md` is the Korean
+translation; `ko/INDEX.md` lists every English and Korean pair.
 
 Isolate broad reading, audits, and runtime debates in a fresh worker instead of adding the full trace to the
 master session:
