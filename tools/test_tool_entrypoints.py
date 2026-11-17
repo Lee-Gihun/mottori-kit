@@ -90,17 +90,25 @@ def test_wf_gardener_syntax_positive_and_negative():
         source = (ROOT / "tools" / "wf_gardener.js").read_text(encoding="utf-8")
         assert "memory-gardener" in source and "REPORT_SCHEMA" in source
         return
-    positive = run(node, "--check", "tools/wf_gardener.js")
-    assert positive.returncode == 0, positive.stdout + positive.stderr
-    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as f:
-        f.write("let x = ;\n" +
-                (ROOT / "tools" / "wf_gardener.js").read_text(encoding="utf-8"))
-        bad = f.name
+    # The workflow runtime strips the meta export and runs the body inside an async function, so
+    # top-level return and await are valid there. Check the syntax in that shape; a bare
+    # `node --check` rejects the top-level return on newer Node versions.
+    source = (ROOT / "tools" / "wf_gardener.js").read_text(encoding="utf-8")
+    assert source.startswith("export const meta"), "workflow script must begin with the meta export"
+    wrapped = "(async function () {\n" + source.replace("export const meta", "const meta", 1) + "\n})\n"
+    paths = []
     try:
-        negative = run(node, "--check", bad)
+        for text in (wrapped, wrapped.replace("const meta", "let x = ;\nconst meta", 1)):
+            with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as f:
+                f.write(text)
+                paths.append(f.name)
+        positive = run(node, "--check", paths[0])
+        assert positive.returncode == 0, positive.stdout + positive.stderr
+        negative = run(node, "--check", paths[1])
         assert negative.returncode != 0
     finally:
-        os.unlink(bad)
+        for path in paths:
+            os.unlink(path)
 
 
 TESTS = (
