@@ -32,3 +32,5 @@ gate-definition-approval: decision:KIT-DR-019 files=system/language-pending.txt,
 gate-definition-approval: decision:KIT-DR-013 files=.github/workflows/gates.yml sha256=c20d0ba46fa024ef140772fc33c7ea80d8dac09045fd5241193bf80c40b809dd
 
 gate-definition-approval: decision:KIT-DR-020 files=system/enforcement-matrix.yaml,system/language-pending.txt,system/review-manifest.yaml,system/test-matrix.yaml,tools/enforce.py,tools/evidencecheck.py,tools/gate.py,tools/manifest_build.py,tools/test_language.py sha256=a0e04a8df053b88cabcf58bcfef5e9195c298ed9c55b13c2d3628f0eb00fef18
+
+gate-definition-approval: decision:KIT-DR-020 files=system/review-manifest.yaml sha256=6fe5da59f5ea754a32bf5b854bbc678e08cdef244ae5551cf419ec3f30f8728d

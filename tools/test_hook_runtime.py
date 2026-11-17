@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import shlex
 import shutil
 import stat
 import subprocess
@@ -384,6 +385,114 @@ def test_precommit_now_check_reads_extracted_index_tree():
         shutil.rmtree(root, ignore_errors=True)
         shutil.rmtree(extracted, ignore_errors=True)
 
+
+# Pre-commit hook body: extract the index being committed as cmd_precommit does, let the gate
+# give the extracted tree its own repository, and report what the test asserts.
+_STAGED_TREE_HOOK = r'''import json, os, subprocess, sys, tempfile
+sys.path.insert(0, os.environ["GATE_TOOLS"])
+import gate
+
+index = os.environ.get("GIT_INDEX_FILE", "")
+
+
+def index_bytes():
+    with open(index, "rb") as source:
+        return source.read()
+
+
+before = index_bytes() if index else None
+extracted = tempfile.mkdtemp(prefix="extracted-", dir=os.environ["HOOK_WORK"])
+subprocess.run(["git", "checkout-index", "-a", "--prefix", extracted + "/"], check=True)
+ok = gate._ensure_git_tree(extracted)
+own_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
+def extracted_git(*args):
+    result = subprocess.run(["git", "-C", extracted, *args], env=own_env,
+                            capture_output=True, text=True)
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+toplevel = extracted_git("rev-parse", "--show-toplevel")
+report = {
+    "git_dir": os.environ.get("GIT_DIR"),
+    "index": index,
+    "ok": ok,
+    "outer_index_unchanged": before is not None and index_bytes() == before,
+    "extracted": os.path.realpath(extracted),
+    "toplevel": os.path.realpath(toplevel) if toplevel else None,
+    "head": extracted_git("rev-parse", "--verify", "HEAD"),
+}
+with open(os.environ["HOOK_RESULT"], "w", encoding="utf-8") as out:
+    json.dump(report, out)
+sys.exit(0 if ok else 1)
+'''
+
+
+def test_staged_tree_git_setup_ignores_outer_commit_hook_variables():
+    """Gate fixture Git setup inside a commit hook must address only the extracted tree.
+
+    A pathspec commit hands its hook an absolute GIT_INDEX_FILE, and a linked worktree also
+    exports GIT_DIR. checkout-index omits skip-worktree entries, so fixture commands that
+    inherit the outer index fail on those entries' missing objects and rewrite the index being
+    committed. An inherited GIT_DIR makes the probe accept the outer repository instead."""
+    git_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    with tempfile.TemporaryDirectory(prefix="hook-staged-tree-") as directory:
+        root = os.path.join(directory, "repo")
+        linked = os.path.join(directory, "linked")
+        link = "archive/read-order.md"
+
+        def git(*args, cwd=root):
+            subprocess.run(["git", *args], cwd=cwd, env=git_env, check=True, capture_output=True)
+
+        os.makedirs(os.path.join(root, "archive"))
+        git("init", "-q")
+        git("config", "user.name", "Fixture")
+        git("config", "user.email", "fixture@example.invalid")
+        with open(os.path.join(root, "README.md"), "w", encoding="utf-8") as f:
+            f.write("base\n")
+        os.symlink("/synthetic/old-root/READ-ORDER.md", os.path.join(root, link))
+        git("add", "-A")
+        git("commit", "-qm", "base")
+        git("worktree", "add", "-q", "-b", "linked", linked)
+        # A locally retargeted link hidden by skip-worktree stays in the index but is absent
+        # from checkout-index output.
+        os.remove(os.path.join(root, link))
+        os.symlink("/synthetic/new-root/READ-ORDER.md", os.path.join(root, link))
+        git("update-index", "--skip-worktree", "--", link)
+
+        probe = os.path.join(directory, "hook_probe.py")
+        with open(probe, "w", encoding="utf-8") as f:
+            f.write(_STAGED_TREE_HOOK)
+        hook = os.path.join(root, ".git", "hooks", "pre-commit")
+        with open(hook, "w", encoding="utf-8") as f:
+            f.write(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(probe)}\n")
+        os.chmod(hook, 0o755)
+
+        for worktree, pinned in ((root, "index"), (linked, "git_dir")):
+            with open(os.path.join(worktree, "README.md"), "w", encoding="utf-8") as f:
+                f.write(f"changed in {os.path.basename(worktree)}\n")
+            git("add", "README.md", cwd=worktree)
+            result = os.path.join(directory, f"hook-{os.path.basename(worktree)}.json")
+            commit = subprocess.run(
+                ["git", "commit", "-qm", "pathspec commit", "--", "README.md"], cwd=worktree,
+                env=dict(git_env, GATE_TOOLS=HERE, HOOK_WORK=directory, HOOK_RESULT=result,
+                         PYTHONDONTWRITEBYTECODE="1"),
+                capture_output=True, text=True)
+            with open(result, encoding="utf-8") as f:
+                report = json.load(f)
+            # Git pins this hook to the outer commit with an absolute path: the hazard under test.
+            assert os.path.isabs(report[pinned] or ""), report
+            assert report["ok"] is True, (report, commit.stderr)
+            assert report["outer_index_unchanged"] is True, report
+            assert report["toplevel"] == report["extracted"] and report["head"], report
+            assert commit.returncode == 0, commit.stdout + commit.stderr
+        committed_link = subprocess.run(
+            ["git", "cat-file", "-p", f"HEAD:{link}"], cwd=root, env=git_env,
+            capture_output=True, text=True, check=True).stdout
+        assert committed_link == "/synthetic/old-root/READ-ORDER.md", committed_link
+
+
 def test_canary_children_pin_instance_and_block_ambient_tools():
     """Exercise the wrapper contract with a fake runtime and ambient sentinel files."""
     from pathlib import Path
@@ -511,6 +620,7 @@ TESTS = [
     test_all_canary_persists_runtime_results_without_nonce,
     test_staged_python_syntax_checks_unicode_spaces_and_index_bytes,
     test_precommit_now_check_reads_extracted_index_tree,
+    test_staged_tree_git_setup_ignores_outer_commit_hook_variables,
 ]
 
 

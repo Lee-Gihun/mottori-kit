@@ -20,6 +20,9 @@ from testlib import run_test
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
+# Gate pins produce block verdicts. signals.py reads this variable once at import, so set it
+# before gate or test_enforce is imported; fixture verdicts must never reach the real log.
+os.environ["MOTTORI_SIGNALS_DIR"] = tempfile.mkdtemp(prefix="test-bypass-signals-")
 
 
 def hole(function):
