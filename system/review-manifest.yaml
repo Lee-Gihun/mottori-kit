@@ -3522,6 +3522,7 @@
         "tool"
       ],
       "depends_on": [
+        "README.md",
         "tools/install_hooks.sh"
       ],
       "reviewed_at": null
