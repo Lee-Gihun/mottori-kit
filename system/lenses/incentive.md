@@ -119,4 +119,4 @@ Do not write actual usage records in this engine document. The location and form
 
 ## Sources
 
-Munger, "The Psychology of Human Misjudgment" · Spence (1973), signaling theory · Crawford & Sobel (1982, statements carry information to the extent that interests overlap) · Public choice theory (organizations move toward their own survival) · Upton Sinclair: It is difficult to get a man to understand something when his salary depends on his not understanding it.
+Munger, "The Psychology of Human Misjudgment" · Spence (1973), signaling theory · Crawford & Sobel (1982, statements carry information to the extent that interests overlap) · Public choice theory (organizations move toward their own survival) · Upton Sinclair, on why a man does not understand a thing when his pay depends on not understanding it.

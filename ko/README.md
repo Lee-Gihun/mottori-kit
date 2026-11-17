@@ -1,4 +1,4 @@
-<!-- source: README.md sha256:c54bba63cad7a9790ee306def6296c0e0701facce7f0d7c49895a1cf1532af10 source-of-truth: en -->
+<!-- source: README.md sha256:e2491bfbe02a0b1d08860956ffe5a41ebf275e8397d4789a096434788fc356a8 source-of-truth: en -->
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../.github/assets/hero-dark.svg">
@@ -53,7 +53,7 @@ mottori-kit은 Claude Code와 Codex로 긴 세션을 돌리기 위한 작업 폴
 필요한 것: Python 3.8 이상, git 2.5 이상, Bash 3.2 이상, macOS 또는 Linux. `claude`, `codex`, `node`는 없어도 된다.
 
 ```bash
-git clone https://github.com/Lee-Gihun/mottori-kit ~/work
+git clone <this-repository> ~/work
 cd ~/work
 MOTTORI_LANG=ko bash setup.sh --name work --context personal   # 회사 컴퓨터에서는 --context work
 bash tools/install_hooks.sh --repair            # 커밋 전 검사. .git/hooks는 clone되지 않는다
@@ -114,11 +114,11 @@ python3 tools/recall.py find "요금제"    # 지난 세션에서 오간 말을 
 
 | | 값 | 그 값을 지키는 방법 |
 |---|---|---|
-| 세션 시작에 고정으로 드는 컨텍스트, 새 설치 | 7KB쯤, 어림으로 1,750토큰. 로컬 파일과 설정된 훅만 센 값이다. 대부분이 규칙 일곱 개다 | `python3 tools/context_budget.py`가 내 작업 폴더를 재 주고, 정해 둔 선을 넘으면 `doctor`가 경고한다 |
+| 세션 시작에 고정으로 드는 컨텍스트, 새 설치 | 7KB쯤, 어림 1,750토큰. 로컬 파일과 설정된 훅만 센 값이다. 대부분이 규칙 일곱 개다 | `python3 tools/context_budget.py`가 내 작업 폴더를 재 주고, 정해 둔 선을 넘으면 `doctor`가 경고한다 |
 | 상태 주입 | 6,000바이트 이하 | 가장 새 결정과 서류철 목록을 먼저 싣는다. 못 실은 것은 수를 알리고 나머지를 보는 명령을 적는다 |
 | 턴 끝 점검 | 작은 편집 뒤 0.4초쯤, 바뀐 것이 없으면 0.1초쯤. 새 설치에서 잰 값이다 | 턴 끝에서는 링크와 상태만 본다. 출시용 전체 검사는 킷 자신의 트리에서 커밋할 때 돈다 |
 | 일꾼이 내 스레드로 돌려주는 것 | 4,096바이트 이하 | 전문은 디스크에 남는다. `python3 tools/receipts.py show <run>` |
-| 대화 원문 검색의 기본 출력 | 짧은 발췌로 4,000바이트 이하 | `--full`은 자세한 꼴로 돌아가고 `--max`는 더 많은 건수를 청한다 |
+| 대화 원문 검색의 기본 출력 | 짧은 발췌, 4,000바이트 이하 | `--full`은 자세한 꼴로 돌아가고 `--max`는 더 많은 건수를 청한다 |
 | 설치 | 1분쯤 | `tools/test_fresh_install.sh`가 임시 사본에서 돌려 본다 |
 
 ## 왜 규칙을 더 쓰지 않고 점검을 두나
