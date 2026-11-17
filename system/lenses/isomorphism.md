@@ -1,77 +1,134 @@
-# 구조 대응 렌즈 (isomorphism)
+<!-- source: isomorphism.ko.md sha256:7d9d255a5dd5bbc3a77f92caa7435d5ca0d5689b20a13e460ab81157528ee869 source-of-truth: ko -->
+Korean: `isomorphism.ko.md`
 
-> 호출: **이 난이도의 핵과 같은 핵을 가진 다른 분야는?**
+# Structure mapping lens
 
-## 핵심 직관
+> Question: **Is there a problem in another field with the same conditions that make this problem hard?**
+>
+> When to use: When you are stuck on a design or on a problem with no fixed answer, especially when
+> you are looking for answers only inside your own field. When a discussion is about to end with
+> "there is no right answer." When you check whether an idea is really new.
+>
+> What to leave behind: At most two mappings that survived. For each mapping, what maps to what,
+> where it does not fit, and what you will therefore do in your own problem.
 
-문제의 표면(도메인 단어)을 벗기면 난이도의 핵(결합 제약)이 남고, 같은 핵을 가진 문제는
-다른 분야에서 이미 풀렸거나 실패 기록이 있다. 유추는 그 기록을 가져오는 다리다.
-**면허 조건: 유추는 가설 생성기지 증명기가 아니다.** 발견 후 장부·유도·실측으로
-검증해야 지식이 된다.
+## Summary
 
-## 작동 원리
+Remove the words of the field from a problem, and the conditions that make the problem hard remain.
+Usually these are linked conditions: when you satisfy one, another one breaks. A problem with the same
+conditions has often been solved already in another field, or there is a record of failed attempts.
+Analogy is a way to bring that record over. But what you get from an analogy is only a hypothesis. You
+must check separately, by calculation or by measurement, whether it holds.
 
-인간의 병목은 유추의 적용이 아니라 **인출**이다. 실험 결과로, 힌트 없이 유추를 스스로
-꺼내는 비율은 10%, 힌트를 주면 30%, 표면이 비슷하면 75%다 (Gick & Holyoak). 인간은
-표면이 다르면 같은 구조를 못 꺼낸다. 전 분야를 읽은 언어모델은 이 인출 병목을 우회하는
-색인으로 쓸 수 있다 — 단, 색인이지 오라클이 아니므로 최종 확인은 원전으로 간다.
+## Example
 
-## 횡단 채굴 프로토콜 (5-pass)
+An online marketplace needs more sellers. If it loosens the entry standard, quality complaints rise. If
+it tightens the standard, there are not enough sellers. Written without the words of the field, this
+becomes: "If you widen the door, quality drops. If you narrow it to protect quality, the numbers fall
+short." Hiring has dealt with the same condition through the probation period. The employer does not
+decide on the interview alone. The person works first, and after a set period the employer looks at
+the results and makes the hire permanent. In the mapping, the seller is the applicant and the entry
+review is the interview. The move to bring over is this: "Do not decide only between approval and
+rejection. Give a temporary entry with limited exposure, and switch it to a full entry when the seller
+meets a performance standard." Also write down where the mapping does not fit. A probationary employee
+works for only one company. A seller can be on other marketplaces at the same time and can leave at
+any moment. So you do not bring over the part about making the temporary period long.
 
-- **P0 난이도 핵**: "이 문제를 어렵게 만드는 결합 제약"을 한 문장으로. 보존해야 할
-  불변량이 서술이 아니라 난이도의 핵이다 — 추상화 수위의 기준.
-- **P1 복수 탈표면**: 단일 추상화 금지. 서로 다른 온톨로지 2-3개(최적화 / 제어 /
-  적대 게임 / 생태 / 시장 …)로 도메인 단어 없이 재기술하고, 각각 P0 보존을 확인.
-- **P2 지층 강제 순회**: 추상화별 후보 분야를 지정 지층에서 찾는다 (자연과학 /
-  공학 시스템 / 사회제도·법 / 생물·진화 / 군사·안보 / 역사 실무). **가장 뻔한 3개 분야
-  금지** — 인출 분포의 롱테일을 강제한다.
-- **P3 심문 게이트**: 후보마다 대응표 + 깨짐 조항 + **이식 수 Z** ("이 유추가 참이면
-  내 문제에서 구체적으로 Z를 한다"). Z를 진술하지 못하면 장식으로 폐기.
-- **P3' 리트머스**: **"이 연결이 실험 설계를 바꾸는가?"** '고차원→저차원 요약엔 손실'급
-  만능 구조는 어느 분야를 파도 나온다. 연결이 계속 발견되는 것은 발견이 아니라
-  재확인(도파민)일 수 있다. 실험이 바뀌면 수확, 안 바뀌면 장식.
-- **P4 반증·수렴**: 생존 후보를 신선한 시각으로 반증 시도 → 최종 2개 이하 +
-  **원전 검색어** 제시 → 원전으로.
-- 수출 패스(옵션): "내 해법이 다른 분야의 어떤 미해결 문제를 푸나."
+## Why it works
 
-**호출 조건**: 설계나 오픈 문제에 막혔을 때 · 토론이 "정답 없음"에 닿았을 때 ·
-아이디어의 novelty를 스트레스 테스트할 때. 라이트 버전(P0 + P2 한 지층 + P3)을 먼저,
-가치가 보이면 풀 버전.
+People get stuck more at recalling an analogy than at applying it. In one experiment, when people were
+given no story to use as a reference, about 10% solved the problem. When they read a story first but
+got no hint, about 30% solved it. When they got the hint "try using the earlier story," the figure
+rose to about 75%. (These are the figures a textbook gives as a summary of Gick & Holyoak 1980. They
+vary between experiments.) The answer was already in their heads, but they could not retrieve it. When
+the surface looks different, people are poor at recalling the same structure. A language model that has
+read text from many fields can serve as an index that covers this weakness. It is only an index, so do
+the final check in the original literature.
 
-## 적용
+## How to use it (five steps)
 
-- **설계**: 판정자 앙상블의 오류 상관 문제 → 배심원 정리(콩도르세 1785)의 독립성 위반과
-  동형 — 이식 수: 표의 수가 아니라 판정자 간 상관을 공격한다.
-- **증거**: 논문의 "novel" 주장 → P2 순회로 인접 분야의 선행을 찾으면 novelty의 실제
-  크기가 측정된다.
-- **결정**: 같은 판을 시장 온톨로지(수요·공급·차익)와 생태 온톨로지(니치·천이)로 각각
-  재기술한다. 두 지도가 다른 수를 가리키면 그 차이가 진짜 질문이다.
+1. **Write down the conditions that make it hard**: Write in one sentence "the linked conditions that
+   make this problem hard." If, when you rewrite the problem in later steps, you abstract so far that
+   these conditions disappear, you have gone too far.
+2. **Rewrite it in several frames without field words**: Do not rewrite it in only one frame. Write it
+   in two or three. Change the frame: is it a problem of making something as large as possible
+   (optimization), of keeping something steady (control), of who competes with whom (game), or of who
+   buys and sells what (market)? For each frame, check that the conditions from step 1 still remain.
+3. **Scan many fields**: For each rewrite, look for fields that may have a similar problem. Go through
+   natural science, engineering, social institutions and law, biology and evolution, the military, and
+   practical work in history, in turn. When you look for a solution, write down the three fields that
+   come to mind first and search outside them. This is to reach fields that do not come to mind easily.
+   When you check whether something is new, do the opposite and start with nearby fields. Earlier work
+   is likely to be nearby. When nothing more comes to mind, ask a language model and name the field.
+   For example: "Find cases in biology that dealt with the same conditions as these."
+4. **Weigh the candidates**: For each candidate, write three things: what maps to what, where it does
+   not fit, and the move to bring over ("if this analogy holds, here is what I will concretely do in my
+   problem"). Drop any candidate for which you cannot write a move. For each remaining candidate, ask:
+   "Does this connection change my next action (experiment, design, question)?" If it only points again
+   at something you are already doing, write "nothing changed" and remove it. A general structure that
+   appears in every field, such as "summarizing loses something," does not count as a connection.
+5. **Try to refute and cut down**: Reread the remaining candidates with fresh eyes, trying to show that
+   they are wrong. Cut what survives to at most two. Attach search terms for finding the original
+   literature, and then read that literature.
 
-## 실패 지형 (전부 실측된 것)
+Start light. Do step 1, one group of fields in step 3, and step 4. If it looks useful, do all five
+steps. After the five steps, you can also ask the reverse question: does my solution solve an unsolved
+problem in another field?
 
-- **뿌리화**: 모든 논의가 자기 이론으로 수렴하는 것은 이론이 보편적이어서가 아니라
-  반증 불가능한 영역으로 미끄러지는 것일 수 있다 — 미완의 회피가 취하는 가장 정교한
-  형태. 수렴이 반복되면 경계 신호로 취급한다.
-- **도파민 재확인**: 연결 발견의 쾌감은 연결의 가치와 무관하다. P3'가 해독제.
-- **깨짐 조항 없는 유추는 장식이다**: 강한 유추는 전부 깨짐 조항이 있었고, 깨짐이
-  오히려 이론을 정밀화했다. 깨짐 없는 수용은 참조점에 그친다.
-- **혼자 돌리면 반감**: 생산적 인출의 상당수는 상대의 반박이 촉발한다.
-  프로토콜에 반박자를 붙여라.
-- **표현 공간의 한계**: 시각을 아무리 다양화해도 같은 표현 공간의 맹점은 못 넘는다.
-  P3/P4는 그 한계 안에서의 최대 추출 장치다.
+## Where to use it
 
-## 간섭
+- **When a design is stuck**: As in the example above, bring over solutions and failure records from a
+  field that has already dealt with the same conditions. As another example, suppose you combine the
+  verdicts of several grading models, and they are still wrong together in the same places. You can map
+  this to Condorcet's jury theorem. The theorem says that a majority vote becomes accurate under the
+  assumption that each juror is right more than half the time and that the jurors are independent. The
+  move to bring over here is to reduce the correlation between the models instead of adding more
+  grading models. This conclusion came out because, in that problem, the independence assumption was
+  confirmed to be broken. Do not carry it unchanged to another problem that has several judges. First
+  write down what the jurors are in your problem, what the right answer is, and whether the
+  independence assumption holds.
+- **When you check a claim that something is "new"**: Use the method in step 3 to scan from nearby
+  fields first and find earlier work. Once you look, you can tell how new it really is.
+- **When a choice is split**: Rewrite the same situation in two different frames. If the two frames
+  point to different choices, the reason they differ is the question you actually need to answer.
 
-- **파인만**이 검증 단계: 유추로 생성 → 재유도로 확정.
-- **장부**가 심문 도구: 대응표의 각 항이 보존량을 실제로 보존하는가.
-- **거울**이 감시자: 이 연결에 흥분한 이유가 연결의 가치인가, 내 이론의 확장인가.
+## Ways to misuse it
 
-## 적용 기록
+- **Everything leads back to my theory**: If every case you look at ends with "my theory explains this
+  too," be suspicious. It may be because the theory holds widely. It may also be because the theory is
+  growing in a direction where it can never be shown to be wrong. If you cannot answer "what would have
+  to be different if this theory were wrong," it is the second case.
+- **The fun of finding connections pulls you along**: The pleasure of finding a connection has nothing
+  to do with whether the connection is useful. Filter with the question from step 4, "does it change
+  the next action?"
+- **You do not write down where it does not fit**: The parts that do not fit decide what you bring over
+  and what you leave behind. Bring over the structure. Leave behind the parts that do not fit (numbers,
+  formulas, properties found only in that field). A remark that you could attach to any analogy, such
+  as "people are not machines," separates nothing, so it does not count as writing something down.
+- **You do it alone**: Useful analogies often come to mind when someone argues against you. Bring in a
+  partner who will argue back.
+- **You get stuck in one way of stating it**: Even if you rewrite the problem in several frames, you
+  cannot see what is completely missing from the way you first wrote the problem. It helps to show the
+  sentence that states the problem to another person first.
 
-실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
+## With other lenses
 
-## 원전
+- **Feynman** (the lens that checks understanding by calculating it yourself): Check a hypothesis that
+  came from an analogy by deriving it again with the Feynman lens.
+- **Ledger** (the lens that tracks what is scarce and what it costs): Use it to see whether the mapped
+  items really correspond. Check whether something that is fixed in amount on one side is also fixed on
+  the other side.
+- **Mirror** (the lens that compares judgments about yourself with the record): Use it to see whether
+  you welcome this connection because it is useful or because it makes your theory larger.
 
-Gick & Holyoak (1980, 1983) analogical transfer · Polya의 유추 장 · Hofstadter,
-*Surfaces and Essences* · 콩도르세 배심 정리.
+The full list of all 13 lenses is in [README](README.md).
 
+## Usage records
+
+Do not write actual usage records in this engine document. The location and format of records follow
+the records section of `system/deep-pass.md`. The default location is the instance's
+`_private/deep-pass/ledger.md`. Copy `templates/deep-pass-ledger.md` to use it.
+
+## Sources
+
+Gick & Holyoak (1980, 1983) · Holyoak & Koh (1987, surface similarity and retrieval) · Polya (analogy) · Hofstadter, *Surfaces and Essences* · Condorcet's jury theorem (1785).

@@ -1,68 +1,112 @@
-# 젠슨황 렌즈 (전략 팩)
+<!-- source: jensen.ko.md sha256:f038f12a2bf1c3875ba8dba1ad7fa44b32f50c431ca90c42dec0063d058f3dbf source-of-truth: ko -->
+Korean: `jensen.ko.md`
 
-> 호출: **0조 시장은? 전체 소는? 30일 남았다면?**
+# Jensen Huang lens (strategy bundle)
 
-사업과 전략의 판을 볼 때 쓰는 5도구 팩. 하나의 뿌리 직관을 공유하므로 렌즈 하나로 센다:
-**판이 정해지기 전에 판을 고르고, 판이 정해진 뒤에는 시스템 전체로 이긴다.**
+> Question: **Is this the time to choose which game to play, or the time to play a chosen game well?**
+>
+> When to use: When you decide where to stand as a company, a product, or a career. When you design a
+> work system in which several outputs depend on each other.
+> Turn it off while you are executing.
+>
+> What to leave behind: A one-line verdict on "is this the time to choose the game", the tools and
+> evidence you used to check that verdict, and whether the judgment changed or stayed the same.
 
-## 5도구
+These are five tools taken from the statements of Nvidia founder Jensen Huang and from the history of
+Nvidia. Here a "game" means a place where it is settled what you compete for and against whom. It can be a
+market, a technology standard, or a job role. The five tools share one idea. When the rules of the game
+are not settled yet, the most important thing is to choose which game to play. After the rules are
+settled, the side that fits the whole system together well wins over the side that perfects one part.
 
-### (a) 0조 시장
+## Five tools
 
-아직 존재하지 않지만 반드시 생길 시장을 먼저 간다. 시장 크기 질문을 "지금 얼마나 큰가"에서
-"물리 법칙과 비용 곡선이 어디로 수렴하나"로 교체한다.
-- 원리: 기존 시장은 가격이 형성되어 있어 초과수익이 경쟁으로 소진되지만, 없는 시장은
-  가격 발견 전이라 정의권이 선점자에게 있다.
-- 실패 지형: 역발상 코스프레. "없는 시장"의 대부분은 없어야 해서 없다. 판별은
-  "무엇이 바뀌어서 이제는 가능해졌나"(enabling shift)를 명시할 수 있는가.
+### 1. A market that does not exist yet ("the zero-dollar market")
 
-### (b) Ship the whole cow
+Enter first a market that does not exist today but is sure to appear. When you look at a market, do not
+ask "how big is it now". Ask "where are the technical limits and the costs going".
 
-자산 하나에서 전 제품군을 뽑는다.
-만든 것의 최상급만 팔고 나머지를 버리는 것은 비용 회계의 실패다.
-- 원리: 고정비가 지배하는 생산에서는 한계비용 0에 가까운 파생물의 판매가 전부 이익이다.
-- 실패 지형: 하위 제품이 브랜드를 침식하는 경우. 파생물에도 바닥 품질선이 필요하다.
+- Why it works: An existing market already has set prices, so competition cuts the profit. In a market
+  that does not exist yet, the side that enters first can decide what that market looks like.
+- Ways to misuse it: Making it the goal to go against everyone else. Most markets that do not exist are
+  missing because nobody needs them. You must be able to say "what changed so that this is possible now".
 
-### (c) 망하기까지 30일
+### 2. Get everything out of one thing ("sell the whole cow")
 
-"우리는 망하기까지 30일 남았다"를 문화로 유지하는 생존 파라노이아. 성공이 클수록 세게.
-자기 표준이 패배하는 순간이 오면 표준에 매달리지 않고 이길 수 있는 표준으로 판을 옮긴다.
-- 원리: 경쟁은 성공한 곳에 도착한다. 파라노이아는 감정이 아니라 조기경보 시스템의 유지비다.
-- 실패 지형: 만성 불안과의 혼동. 파라노이아는 정기 워게임(드릴)이지 기분이 아니다.
+When you butcher a cow, you do not sell only the tenderloin. Release every product you can make from the
+one thing you built. If you sell only the best part and throw away the rest, you do not recover all the
+cost you put in. Applied to personal work, the same idea goes like this. Records or documents that you
+must set aside separate time to write never get made in the end. So arrange your work so that they come
+out on their own from work you already do.
 
-### (d) 풀스택 / 속도의 빛
+- Why it works: In work with a large fixed cost to build, every by-product that comes out at almost no
+  extra cost is pure profit when you sell it.
+- Ways to misuse it: Low-quality by-products damage the reputation of the original product. Set a
+  minimum quality bar for by-products too. Also, if a by-product becomes a copy that must be fixed
+  separately from the original, you only add things to maintain. Make it so that when you fix the
+  original, the by-product changes with it.
 
-이론 한계에서 역산해 시스템 전체를 설계한다. 부품이 아니라 시스템을 판다.
-부품 최적화의 합은 시스템 최적이 아니다.
-- 원리: 통합자는 부품 간 인터페이스에서 새는 가치를 회수한다.
-- 실패 지형: 병목이 한 부품에 있을 때는 그 부품의 전문가가 이긴다. 풀스택은 언제나가
-  아니라 인터페이스 병목일 때의 수다.
+### 3. Thirty days from going under
 
-### (e) 고통과 인내
+Assume "our company is thirty days from going under" and check regularly. Do it more as you succeed
+more. Early on, Nvidia's own approach to graphics technology lost out to the industry standard. Nvidia
+dropped that approach, moved to the industry standard, and survived.
 
-결핍이 방법론을 발명한다. 자원 부족을 접고 들어가는 조건이 아니라 발명 압력으로 재해석한다.
-- 실패 지형: 고통 숭배. 결핍이 발명을 낳는 것은 방향이 맞을 때뿐이며, 고통 자체는
-  지표가 아니다.
+- Why it works: Competitors come to where success is. If you check under the assumption that you can go
+  under, you can notice problems early.
+- Ways to misuse it: Confusing it with constant anxiety. This tool is a check you do on a set date, not
+  a mood. Writing down "if we went under in thirty days, what would be the cause" is enough.
 
-## 적용
+### 4. Design backward from the theoretical limit ("the speed of light")
 
-- **판 읽기**: 회사·제품 분석 시 5도구를 순서대로 — 이 조직의 0조 시장은, 소는,
-  표준 패배 시 대응은, 스택 커버리지는, 결핍의 방법론은.
-- **개인 전략**: (a) 아직 이름 없는 역할을 먼저 정의한다 (b) 한 작업물에서 논문·코드·
-  글·발표를 다 뽑는다 (c) "이 조직이 나를 30일 뒤 안 쓴다면" 드릴 (d) 모델만이 아니라
-  평가-서빙-피드백 루프 전체를 소유한다 (e) 자원 없음을 방법론 발명의 압력으로 쓴다.
+Do not set the comparison point at a competitor or at last quarter. Set it at the theoretically
+possible limit. For example, when you fix a feature that takes 1.2 seconds to respond, do not compare it
+with last quarter's number. First calculate the minimum time that is theoretically possible (for
+example, 0.05 seconds). When you trace where that gap comes from, the time often leaks between parts
+rather than inside one part.
 
-## 실패 지형 (팩 공통)
+- Why it works: Making each part as good as possible does not make the whole as good as possible. The
+  side that owns the whole can recover what leaks where the parts meet.
+- Ways to misuse it: When the problem is in one part, the side that makes that part best wins. Owning
+  the whole is for when the problem is where the parts meet. Also, do not read "own the whole" as "build
+  everything". At first, build only the thinnest single flow that actually runs from start to end.
 
-- 5도구를 체크리스트로 순회만 하는 것. 이 팩의 힘은 개별 도구가 아니라 "판을 고르는 자와
-  판에서 뛰는 자를 구분"하는 뿌리 직관이다.
-- 전략 렌즈를 실행 국면에 들이대는 것. 실행 중의 주 렌즈는 되먹임과 한계효용이다.
+### 5. Shortage as a trigger for new methods ("pain and suffering")
 
-## 적용 기록
+When resources are plentiful, you end up using the methods others use. When they are short, you cannot
+use those methods, so you look for other ones. So treat shortage as a trigger to find a new method, not
+as a reason to give up.
 
-실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
+- Ways to misuse it: Treating hardship itself as good. Shortage produces new methods only when the
+  direction is right. Being hard is not evidence that you are doing well.
 
-## 원전
+## Where to use it
 
-Jensen Huang 인터뷰·연설 (Stratechery, 졸업 연설, Acquired) · Tae Kim, *The Nvidia Way* ·
-NV1 실패 후 표준 전환의 사사(社史).
+- **When you read a company or a product**: First ask "does this organization choose the game, or does
+  it play in a chosen game". Then start with the tools that could shake that answer. If the verdict
+  stays the same after you actually apply the tools, write "no change" and the evidence you checked. If
+  you could not write even one line of evidence, you only skimmed.
+- **When you decide a personal career path**: See whether you can take on first a kind of work that
+  others do not yet call a job role, so that you get to define its scope. Arrange one piece of work so
+  that a paper, code, writing, and a talk all come out of it together. Write down "if this organization
+  did not need me in thirty days, why would that be".
+
+## Ways to misuse it (common to all five)
+
+- **Only running through the five in order**: What matters in this bundle is the idea "tell apart the
+  side that chooses the game from the side that plays in it", more than any single tool.
+- **Using it during execution**: This lens is for deciding where to stand. During execution, use the
+  Feedback loop lens (the lens that looks at how the other side reacts to your actions) and the Marginal
+  value lens (the lens that asks where to spend the next unit).
+- **Forgetting that this is the story of one successful company**: The companies that did the same
+  thing and failed are not in this story. What you take from it is the questions. There is no guarantee
+  that "doing this works".
+
+The full list of all 13 is in the [README](README.md).
+
+## Usage records
+
+Do not write actual usage records in this engine document. The location and format of records follow the records section of `system/deep-pass.md`. The default location is the instance's `_private/deep-pass/ledger.md`. Copy `templates/deep-pass-ledger.md` to use it.
+
+## Sources
+
+Jensen Huang's interviews and speeches (Stratechery, commencement speech, Acquired) · Tae Kim, *The Nvidia Way* · Nvidia's history of changing to the standard after the NV1 failure.

@@ -1,70 +1,117 @@
-# 극한 렌즈
+<!-- source: limits.ko.md sha256:48507ffaa00cf2544ba249eebb65912af21b43a21a6ac4b280946d0d729463ba source-of-truth: ko -->
+Korean: `limits.ko.md`
 
-> 호출: **다이얼을 0과 ∞로 돌리면? 지배 법칙이 바뀌는 지점은?**
+# Limits lens
 
-## 핵심 직관
+> Question: **What happens when you push the value to zero, and to infinity? From where does it start
+> to behave differently?**
+>
+> When to use: When you have to decide "how much," such as a count, a size, or a range. When you hear a
+> claim like "more is better." When a new formula or rule has been checked only at middle values.
+>
+> What to leave behind: One line each on what happens at both ends, and the point where the behavior
+> starts to change. If you do not know that point, write that you do not know.
 
-주장이나 공식이 틀렸다면 대개 극단에서 눈에 보이게 틀린다. 다이얼을 0과 ∞로 돌리는 것은
-공짜 검증기다: 중간 영역에서는 그럴듯함이 오류를 가려주지만 경계에서는 못 가린다.
-그리고 다이얼을 돌리다 보면 지배 법칙 자체가 교체되는 지점(상전이)이 있다.
-극한값만 보지 말고 법칙이 갈리는 문턱을 찾아라. More is different.
+## Summary
 
-## 작동 원리
+When a claim or a formula is wrong, it is often visibly wrong at the extremes. In the middle range, many
+factors mix together, so it looks plausible. So you push an adjustable value to zero and to infinity.
+This is a check you can do in your head without an experiment. While you push the value, you sometimes
+meet a point where it starts to behave in a completely different way. Where that point is matters as
+much as the result at the ends.
 
-경계에서는 자유도가 죽는다. 점근 영역에서는 지배항 하나만 남아 얼버무림이 불가능해지고,
-공식은 참이거나 거짓이거나 둘 중 하나가 된다. 상전이 쪽 원리: 많은 시스템의 거동은
-연속적으로 변하지 않고 임계점에서 질적으로 바뀐다. 양이 질로 전환되는 지점은 예외가
-아니라 복잡계의 기본 패턴이다.
+## Example
 
-## 변형
+There is a proposal to raise app notifications from 3 times a week to 7 times a week. First push it to
+zero. If you send no notifications at all and use only email and in-app banners, what do you lose?
+When you work it out, what you lose is roughly "people who left items in their cart coming back within
+a day." Now increase it without end. If you send dozens a day, people turn notifications off or delete
+the app. Then what you really need to know is "from how many per week does the number of people who
+turn notifications off rise sharply?" The proposal changes from "raise the total count" to "keep the
+cart notification, and first measure on a small scale how the rate of turning notifications off
+changes with the count." Write down that you do not know yet where that point is.
 
-- **다이얼 0/∞**: 온도, 샘플 수, 비중, 스텝 수를 양 끝으로.
-- **단항 극단화**: 변수 하나만 극단으로 보내고 나머지는 고정 — 어느 변수가 결론을
-  지배하는지 분리한다.
-- **퇴화 사례 검사**: 공집합, 자기 자신, 원소 1개. 정의가 퇴화 사례에서 무너지면
-  정의가 덜 된 것이다.
-- **상전이 탐지**: 다이얼을 연속으로 돌리며 "여기서 규칙이 바뀐다"는 문턱을 찾는다.
-  문턱의 위치 자체가 시스템에 대한 1급 정보다.
-- **시간 극한**: "이걸 10년 계속하면 / 딱 하루만 하면" — 습관과 전략의 검증기.
-- **보편화 검사**: "모두가 이 원칙을 따르면 어떻게 되나" — 사회적 극한.
+With a formula, it is even simpler. Take the value that controls how evenly probability is spread (the
+temperature in softmax). As it approaches 0, all the probability gathers on the option with the highest
+score (if several options tie for the highest, they share it). When it becomes very large, all options
+get the same probability. If a newly proposed method is said to keep this property but does not behave
+this way at the two ends, also doubt the performance gains it showed at middle values.
 
-## 적용
+## Why it works
 
-- **설계**: 새 손실함수 제안 → 계수 0에서 기존과 일치하는가, ∞에서 퇴화가 예측대로인가.
-  하나라도 어긋나면 유도가 틀린 것.
-- **증거**: "X가 Y를 개선한다" → 개선 곡선을 X의 극단까지 외삽해본다. 극단에서 말이
-  안 되면 어딘가 문턱이 있고, 문턱을 재지 않은 논문의 주장 범위는 과대다.
-- **결정**: "이 지출·습관·원칙을 100배로 늘리면 삶이 어떻게 되나."
-- **자기**: 걱정을 극한까지 시뮬레이션한다 — "최악이 실제로 일어나면 정확히 뭘 하게 되나"를
-  끝까지 따라가면 대부분의 걱정은 유한한 복구 계획으로 수렴하고, 남은 소수만 진짜
-  대비 대상이다.
+When you send a value to an end, one factor usually overwhelms the rest. You can no longer blur the
+answer by leaning on other factors, so it becomes clear whether the claim is right or wrong. Points
+where behavior changes appear for the same reason. Many systems change little by little, and once they
+pass a certain point, a different factor takes control and their character changes.
 
-장난감 예시: softmax 온도 — T→0이면 argmax, T→∞이면 균등분포. 어떤 샘플링 개선안이
-이 두 극한에서 자명하게 옳은 거동을 보이지 않으면, 중간 온도에서의 벤치마크 이득은
-의심 대상이다. 상전이 버전: 규모를 늘리며 능력 곡선을 그릴 때 곡선이 꺾이는 지점 전후는
-같은 시스템이 아닐 수 있다 — 문턱 전 데이터로 문턱 후를 외삽하면 틀린다.
+## How to use it
 
-## 실패 지형
+- **Push to zero and to infinity**: Send values such as a count, a size, a weight, or a period to both
+  ends. Also push the effort or cost you put in. On the zero side, ask "if I do nothing and use only
+  what already exists, what do I lose?" Among the things you would lose then, the ones you must not lose
+  are candidates for the work you need to do.
+- **Push only one value**: Send only one value to an end and leave the rest as they are. This shows which
+  value drives the conclusion.
+- **Plug in the simplest cases**: Try the case with nothing, the case with only one, and the case of
+  comparing something with itself. If the definition or rule makes no sense here, it is not polished
+  enough.
+- **Find the point where it changes**: Change the value little by little and find the point where "from
+  here it behaves differently." When you find it, write down what drives the behavior before that point
+  and what drives it after.
+- **Push time**: Ask "what if I keep doing this for 10 years?" and "what if I do it for just one day?"
+  Use this to check habits or strategies.
+- **If everyone did it**: Ask "what happens if everyone does this?"
 
-- **극한 성립 = 중간 성립 착각**: 양 극단에서 옳아도 중간에서 비단조일 수 있다.
-  극한은 필요조건 검사지 충분조건이 아니다.
-- **도달 불가능한 극한의 남용**: 물리적으로 불가능한 극한의 거동으로 현실 영역을
-  재단하는 것. 극한이 조명하는 것은 구조지 예측이 아니다.
-- **상전이 남발**: 모든 비선형을 "창발"이라 부르면 설명이 아니라 이름 붙이기다.
-  문턱을 주장하려면 문턱의 위치와 전후의 지배 법칙을 각각 명시해야 한다.
+## Where to use it
 
-## 간섭
+- **When you design a product or a policy**: Pick one axis, such as how much the user controls directly
+  and how much the system does on its own. Write down how it breaks at each end. The range between the
+  two points where it starts to break is the range you can design within.
+- **When you check a new formula**: See whether setting a coefficient to 0 gives the same result as the
+  existing method, and whether making it very large gives what you expected. If it differs, you must be
+  able to explain why.
+- **When you read someone else's claim**: When you see a claim that "increasing X improves Y," picture
+  what happens when X is increased all the way. If it makes no sense at the end, there is a point
+  somewhere in the middle where the behavior changes. A claim that did not measure that point may be
+  claiming a wider range than is true.
+- **When you decide on a large expense or a habit**: Ask "what would my life look like if I multiplied
+  this by 100?"
+- **When your worry is large**: Follow "if the worst thing actually happens, what exactly would I do?"
+  to the end. When you follow it, the worry often turns into a response plan you can carry out. What
+  remains after that is what you actually need to prepare for.
 
-- 재시동 시퀀스 2단: 장부 → **극한** → 역산.
-- **파인만**과 짝: 극한 검증은 가장 싼 장난감 계산이다.
-- **되먹임**과 접속: 가동률 100% 극한에서의 폭발은 극한이 찾고 되먹임이 설명한다.
+## Ways to misuse it
 
-## 적용 기록
+- **Assuming the middle is right because the ends are right**: Even when both ends are right, the middle
+  can behave differently. Checking the ends is the minimum check.
+- **Judging reality by an end you cannot reach**: Do not decide the range of reality from the result of
+  an extreme that cannot actually happen. An extreme shows structure, but it does not make predictions.
+- **Only naming every bend**: Calling a place where change speeds up "emergence" or a "tipping point" is
+  not an explanation. You must write where that point is and what drives the behavior before and after
+  it.
+- **Saying the middle is the answer because both ends are bad**: If you conclude "a reasonable middle"
+  only because both extremes are bad, you have decided nothing. Write where the problem at each end
+  starts. That tells you where in the middle to be.
 
-실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
+## With other lenses
 
-## 원전
+- **Ledger** (the lens that tracks what is scarce and what it costs): After you set up items with the
+  Ledger lens, check the ends of each item with this lens.
+- **Feynman** (the lens that checks understanding by calculating it yourself): Pushing to the ends is
+  the cheapest small calculation you can do.
+- **Feedback loop** (the lens that looks at how the other side reacts to your action): Use this lens to
+  find the effect where waiting grows sharply as spare capacity approaches 0, and use the Feedback loop
+  lens to explain it.
 
-Anderson, "More Is Different" (1972) · 점근 분석 전통 · Polya, *How to Solve It*의
-경계 사례 · 칸트 정언명법 (보편화 검사).
+The full list of all 13 lenses is in the [README](README.md).
 
+## Usage records
+
+Do not write actual usage records in this engine document. The location and format of records follow
+the records section of `system/deep-pass.md`. The default location is the instance's
+`_private/deep-pass/ledger.md`. Copy `templates/deep-pass-ledger.md` to use it.
+
+## Sources
+
+Anderson, "More Is Different" (1972) · Asymptotic analysis · Polya, *How to Solve It* (boundary cases) ·
+Kant's universalizability test.

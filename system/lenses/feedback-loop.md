@@ -1,76 +1,129 @@
-# 되먹임 렌즈
+<!-- source: feedback-loop.ko.md sha256:3235005ef57ccc05dc338281f8583aa76b49936b4655a3e10922ff108a4fbd07 source-of-truth: ko -->
+Korean: `feedback-loop.ko.md`
 
-> 호출: **내 개입에 시스템은 어떻게 응수하나? 지연은 어디 있나?**
+# Feedback loop lens
 
-## 핵심 직관
+> Question: **If I act, how does the other side respond? How late does that response come?**
+>
+> When to use: When you create a new rule, metric, procedure, or automation. When you change something
+> and it returns to how it was. When a state of "busy" or "overwhelmed" continues. Do not use it on work
+> whose results do not come back into later actions.
+>
+> What to leave behind: What increases what, what decreases what, and where responses arrive late. Then
+> one line on what you changed because of it.
 
-정적인 물체는 밀면 밀린다. 살아 있는 시스템은 밀면 되민다 — 개입은 1회 사건이 아니라
-루프의 새 항이고, 시스템은 개입에 적응한 상태로 응수한다. "그다음엔?"을 두 번 묻지 않은
-계획은 계획이 아니라 첫 수다. 측정이 표적이 되는 순간 측정이 오염되는 것도 이 렌즈의
-특수 사례다: 시스템이 지표에 응수한 것.
+## Summary
 
-## 작동 원리
+An object that does not move gets pushed when you push it. People and organizations push back. When I
+act, the other side adapts to it, and then responds again from the changed state. So a plan that never
+asks "and what happens after that?" has decided only the first move. When a metric becomes a target, it
+stops being trustworthy. This is the same effect, because people change their behavior to fit the
+metric.
 
-루프는 두 종류뿐이다 — 강화(출력이 입력을 키움: 복리, 부채, 평판)와 균형(출력이 입력을
-누름: 온도조절, 가격, 피로). 시스템 거동은 어느 루프가 지배하느냐로 정해지고, 지연이 낀
-균형 루프는 진동한다 (샤워 온도 조절이 널뛰는 이유). 용량 근처의 수학: 대기 지연은
-가동률 ρ에 대해 ρ/(1-ρ)로 폭발한다 — 50%에서 1배, 80%에서 4배, 95%에서 19배.
-여유는 사치가 아니라 변동 흡수 장치이며, 그것이 없는 시스템은 반드시 발작한다.
+## Example
 
-## 변형
+A request comes in to use "average time to handle one inquiry" as the performance metric for a customer
+support team. Before you set the metric, write down what team members will do once they know about it.
+They pass hard inquiries to other teams. They close a ticket before it is solved and let the customer
+reopen it. They pick short inquiries first. All three are easier than actually solving the customer's
+problem. So you do not use handling time alone. You also track the share of customers who contact
+support again within one week. If people close tickets without solving them, this second number gets
+worse, and the trick becomes visible.
 
-- **루프 그리기**: 개입 전에 무엇이 무엇을 키우고 누르는지 화살표 몇 개라도 손으로.
-  강화 루프에는 브레이크가, 균형 루프에는 목표값이 어디 있는지 표시한다.
-- **재고 vs 유량 구분**: 신뢰, 체력, 기술은 재고(천천히 쌓이고 천천히 빠짐), 기분과
-  일정은 유량. 재고 문제를 유량 조작으로 풀려는 것이 표준 오류다 (몰아 자기로 수면 부채
-  청산 등).
-- **가동률 상한 정책**: 캘린더, 서버, 현금흐름에 70~80% 상한을 정책으로 박는다.
-  "바쁘다"는 감정이 아니라 ρ가 0.9를 넘었다는 계기판이다.
-- **"그다음엔?" ×2**: 1차 효과 다음의 2차, 2차 다음의 3차까지만. 두 스텝이면 대부분의
-  부메랑이 보인다.
-- **측정 응수 검사**: 지표를 걸기 전에 — 시스템이 이 지표를 아는 순간 무엇을 하나.
-  지표 조작이 목표 달성보다 싸면 그 지표는 걸면 안 된다.
-- **자기 입력 검사**: 자동화·재생성기에 "자기 출력이 자기 입력이 되는 경로가 있나"를
-  검사한다. 내용이 같아도 산출물을 다시 쓰는 재생성기는 자기 신선도 판정을 오염시킨다 —
-  동결 판정은 시각이 아니라 내용 해시로 한다.
+## Why it works
 
-## 적용
+There are two kinds of flows in which things affect each other. One is a flow that grows by itself. The
+result makes the cause larger. Money that earns interest and reputation work this way. The other is a
+flow that shrinks by itself. The result holds the cause down. A thermostat and prices work this way. How
+a system behaves depends on which of the two is stronger. If a flow that shrinks by itself has a stage
+where the response comes late, the system swings back and forth. This is why the water goes hot and cold
+when you adjust a shower.
 
-- **설계**: 새 프로세스 도입 시 구성원이 적응한 뒤의 균형점을 예측한다. 도입 직후의
-  효과는 거의 항상 과대측정이다 — 아직 응수 전이라서.
-- **습관**: 강화 루프를 설계한다 — 행동 → 가시적 기록 → 동기 → 행동. 기록이 빠진 습관은
-  루프가 닫히지 않아 의지력만 소모한다.
-- **일정**: 새 조직 합류 초기, 가동률 100%로 신뢰를 사고 싶은 유혹 — ρ/(1-ρ)를 기억하라.
-  100%는 최고 성과 상태가 아니라 첫 변동에 무너지는 상태다. 신뢰는 재고라서 천천히
-  쌓는 수밖에 없다.
-- **자기**: "요즘 왜 이렇게 정신없지"를 감정이 아니라 가동률 문제로 재분류하고,
-  일정 밀도를 계기판으로 읽는다.
+The same frame explains why slack is needed. Take the simplest model (M/M/1 in queueing theory). Work
+arrives at random, the time to handle one item also varies, and there is one place that handles the
+work. In this model, the average wait before handling starts is ρ/(1-ρ) times the time to handle one
+item. ρ is the share of handling capacity actually in use. At 50% ρ the wait is 1 times, at 80% it is 4
+times, at 90% it is 9 times, and at 95% it is 19 times. Suppose a place handles 10 items per hour. If
+the incoming work grows by only half an item, from 9 to 9.5 per hour, the wait jumps from 9 times to 19
+times. Slack looks like waste, but it absorbs work that arrives unevenly. When work starts to pile up,
+the time spent switching between tasks and the amount of rework both grow. Then the handling capacity
+itself shrinks, and things break down faster than this calculation says. These numbers are here to show
+the shape: as slack shrinks, waiting grows sharply. The multiple changes with how much the handling time
+varies, so it is not a value to apply directly to a personal schedule.
 
-장난감 예시: 처리 능력 시간당 10건에 유입 9건(ρ=0.9)이면 대기 지연 ∝ 9배. 유입을
-9.5건으로 올리면(ρ=0.95) 19배 — 유입 5% 증가가 지연 2배. 캘린더에 미팅 하나 더 넣는
-것의 실제 비용이 이 곡선 위에 있다.
+## How to use it
 
-## 실패 지형
+- **Draw the flows**: Before you act, draw with a few arrows what increases what and what decreases what.
+  For a flow that grows by itself, mark where the mechanism that stops it is. For a flow that shrinks by
+  itself, mark the value it aims at.
+- **Handle late responses**: If there is a stage where the response comes late, look for a way to shorten
+  that time. If you cannot shorten it, set the date to check the result in advance.
+- **Ask "and after that?" twice**: Look at what comes after the immediate result, and at what comes after
+  that. Ask only twice. If you go further, guesses pile on guesses and become hard to trust.
+- **Separate amounts piled up from amounts moving in and out**: Look separately at the amount piled up
+  now and the amount that comes in and goes out per period. The number of waiting inquiries is a piled-up
+  amount. New inquiries per day and handled inquiries per day are amounts moving in and out. A piled-up
+  amount goes down only when there is a run of days on which more goes out than comes in. Trust, stamina,
+  skill, and sleep debt are also piled-up amounts. Trying to repay sleep debt built up over many days with
+  one weekend lie-in is the mistake of trying to clear a piled-up amount with one day of movement.
+- **Set an upper limit on how full to get**: For schedules, servers, and cash flow, set a rule that says
+  "fill only up to this much." Many start at 70 to 80%. The more uneven the incoming work, the lower the
+  limit. Read the feeling of "busy" as a signal that the slack has run out.
+- **Separate the visible response from the actual change**: Write down separately the response the other
+  side sees right away, what was actually applied, and the result that shows up later. If you make a
+  "received" notice look like "fixed," trust drops when the other side learns that it was not fixed.
+- **Predict how people will respond to a metric**: Before you choose a metric, write down what people will
+  do once they know it. If hitting the number is easier than reaching the real goal, do not use that
+  metric alone. Add another metric that exposes number gaming.
+- **Check whether something uses its own output as evidence**: Check whether there is a path through which
+  an automation or evaluation tool uses results it produced as evidence for its own judgment. And when you
+  fix something after seeing the results, do not measure it again on the same data. Confirm it on new
+  data.
 
-- **다이어그램 중독**: 루프를 그리다 행동을 안 하는 것. 이 렌즈는 개입 전 검사지 개입의
-  대체물이 아니다. 두 스텝 규칙으로 제한한다.
-- **1차 효과 경시**: 2차 효과 사냥에 취해 명백한 1차 이득을 버리는 것. 2차 효과는
-  1차를 뒤집을 만큼 클 때만 결정에 반영한다.
-- **만능 루프화**: 루프가 없는 문제(진짜 1회성 결정)에 루프를 상정하는 것.
+## Where to use it
 
-## 간섭
+- **When you introduce a new rule or procedure**: Predict the state after people get used to it. The
+  effect right after introduction often looks larger than it really is, because people have not yet
+  responded.
+- **When you build a habit**: Build a flow in which you act, record it where you can see it, and want to
+  act again because you see the record. If the record is missing, the flow breaks and you rely on
+  willpower alone.
+- **When you plan a schedule**: In the early period at a new organization, you want to fill your schedule
+  to earn trust. A full schedule breaks down when a single unexpected task appears. Do not fill the
+  schedule completely. Build trust through the number of promises you keep.
+- **When you stay overwhelmed**: Before treating it as a matter of mood, look at how full the schedule is.
 
-- **장부**와 짝: 장부는 스냅샷의 수지, 되먹임은 흐름의 동역학. 순서는 장부 먼저.
-- **극한**과 접속: ρ→1 극한의 폭발은 극한이 찾고 이 렌즈가 설명한다.
-- **에르고드**와 접속: 흡수상태로의 추락은 대부분 강화 루프를 탄다.
-- **울타리**와 접속: 기존 구조가 균형 루프의 부품일 수 있다 — 철거 전 루프 확인.
+## Ways to misuse it
 
-## 적용 기록
+- **Only drawing**: This is the case where you are busy drawing flows and do not act. If you cannot write
+  in one line what you changed because of the drawing, you have only laid out arrows. The change is
+  usually one of these: a path you cut, a limit you set, or a signal you separated.
+- **Underrating immediate gains**: This is the case where you get absorbed in finding later effects and
+  give up a clear gain. Let later effects count in the decision only when they are large enough to
+  outweigh the present gain.
+- **Seeing loops everywhere**: If there is no path through which the result comes back into later actions
+  and changes the result again, turn this lens off. Whether you make the decision only once is not the
+  test. A reward rule that you set once also keeps changing behavior after that.
 
-실제 적용 기록은 이 엔진 문서에 쓰지 않는다. 기록 위치와 양식은 `system/deep-pass.md`의 기록 절을 따른다. 기본 위치는 인스턴스의 `_private/deep-pass/ledger.md`이며, `templates/deep-pass-ledger.md`를 복사해 사용한다.
+## With other lenses
 
-## 원전
+- **Ledger** (the lens that counts what is scarce and what it costs): Ledger is a calculation at one point
+  in time. This lens looks at changes over time.
+- **Limits** (the lens that pushes a value to 0 and to infinity): The Limits lens finds that waiting grows
+  sharply as slack approaches 0, and this lens explains it.
+- **Ergodicity** (the lens that first asks whether there is an irreversible loss): Falls into irreversible
+  states often ride a flow that grows by itself.
+- **Fence** (the lens that asks what an old practice protects): An old practice may be part of a flow
+  that keeps the system stable. Check before you remove it.
 
-Forrester, *Industrial Dynamics* · Meadows, *Thinking in Systems* · 대기행렬 이론
-(Erlang, M/M/1) · Goodhart (1975) / Strathern의 정식화 · Senge의 시스템 원형.
+The full list of all 13 lenses is in the [README](README.md).
 
+## Usage records
+
+Do not write actual usage records in this engine document. Follow the recording section of
+`system/deep-pass.md` for the location and format of records. The default location is the instance's
+`_private/deep-pass/ledger.md`. Copy `templates/deep-pass-ledger.md` to use it.
+
+## Sources
+
+Forrester, *Industrial Dynamics* · Meadows, *Thinking in Systems* · Queueing theory (Erlang, M/M/1) · Goodhart (1975) and Strathern's formulation · Senge's system archetypes.
