@@ -414,7 +414,7 @@ if os.environ.get("CLAUDE_CODE_PLUGIN_DIRS") or os.environ.get("CLAUDE_CODE_SYNC
     (root / "ambient-executed").write_text("plugin")
 if "exec" in args:
     disabled = [args[i+1] for i, value in enumerate(args[:-1]) if value == "--disable"]
-    if "--ignore-user-config" not in args or "plugins" not in disabled or "apps" not in disabled or "mcp_servers={}" not in args:
+    if "--ignore-user-config" in args or "plugins" not in disabled or "apps" not in disabled or "mcp_servers={}" not in args:
         (root / "ambient-executed").write_text("connector")
     enabled = "hooks" not in disabled
 else:

@@ -2,7 +2,7 @@
 """Query the untracked fact ledger without embedding domain content in this tool.
 
 Usage:
-  python3 tools/rec.py hot                  Render the hotset and snapshot
+  python3 tools/rec.py hot                  Render the hotset, print it, and snapshot
   python3 tools/rec.py find QUERY           Search claims, text, tags, and speakers
       [--status=STATUS] [--tag=TAG] [--speaker=NAME] [--domain=DOMAIN] [--since=YYYY-MM-DD]
   python3 tools/rec.py show ID              Show one record
@@ -14,26 +14,47 @@ Usage:
 Search includes full text rather than relying only on tags. Speaker matching is partial so composite speaker fields are not silently missed. Scaffold TODOs remain check failures."""
 import os, re, sys, glob
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from i18n import STRINGS, t
+
+
+def _resolve_root():
+    """Follow MOTTORI_INSTANCE like memlib does, so a shared engine reads the active instance's ledger.
+
+    memlib is not imported: it loads and validates the whole instance config, which this
+    standalone ledger tool does not need.
+    """
+    env = os.environ.get("MOTTORI_INSTANCE")
+    if env:
+        return os.path.abspath(os.path.expanduser(env))
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+ROOT = _resolve_root()
 LEDGER = os.path.join(ROOT, "_private/ledger")
 FACTS = os.path.join(LEDGER, "facts")
 HOTSET = os.path.join(LEDGER, "hotset.md")
 
 HOT_CAP = 60  # PRD §11 D7
-STATUSES = {"확정", "전언", "추론", "미해결", "결정됨", "대체됨", "철회됨"}
+# Status values are data in record files. A record may carry the English or the Korean
+# form; both map to one status key, so a ledger keeps working when the language changes.
 REQUIRED = ["id", "claim", "status", "hot", "domain", "speaker", "date",
             "origin_kind", "origin"]
 # Display statuses in order of violation risk.
-ORDER = ["결정됨", "철회됨", "확정", "추론", "전언", "미해결", "대체됨"]
-HEAD = {
-    "결정됨": ("A. 결정됨 — 재제안 금지", "이 항목을 다시 제안하면 버그다 (I-1)."),
-    "철회됨": ("B. 철회됨 — 재발 금지", "이 주장을 다시 말하면 버그다 (I-5)."),
-    "확정":   ("C. 확정 — 원점 확인된 사실", ""),
-    "추론":   ("D. 추론 — 관측이 아니다", "사실처럼 인용하지 말 것 (I-3)."),
-    "전언":   ("E. 전언", ""),
-    "미해결": ("F. 미해결 — 모르면 모른다고 한다", "추측으로 메우지 않는다 (PRD §4.4)."),
-    "대체됨": ("G. 대체됨", ""),
-}
+ORDER = ["decided", "retracted", "confirmed", "inferred", "hearsay", "unresolved", "superseded"]
+
+
+def status_key(value):
+    """Return the status key for either language form of a status value, or None."""
+    for key in ORDER:
+        if value in STRINGS["rec.status." + key].values():
+            return key
+    return None
+
+
+def _order_index(record):
+    key = status_key(record["status"])
+    return ORDER.index(key) if key else 9
 
 
 
@@ -93,34 +114,37 @@ def exists(p):
 def cmd_hot():
     recs = [r for r in load() if r["hot"]]
     lines = [
-        "# 핫셋 — 세션 시작 시 로드 (PRD §6.4)",
+        t("rec.hot_title"),
         "",
-        "> **생성물이다. 직접 고치지 말 것** — 정본은 `_private/ledger/facts/` 원자 노트다.",
-        "> 갱신: 레코드를 고친 뒤 `python3 tools/rec.py hot` 재실행.",
-        "> **규율**: 사실 단언(T1)·행동 제안(T2) 전에 여기부터 본다.",
-        f"> 레코드 {len(recs)}건 / 상한 {HOT_CAP}",
+        t("rec.hot_generated"),
+        t("rec.hot_refresh"),
+        t("rec.hot_rule"),
+        t("rec.hot_count", count=len(recs), cap=HOT_CAP),
         "",
     ]
     if len(recs) > HOT_CAP:
-        lines += [f"> ⚠️ **상한 초과({len(recs)}/{HOT_CAP})** — 국면 종료 항목을 콜드로 강등할 것 (D7).", ""]
+        lines += [t("rec.hot_over_cap", count=len(recs), cap=HOT_CAP), ""]
     lines.append("---")
     for st in ORDER:
-        group = [r for r in recs if r["status"] == st]
+        group = [r for r in recs if status_key(r["status"]) == st]
         if not group:
             continue
-        title, note = HEAD.get(st, (st, ""))
+        title = t("rec.hot_head." + st)
+        note = t("rec.hot_note." + st) if "rec.hot_note." + st in STRINGS else ""
         lines += ["", f"## {title}", ""]
         if note:
             lines += [f"> {note}", ""]
-        lines += ["| 사실 | 출처 | 날짜 | id |", "|---|---|---|---|"]
+        lines += [t("rec.hot_table_head"), "|---|---|---|---|"]
         for r in sorted(group, key=lambda x: x["id"]):
             claim = r["claim"].replace("|", "\\|")
             lines.append(f"| {claim} | {r['speaker']} | {r['date']} | `{r['id']}` |")
-    lines += ["", "---", "",
-              "**깊이 파려면**: `python3 tools/rec.py show <id>` · "
-              "`python3 tools/rec.py audit <id>` (원점까지의 사슬)", ""]
+    lines += ["", "---", "", t("rec.hot_dig"), ""]
     os.makedirs(LEDGER, exist_ok=True)
-    open(HOTSET, "w", encoding="utf-8").write("\n".join(lines))
+    text = "\n".join(lines)
+    open(HOTSET, "w", encoding="utf-8").write(text)
+    # Print the content too: the command is the documented way to consult the hotset, and a
+    # path alone forces a second read that is easy to skip.
+    print(text)
     print(f"[hot] {len(recs)} records -> {os.path.relpath(HOTSET, ROOT)}")
     if len(recs) > HOT_CAP:
         print(f"[hot] WARNING over cap: {len(recs)}/{HOT_CAP}")
@@ -135,6 +159,7 @@ def cmd_find(args):
         else:
             terms.append(a)
     recs = load()
+    total = len(recs)
     for k, v in filters.items():
         if k == "since":
             recs = [r for r in recs if r.get("date", "") >= v]
@@ -152,10 +177,14 @@ def cmd_find(args):
             return all(t.lower() in hay for t in terms)
         recs = [r for r in recs if hit(r)]
     if not recs:
-        print("[find] 0 hits — 기록에 없다. 지어내지 말 것 (PRD §4.4).")
+        # Lexical containment over this ledger only: a miss is bounded by that scope and wording.
+        shown = " ".join(f"--{k}={v}" for k, v in filters.items())
+        scope = t("rec.find_scope", total=total, facts=os.path.relpath(FACTS, ROOT),
+                  filters=f" ({shown})" if shown else "")
+        print(t("rec.find_zero", scope=scope))
         return 0
     print(f"[find] {len(recs)} hit(s)\n")
-    for r in sorted(recs, key=lambda x: (ORDER.index(x["status"]) if x["status"] in ORDER else 9, x["id"])):
+    for r in sorted(recs, key=lambda x: (_order_index(x), x["id"])):
         flag = "🔥" if r["hot"] else "  "
         print(f"{flag} [{r['status']}] {r['claim']}")
         print(f"     {r['speaker']} · {r['date']} · `{r['id']}`")
@@ -165,7 +194,7 @@ def cmd_find(args):
 def cmd_show(rid):
     p = os.path.join(FACTS, rid + ".md")
     if not os.path.exists(p):
-        print(f"[show] 그런 레코드 없음: {rid}")
+        print(t("rec.no_record", cmd="show", rid=rid))
         return 1
     print(open(p, encoding="utf-8").read())
     return 0
@@ -174,32 +203,32 @@ def cmd_show(rid):
 def cmd_audit(rid):
     p = os.path.join(FACTS, rid + ".md")
     if not os.path.exists(p):
-        print(f"[audit] 그런 레코드 없음: {rid}")
+        print(t("rec.no_record", cmd="audit", rid=rid))
         return 1
     r = parse(p)
     gap = r.get("origin_gap", "")
-    print(f"주장   : {r['claim']}")
-    print(f"등급   : {r['status']}   발화자: {r['speaker']}   날짜: {r['date']}")
-    print(f"레코드 : {os.path.relpath(p, ROOT)}")
+    print(t("rec.audit_claim", value=r['claim']))
+    print(t("rec.audit_status", status=r['status'], speaker=r['speaker'], date=r['date']))
+    print(t("rec.audit_record", path=os.path.relpath(p, ROOT)))
     print()
-    print("감사 사슬 (원점 → 파생):")
+    print(t("rec.audit_chain"))
     chain = r.get("via") or [r["origin"]]
     for i, step in enumerate(chain):
-        mark = "✓" if exists(step) else "✗ 없음"
+        mark = "✓" if exists(step) else t("rec.audit_missing_mark")
         if i == 0:
             # A derived reference does not become an original when the origin is missing.
-            arrow = "  원점 " if not gap else "최선가용"
+            arrow = t("rec.audit_origin_arrow") if not gap else t("rec.audit_best_arrow")
         else:
             arrow = "   ↓   "
         print(f"{arrow} [{mark}] {step}")
-    print(f"   ↓    [✓] {os.path.relpath(p, ROOT)}  ← 이 레코드")
+    print(t("rec.audit_this_record", path=os.path.relpath(p, ROOT)))
     print()
-    print(f"원점 종류: {r.get('origin_kind','—')}")
+    print(t("rec.audit_origin_kind", kind=r.get('origin_kind', '—')))
     if gap:
-        print(f"⚠️  원점 결손: {gap}")
-        print("    사슬 첫 항목은 원점이 아니라 **현존 최선 가용 소스**다. 축자 인용이 필요하면 등급 한계를 함께 밝힐 것.")
+        print(t("rec.audit_gap", gap=gap))
+        print(t("rec.audit_gap_note"))
     else:
-        print("원점 결손: 없음 (원점 파일이 실재)")
+        print(t("rec.audit_no_gap"))
     return 0
 
 
@@ -211,40 +240,41 @@ def cmd_check():
         rid = r.get("id", os.path.basename(r["_path"]))
         for f in REQUIRED:
             if f not in r or r[f] in ("", None):
-                problems.append(f"{rid}: 필수 필드 누락 `{f}`")
-        if r.get("status") not in STATUSES:
-            problems.append(f"{rid}: 알 수 없는 상태 `{r.get('status')}`")
+                problems.append(t("rec.problem_missing_field", rid=rid, field=f))
+        status = status_key(r.get("status"))
+        if status is None:
+            problems.append(t("rec.problem_unknown_status", rid=rid, status=r.get('status')))
         if r["id"] != os.path.basename(r["_path"])[:-3]:
-            problems.append(f"{rid}: id와 파일명 불일치")
+            problems.append(t("rec.problem_id_mismatch", rid=rid))
         for step in (r.get("via") or []) + [r.get("origin", "")]:
             if step and not exists(step):
-                problems.append(f"{rid}: 경로 없음 → {step}")
+                problems.append(t("rec.problem_missing_path", rid=rid, path=step))
         for link in re.findall(r"\[\[([^\]]+)\]\]", r.get("_body", "")):
             if link not in ids:
-                problems.append(f"{rid}: 끊긴 링크 → [[{link}]]")
+                problems.append(t("rec.problem_broken_link", rid=rid, link=link))
         # Supersession and withdrawal references must resolve.
         for fld in ("supersedes", "superseded_by"):
             val = r.get(fld)
             if val:
-                for t in (val if isinstance(val, list) else [val]):
-                    if t not in ids:
-                        problems.append(f"{rid}: {fld} 대상 없음 → {t}")
+                for target in (val if isinstance(val, list) else [val]):
+                    if target not in ids:
+                        problems.append(t("rec.problem_missing_target", rid=rid, field=fld, target=target))
         # Superseded records need an explicit replacement link.
-        if r.get("status") == "대체됨" and not r.get("superseded_by"):
-            problems.append(f"{rid}: 상태가 `대체됨`인데 `superseded_by` 없음")
+        if status == "superseded" and not r.get("superseded_by"):
+            problems.append(t("rec.problem_superseded_without_link", rid=rid, status=r.get("status")))
     hot = sum(1 for r in recs if r["hot"])
     if hot > HOT_CAP:
-        problems.append(f"핫셋 상한 초과: {hot}/{HOT_CAP} (D7 — 국면 종료 항목 강등 필요)")
+        problems.append(t("rec.problem_hot_over_cap", count=hot, cap=HOT_CAP))
     dup = [i for i in ids if sum(1 for r in recs if r["id"] == i) > 1]
     for d in set(dup):
-        problems.append(f"중복 id: {d}")
+        problems.append(t("rec.problem_duplicate_id", rid=d))
 
-    print(f"[check] 레코드 {len(recs)}건 · 핫 {hot}/{HOT_CAP}")
+    print(t("rec.check_counts", count=len(recs), hot=hot, cap=HOT_CAP))
     from collections import Counter
-    print("[check] 상태:", dict(Counter(r["status"] for r in recs)))
+    print(t("rec.check_statuses"), dict(Counter(r["status"] for r in recs)))
     for p in problems:
         print("PROBLEM " + p)
-    print(f"[check] 문제: {len(problems)}건")
+    print(t("rec.check_trailer", count=len(problems)))
     return 1 if problems else 0
 
 
@@ -270,7 +300,7 @@ def cmd_snapshot(quiet=False):
     cur = ledger_hash()
     if os.path.exists(hfile) and open(hfile).read().strip() == cur:
         if not quiet:
-            print("[snapshot] 변경 없음 — 건너뜀")
+            print(t("rec.snapshot_unchanged"))
         return 0
     name = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S") + "-" + cur[:8]
     dst = os.path.join(snaps, name)
@@ -285,7 +315,7 @@ def cmd_snapshot(quiet=False):
     for old in dirs[:-20]:
         shutil.rmtree(os.path.join(snaps, old))
     n = len(glob.glob(os.path.join(dst, "facts", "*.md")))
-    print(f"[snapshot] {name} (facts {n}건, 링 {min(len(dirs),20)}/20)")
+    print(t("rec.snapshot_done", name=name, count=n, ring=min(len(dirs), 20)))
     return 0
 
 
@@ -296,12 +326,12 @@ def cmd_new(args):
         return 1
     rid = args[0]
     if not re.match(r"^[a-z0-9][a-z0-9-]*$", rid):
-        print(f"[new] id는 kebab-case여야 한다: {rid}")
+        print(t("rec.new_bad_id", rid=rid))
         return 1
     path = os.path.join(FACTS, rid + ".md")
     if os.path.exists(path):
-        print(f"[new] 이미 존재: {os.path.relpath(path, ROOT)}")
-        print("[new] 기존 레코드 수정은 편집이 아니라 **상태 전이**로 (README — 대체됨/철회됨 + supersedes)")
+        print(t("rec.new_exists", path=os.path.relpath(path, ROOT)))
+        print(t("rec.new_transition"))
         return 1
     opts = {}
     for a in args[1:]:
@@ -309,22 +339,22 @@ def cmd_new(args):
         if m:
             opts[m.group(1)] = m.group(2)
     today = datetime.date.today().isoformat()
-    origin = opts.get("origin", "TODO-원점-경로")
-    claim = opts.get("claim", "TODO-한-문장-주장")
+    origin = opts.get("origin", t("rec.todo_origin"))
+    claim = opts.get("claim", t("rec.todo_claim"))
     os.makedirs(FACTS, exist_ok=True)
     # Leave unresolved fields as TODOs so check cannot accept an incomplete scaffold.
     lines = [
         "---",
         f"id: {rid}",
         f"claim: \"{claim}\"",
-        f"status: {opts.get('status', 'TODO-상태')}",
+        f"status: {opts.get('status', t('rec.todo_status'))}",
         "hot: true",
-        f"domain: {opts.get('domain', 'TODO-도메인')}",
-        f"tags: [{opts.get('tags', 'TODO-태그')}]",
-        f"speaker: {opts.get('speaker', 'TODO-발화자')}",
+        f"domain: {opts.get('domain', t('rec.todo_domain'))}",
+        f"tags: [{opts.get('tags', t('rec.todo_tags'))}]",
+        f"speaker: {opts.get('speaker', t('rec.todo_speaker'))}",
         f"date: {opts.get('date', today)}",
         f"recorded: {today}",
-        f"origin_kind: {opts.get('origin_kind', 'TODO-오디오|전사|전사파생|메시지|문서|세션발화')}",
+        f"origin_kind: {opts.get('origin_kind', t('rec.todo_origin_kind'))}",
         f"origin: {origin}",
         "origin_gap: \"\"",
         "via:",
@@ -333,14 +363,14 @@ def cmd_new(args):
         "",
         f"# {claim}",
         "",
-        "**근거**: (가능하면 축자 인용. 원점이 유실됐으면 origin_gap에 정직하게)",
+        t("rec.new_evidence"),
         "",
-        "**주의/범위**: ",
+        t("rec.new_scope"),
         "",
     ]
     open(path, "w", encoding="utf-8").write("\n".join(lines))
     print(f"[new] {os.path.relpath(path, ROOT)}")
-    print("[new] 다음: TODO 채우기 → `rec.py check` → `rec.py hot`")
+    print(t("rec.new_next"))
     return 0
 
 
@@ -352,7 +382,7 @@ def main():
     if cmd == "new":
         return cmd_new(rest)  # Allow creation of the first record when the ledger directory is absent.
     if not os.path.isdir(FACTS):
-        print(f"[rec] 원장이 없다: {os.path.relpath(FACTS, ROOT)}")
+        print(t("rec.no_ledger", path=os.path.relpath(FACTS, ROOT)))
         return 1
     if cmd == "hot":
         cmd_snapshot(quiet=True)  # Snapshot content changes when rendering the hotset.

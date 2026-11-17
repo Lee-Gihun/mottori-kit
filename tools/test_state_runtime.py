@@ -8,6 +8,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -21,6 +22,9 @@ from unittest import mock
 HERE = os.path.dirname(os.path.abspath(__file__))
 NOW = os.path.join(HERE, "now.py")
 FAIL_CLOSE_WARNING = "[state] privacy fail-close:"
+# Most assertions below pin the Korean wording that the origin instance parses. Pin the language
+# for this process and every now.py it starts; tests that check another language set it per run.
+os.environ["MOTTORI_LANG"] = "ko"
 sys.path.insert(0, HERE)
 import memlib as LIVE_M  # noqa: E402
 import now as LIVE_NOW  # noqa: E402
@@ -241,7 +245,10 @@ def test_utf8_hook_budget_and_overlay_fairness():
         assert "## PUBLIC STATE" in ctx and "## LOCAL PRIVATE OVERLAY" in ctx
         assert "# NOW" in ctx and "local private overlay" in ctx
         assert "CANARY-ONLY-HOOK" in ctx
-        assert "절단" in ctx
+        # Both sides share the room: each keeps its newest events and reports what it dropped.
+        public_part, local_part = ctx.split("## LOCAL PRIVATE OVERLAY", 1)
+        assert "PUBLIC-29-" in public_part and "PRIVATE-29-" in local_part, ctx
+        assert "[… 더 오래된 사건 " in ctx and ctx.count("[… 더 오래된 사건 ") <= 2
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -1092,15 +1099,181 @@ def test_precompact_tags_runtime_and_session_hash():
         shutil.rmtree(root, ignore_errors=True)
 
 
-def test_now_folds_consecutive_compaction_events_only():
+def _hook_ctx(root, *args):
+    r = run_now(root, "hook-context", *args)
+    return json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
+
+
+def _long_journal(path, prefix, n, newest_decision, filler):
+    """Write n events: mostly artifacts, a decision every 50 lines, compactions in between."""
+    lines = ["# journal\n\n"]
+    start = datetime.datetime(2026, 11, 1, 0, 0, tzinfo=datetime.timezone(datetime.timedelta(hours=9)))
+    for i in range(n):
+        ts = (start + datetime.timedelta(minutes=i)).isoformat(timespec="seconds")
+        if i == n - 20:
+            body, typ = newest_decision, "decision"
+        elif i % 50 == 0:
+            body, typ = f"{prefix}-OLD-DECISION-{i:04d} " + filler * 60, "decision"
+        elif i % 7 == 0:
+            body, typ = "컴팩션 발생 (claude · s:unknown) — 이후 컨텍스트는 요약본", "state"
+        else:
+            body, typ = f"{prefix}-EVENT-{i:04d} " + filler * 60, "artifact"
+        lines.append(f"- {ts} [system/{typ}] {body}\n")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("".join(lines))
+
+
+def test_hook_context_keeps_dossiers_and_newest_decisions_with_long_journals():
+    public_threads = [{"key": f"pub{i}", "name": f"PUBLIC-THREAD-{i}", "dossier": f"research/pub{i}.md"}
+                      for i in range(5)]
+    root = instance(threads=public_threads)
+    try:
+        local_state = os.path.join(root, "_private", "state")
+        os.makedirs(local_state, exist_ok=True)
+        with open(os.path.join(local_state, "threads.json"), "w", encoding="utf-8") as f:
+            json.dump([{"key": f"loc{i}", "name": f"LOCAL-THREAD-{i}",
+                        "dossier": f"_private/loc{i}.md"} for i in range(3)], f)
+        _long_journal(os.path.join(root, "state", JOURNAL_NOW), "PUB", 1000,
+                      "PUB-NEWEST-DECISION", "공")
+        _long_journal(os.path.join(local_state, JOURNAL_NOW), "LOC", 1000,
+                      "LOC-NEWEST-DECISION", "로")
+        run_now(root, "render")
+        ctx = _hook_ctx(root)
+        assert len(ctx.encode("utf-8")) <= 6000
+        assert ctx.startswith("[상태 자동 주입 · public "), ctx[:80]
+        assert "local overlay available]" in ctx.splitlines()[0]
+        assert "## PUBLIC STATE" in ctx and "## LOCAL PRIVATE OVERLAY" in ctx
+        public_part, local_part = ctx.split("## LOCAL PRIVATE OVERLAY", 1)
+        for i in range(5):
+            assert f"PUBLIC-THREAD-{i} — 서류철 `research/pub{i}.md`" in public_part, i
+        for i in range(3):
+            assert f"LOCAL-THREAD-{i} — 서류철 `_private/loc{i}.md`" in local_part, i
+        assert "## 정본 포인터" in public_part and "## 트랙 온도판" in public_part
+        assert "PUB-NEWEST-DECISION" in public_part, public_part
+        assert "LOC-NEWEST-DECISION" in local_part, local_part
+        # File-management lines stay in NOW but carry nothing the model can act on.
+        assert "sha256:" not in ctx and "손 편집 금지" not in ctx
+        assert "중간 절단" not in ctx
+        assert re.search(r"\[… 더 오래된 사건 \d+줄 생략 …\]", ctx), ctx
+        # Decisions are kept newest first: no older decision survives while a newer one is dropped.
+        kept = [int(x) for x in re.findall(r"PUB-OLD-DECISION-(\d{4})", public_part)]
+        listed = [int(x) for x in re.findall(r"PUB-OLD-DECISION-(\d{4})",
+                                             read(os.path.join(root, "state", "NOW.md")))]
+        assert kept == listed[len(listed) - len(kept):], (kept, listed)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def _dossier_note_count(text):
+    """Return the omitted-dossier count named in a state body, or 0 when no note is present."""
+    found = re.findall(r"서류철 (\d+)개 생략 · `python3 tools/now\.py threads`", text)
+    assert len(found) <= 1, found
+    return int(found[0]) if found else 0
+
+
+def test_hook_context_names_omitted_dossiers_when_both_lists_are_long():
+    public_threads = [{"key": f"pub{i}", "name": f"PUBLIC-{i:02d}-" + "P" * 70,
+                       "dossier": f"research/pub{i}.md"} for i in range(28)]
+    root = instance(threads=public_threads)
+    try:
+        local_state = os.path.join(root, "_private", "state")
+        os.makedirs(local_state, exist_ok=True)
+        with open(os.path.join(local_state, "threads.json"), "w", encoding="utf-8") as f:
+            json.dump([{"key": f"loc{i}", "name": f"LOCAL-{i:02d}-" + "L" * 70,
+                        "dossier": f"_private/loc{i}.md"} for i in range(28)], f)
+        run_now(root, "log", "[system/decision] PUBLIC-NEWEST")
+        run_now(root, "log", "--private", "[system/decision] LOCAL-NEWEST")
+        ctx = _hook_ctx(root)
+        assert len(ctx.encode("utf-8")) <= 6000
+        assert ctx.startswith("[상태 자동 주입 · public "), ctx[:80]
+        public_part, local_part = ctx.split("## LOCAL PRIVATE OVERLAY", 1)
+        assert "PUBLIC-NEWEST" in public_part and "LOCAL-NEWEST" in local_part, ctx
+        assert "중간 절단" not in ctx
+        for part, prefix in ((public_part, "PUBLIC"), (local_part, "LOCAL")):
+            shown = set(re.findall(prefix + r"-(\d\d)-", part))
+            omitted = _dossier_note_count(part)
+            assert omitted > 0 and len(shown) + omitted == 28, (prefix, len(shown), omitted)
+            # The list is cut from its end: the first rows stay.
+            assert shown == {f"{i:02d}" for i in range(len(shown))}, shown
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_hook_context_survives_sixty_long_dossier_names_on_one_side():
+    threads = [{"key": f"p{i}", "name": f"public dossier {i} " + "x" * 70,
+                "dossier": f"research/p{i}.md"} for i in range(60)]
+    root = instance(threads=threads)
+    try:
+        run_now(root, "log", "[system/decision] NEWEST-DECISION")
+        now_text = read(os.path.join(root, "state", "NOW.md"))
+        assert len(now_text.encode("utf-8")) <= 6000
+        assert "NEWEST-DECISION" in now_text
+        listed = len(re.findall(r"public dossier \d+ ", now_text))
+        assert listed + _dossier_note_count(now_text) == 60, listed
+        result = run_now(root, "hook-context", check=False)
+        assert result.returncode == 0, result.stderr
+        ctx = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+        assert len(ctx.encode("utf-8")) <= 6000
+        assert ctx.startswith("[상태 자동 주입 · public "), ctx[:80]
+        assert "NEWEST-DECISION" in ctx and "## 정본 포인터" in ctx, ctx
+        listed = len(re.findall(r"public dossier \d+ ", ctx))
+        assert listed + _dossier_note_count(ctx) == 60, listed
+        # A tighter hook budget drops more names but still keeps the reopen command.
+        cfg_path = os.path.join(root, "system", "memory-config.json")
+        cfg = json.load(open(cfg_path, encoding="utf-8"))
+        cfg["thresholds"]["now_hook_max_bytes"] = 1500
+        cfg["thresholds"]["now_max_bytes"] = 1500
+        with open(cfg_path, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False)
+        run_now(root, "render")
+        ctx = _hook_ctx(root)
+        assert len(ctx.encode("utf-8")) <= 1500, len(ctx.encode("utf-8"))
+        assert "NEWEST-DECISION" in ctx and _dossier_note_count(ctx) > 0, ctx
+        listed = len(re.findall(r"public dossier \d+ ", ctx))
+        assert listed + _dossier_note_count(ctx) == 60, (listed, ctx)
+        en = run_now(root, "context", env={"MOTTORI_LANG": "en"}).stdout
+        assert "tools/now.py threads" in en, en
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_hook_context_clips_one_long_event_line_instead_of_spending_the_budget():
     root = instance()
     try:
         jp = os.path.join(root, "state", JOURNAL_NOW)
-        lines = [f"- 2026-09-02T21:00:00+09:00 [system/decision] REAL-ALPHA\n"]
+        lines = ["# journal\n\n"]
+        for i in range(12):
+            lines.append(f"- 2026-11-01T10:{i:02d}:00+09:00 [system/artifact] SMALL-{i:02d}\n")
+        lines.append("- 2026-11-01T11:00:00+09:00 [system/artifact] HUGE-" + "🙂" * 290 + "\n")
+        with open(jp, "w", encoding="utf-8") as f:
+            f.write("".join(lines))
+        # A small budget makes one 1.2KB event larger than a fair share of the room.
+        cfg_path = os.path.join(root, "system", "memory-config.json")
+        cfg = json.load(open(cfg_path, encoding="utf-8"))
+        cfg["thresholds"]["now_hook_max_bytes"] = 2600
+        with open(cfg_path, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False)
+        run_now(root, "render")
+        ctx = _hook_ctx(root)
+        assert len(ctx.encode("utf-8")) <= 2600
+        ctx.encode("utf-8").decode("utf-8")
+        huge = [line for line in ctx.splitlines() if "HUGE-" in line]
+        assert len(huge) == 1 and len(huge[0].encode("utf-8")) <= 400, huge
+        assert "SMALL-11" in ctx and "SMALL-10" in ctx, ctx
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_snapshot_drops_compactions_from_decisions_and_dedups_recent():
+    root = instance()
+    try:
+        jp = os.path.join(root, "state", JOURNAL_NOW)
+        lines = ["- 2026-09-02T21:00:00+09:00 [system/decision] REAL-ALPHA\n"]
         for i in range(5):
             rt = "codex" if i % 2 == 0 else "claude"
             lines.append(f"- 2026-09-02T21:{10 + i:02d}:00+09:00 [system/state] 컴팩션 발생 ({rt} · s:deadbeef) — 이후 컨텍스트는 요약본\n")
         lines.append("- 2026-09-02T21:30:00+09:00 [system/state] REAL-BETA\n")
+        lines.append("- 2026-09-02T21:35:00+09:00 [system/artifact] PLAIN-ARTIFACT\n")
         lines.append("- 2026-09-02T21:40:00+09:00 [system/state] 컴팩션 발생 — 이후 컨텍스트는 요약본\n")
         lines.append("- 2026-09-02T21:41:00+09:00 [system/state] 컴팩션 발생 (claude · s:unknown) — 이후 컨텍스트는 요약본\n")
         lines.append("- 2026-09-02T21:50:00+09:00 [system/state] REAL-GAMMA\n")
@@ -1109,24 +1282,160 @@ def test_now_folds_consecutive_compaction_events_only():
             f.write("".join(lines))
         run_now(root, "render")
         now = read(os.path.join(root, "state", "NOW.md"))
-        recent = now.split("## 최근 사건")[1].split("## 정본 포인터")[0]
-        assert recent.count("컴팩션 발생") == 3, recent
-        assert "컴팩션 발생 5회 (codex 3 · claude 2) ~2026-09-02T21:14" in recent, recent
-        assert "컴팩션 발생 2회 (unknown 1 · claude 1) ~2026-09-02T21:41" in recent, recent
-        assert "컴팩션 발생 (claude · s:unknown)" in recent.split("REAL-GAMMA")[1], recent  # Preserve a single event verbatim.
-        for token in ("REAL-ALPHA", "REAL-BETA", "REAL-GAMMA"):
-            assert token in recent, token
-        assert recent.index("REAL-BETA") < recent.index("컴팩션 발생 2회") < recent.index("REAL-GAMMA")
         decisions = now.split("## 최근 결정·국면")[1].split("## 최근 사건")[0]
-        assert decisions.count("컴팩션 발생") == 3, decisions
+        recent = now.split("## 최근 사건")[1].split("## 정본 포인터")[0]
+        assert "컴팩션" not in decisions, decisions
+        for token in ("REAL-ALPHA", "REAL-BETA", "REAL-GAMMA"):
+            assert now.count(token) == 1 and token in decisions, token
+        assert "PLAIN-ARTIFACT" in recent
+        compaction_lines = [line for line in recent.splitlines() if "컴팩션" in line]
+        assert len(compaction_lines) == 1, recent
+        assert "8회" in compaction_lines[0] and "2026-09-02T21:55" in compaction_lines[0], compaction_lines
         assert read(jp).count("컴팩션 발생") == 8  # Keep the source journal uncollapsed.
+        # Freshness follows the last non-compaction event, not the journal mtime the compactions keep fresh.
+        expected = (datetime.date.today() - datetime.date(2026, 9, 2)).days
+        assert f"journal {expected}일 전 ⚠" in now, now
+        issues = run_now(root, "check", "--issues", check=False).stdout
+        assert "~journal-stale" in issues, issues
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_private_log_survives_corrupt_public_journal():
+    root = instance()
+    try:
+        run_now(root, "log", "[system/state] PUBLIC-BEFORE")
+        with open(os.path.join(root, "state", JOURNAL_NOW), "a", encoding="utf-8") as f:
+            f.write("- broken line\n")
+        r = run_now(root, "log", "--private", "[system/decision] LOCAL-WHILE-PUBLIC-BROKEN", check=False)
+        assert r.returncode == 0, r.stderr
+        assert "LOCAL-WHILE-PUBLIC-BROKEN" in read(os.path.join(root, "_private", "state", JOURNAL_NOW))
+        assert len(r.stderr.strip().splitlines()) == 1 and "NOW" in r.stderr, r.stderr
+        r = run_now(root, "log", "[system/state] PUBLIC-AFTER", check=False)
+        assert r.returncode == 1 and "journal 손상" in r.stderr
+        assert "PUBLIC-AFTER" not in read(os.path.join(root, "state", JOURNAL_NOW))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_check_does_not_gate_on_tools_the_instance_lacks():
+    root = instance()
+    try:
+        run_now(root, "log", "[system/state] CHECK-FIXTURE")
+        rec = os.path.join(root, "_private", "recordings", "2026-11-01-meeting")
+        os.makedirs(rec)
+        open(os.path.join(rec, "a-timestamped.txt"), "w").close()
+        issues = run_now(root, "check", "--issues", check=False).stdout
+        assert "#issues 0" in issues, issues
+        assert "analyze_recording.py" not in issues, issues
+        # With the reading tool present the unread recording is still a gated finding.
+        os.makedirs(os.path.join(root, "tools"), exist_ok=True)
+        open(os.path.join(root, "tools", "analyze_recording.py"), "w").close()
+        issues = run_now(root, "check", "--issues", check=False).stdout
+        assert "\nrec-unread:2026-11-01-meeting\t" in "\n" + issues, issues
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+HANGUL = re.compile("[\uac00-\ud7a3]")
+EN = {"MOTTORI_LANG": "en"}
+
+
+def test_english_instance_writes_english_state_and_injection():
+    """A new English instance gets English NOW files, journal header, injection, and messages."""
+    root = instance(threads=[{"key": "pub", "name": "PUB-THREAD", "dossier": None}])
+    try:
+        os.makedirs(os.path.join(root, "_private", "state"), exist_ok=True)
+        with open(os.path.join(root, "_private", "state", "threads.json"), "w") as f:
+            json.dump([{"key": "loc", "name": "LOC-THREAD", "dossier": "_private/x.md"}], f)
+        outputs = [
+            run_now(root, "log", "[system/decision] EN-DECISION", env=EN),
+            run_now(root, "log", "--private", "[system/state] EN-LOCAL", env=EN),
+            run_now(root, "precompact", "--runtime", "claude", env=EN),
+            run_now(root, "log", "no brackets", env=EN, check=False),
+            run_now(root, "render", env=EN),
+            run_now(root, "threads", env=EN),
+            run_now(root, "context", env=EN),
+            run_now(root, "context", "--public-only", env=EN),
+            run_now(root, "hook-context", env=EN),
+            run_now(root, "check", env=EN, check=False),
+            run_now(root, "bogus", env=EN, check=False),
+        ]
+        files = [read(os.path.join(root, "state", "NOW.md")),
+                 read(os.path.join(root, "_private", "state", "NOW.md")),
+                 read(os.path.join(root, "state", JOURNAL_NOW)),
+                 read(os.path.join(root, "_private", "state", JOURNAL_NOW))]
+        text = "".join(r.stdout + r.stderr for r in outputs) + "".join(files)
+        assert not HANGUL.search(text), HANGUL.search(text) and text[max(0, HANGUL.search(text).start() - 200):][:400]
+        public = files[0]
+        for name in LIVE_M.NOW_SECTION_TOKENS:
+            assert "## " + LIVE_M.token(name, "en") in public, name
+        assert "compaction occurred (claude · s:" in files[2], files[2]
+        assert "EN-DECISION" in outputs[6].stdout and "LOC-THREAD" in outputs[6].stdout
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_state_tokens_are_read_in_both_languages():
+    """Compactions and sections written under one language are counted and placed under the other."""
+    root = instance()
+    try:
+        today = datetime.date.today()
+        old = (today - datetime.timedelta(days=5)).isoformat()
+        with open(os.path.join(root, "state", JOURNAL_NOW), "w", encoding="utf-8") as f:
+            f.write(f"- {old}T09:00:00+09:00 [system/decision] OLD-DECISION\n")
+        run_now(root, "precompact", "--runtime", "claude", env={"MOTTORI_LANG": "ko"})
+        run_now(root, "precompact", "--runtime", "codex", env=EN)
+        # A tight injection budget makes the decision and event tiers decide which lines stay.
+        cfg_path = os.path.join(root, "system", "memory-config.json")
+        cfg = json.load(open(cfg_path, encoding="utf-8"))
+        cfg["thresholds"]["now_hook_max_bytes"] = 1400
+        json.dump(cfg, open(cfg_path, "w", encoding="utf-8"))
+        with open(os.path.join(root, "state", JOURNAL_NOW), "a", encoding="utf-8") as f:
+            for i in range(24):
+                typ = "decision" if i % 3 == 0 else "artifact"
+                f.write(f"- {old}T10:{i:02d}:00+09:00 [system/{typ}] ITEM-{i:02d} {'z' * 30}\n")
+        journal = read(os.path.join(root, "state", JOURNAL_NOW))
+        assert "컴팩션 발생 (claude" in journal and "compaction occurred (codex" in journal, journal
+        for lang, decisions_heading, events_heading, count in (
+                ("ko", "최근 결정·국면", "최근 사건", "2회"),
+                ("en", "Recent decisions and phases", "Recent events", "2 times")):
+            run_now(root, "render", env={"MOTTORI_LANG": lang})
+            now = read(os.path.join(root, "state", "NOW.md"))
+            decisions = now.split("## " + decisions_heading)[1].split("## ")[0]
+            recent = now.split("## " + events_heading)[1].split("## ")[0]
+            assert "OLD-DECISION" in decisions and "ompaction" not in decisions \
+                and "컴팩션" not in decisions, decisions
+            assert "ITEM-21" in decisions, decisions
+            rows = [line for line in recent.splitlines() if "컴팩션" in line or "compaction" in line]
+            assert len(rows) == 1 and count in rows[0] and "claude 1" in rows[0] \
+                and "codex 1" in rows[0], recent
+            issues = run_now(root, "check", "--issues", env={"MOTTORI_LANG": lang}, check=False).stdout
+            assert "~journal-stale" in issues, issues
+            # The snapshot was written in `lang`; the injection under the other language must
+            # still place its decisions in the decision tier and drop its generated notice.
+            other = "en" if lang == "ko" else "ko"
+            same = run_now(root, "context", env={"MOTTORI_LANG": lang}).stdout
+            cross = run_now(root, "context", env={"MOTTORI_LANG": other}).stdout
+            assert read(os.path.join(root, "state", "NOW.md")) == now, "a language switch re-rendered"
+            def public_part(ctx):
+                part = ctx.split("## PUBLIC STATE", 1)[1].split("## LOCAL PRIVATE OVERLAY", 1)[0]
+                # The omission note is the reader's own text; compare the kept lines only.
+                return re.sub(r"(?m)^\[… .* …\]$", "", part)
+            assert public_part(same) == public_part(cross), cross
+            assert "*생성 " not in cross and "*Generated " not in cross, cross
+            assert "ITEM-21" in cross and ("생략" in cross or "omitted" in cross), cross
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
 
 TESTS = [
+    test_hook_context_keeps_dossiers_and_newest_decisions_with_long_journals,
+    test_hook_context_clips_one_long_event_line_instead_of_spending_the_budget,
+    test_snapshot_drops_compactions_from_decisions_and_dedups_recent,
+    test_private_log_survives_corrupt_public_journal,
+    test_check_does_not_gate_on_tools_the_instance_lacks,
     test_precompact_tags_runtime_and_session_hash,
-    test_now_folds_consecutive_compaction_events_only,
     test_routing_and_public_immutability,
     test_legacy_filter_and_private_thread,
     test_legacy_allowlist_expansion_does_not_retro_promote,
@@ -1166,6 +1475,10 @@ TESTS = [
     test_parallel_writers_exactly_once,
     test_render_transaction_prevents_stale_last_writer,
     test_hook_internal_failure_is_nonzero,
+    test_english_instance_writes_english_state_and_injection,
+    test_state_tokens_are_read_in_both_languages,
+    test_hook_context_names_omitted_dossiers_when_both_lists_are_long,
+    test_hook_context_survives_sixty_long_dossier_names_on_one_side,
 ]
 
 

@@ -29,6 +29,45 @@ FORBIDDEN_EXACT = {
 }
 TRACKED_STATE_EXCEPTIONS = {"state/.gitkeep"}
 
+# English text of every message this module prints, used when tools/i18n.py cannot be imported.
+# The hook dispatcher must still print its fail-closed fallback when the engine is partly broken.
+# test_enforce.py pins these values to the catalog's English entries.
+FALLBACK_TEXT = {
+    "enforce.git_failed": "git failed to run: {error_type}",
+    "enforce.path_not_utf8": "Git path is not UTF-8",
+    "enforce.path_stream_truncated": "Git NUL path stream was truncated",
+    "enforce.config_missing": "config missing: {path}",
+    "enforce.config_unreadable": "config unreadable: {error_type}",
+    "enforce.config_not_object": "config root is not an object",
+    "enforce.ls_files_no_tab": "git ls-files record has no TAB",
+    "enforce.ls_files_metadata": "git ls-files metadata has an unexpected format",
+    "enforce.context_required": "instance.context must be set to personal or work",
+    "enforce.rules_missing": "instance-rules missing: {path}",
+    "enforce.rules_unreadable": "instance-rules unreadable: {error_type}",
+    "enforce.rules_changeme": "instance-rules still contains CHANGEME",
+    "enforce.rules_empty": "instance-rules is empty",
+    "enforce.push_unknown_context": "push blocked: cannot determine instance.context",
+    "enforce.push_work": "push blocked: a work instance does not allow remote export from local pre-push",
+    "enforce.fallback_authority": ("Read state/NOW.md together with _private/state/NOW.md when it exists. "
+                                   "A missing local overlay means unavailable, not no state."),
+    "enforce.hook_root_mismatch": "refused state injection or gate run because the hook project root does not match",
+    "enforce.hook_failed": "{event} hook failed (exit {code})",
+    "enforce.sessionstart_invalid_json": "SessionStart hook did not print valid JSON",
+    "enforce.stop_invalid_json": "Stop gate did not print valid JSON",
+    "enforce.command_required": "--issues or a command is required",
+}
+
+
+def _t(key: str, **kw: object) -> str:
+    """Return catalog text in the instance language, or English when the catalog is unavailable."""
+    try:
+        if str(HERE) not in sys.path:
+            sys.path.insert(0, str(HERE))
+        from i18n import t
+        return t(key, **kw)
+    except Exception:
+        return FALLBACK_TEXT[key].format(**kw)
+
 
 class MeasurementError(RuntimeError):
     pass
@@ -40,7 +79,7 @@ def _run_git(root: Path, args: list[str]) -> bytes:
             ["git", *args], cwd=root, capture_output=True, check=False, timeout=30,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
-        raise MeasurementError(f"git 실행 실패: {type(error).__name__}") from error
+        raise MeasurementError(_t("enforce.git_failed", error_type=type(error).__name__)) from error
     if run.returncode:
         detail = run.stderr.decode("utf-8", errors="replace").strip()
         raise MeasurementError(detail or f"git {' '.join(args)} exit {run.returncode}")
@@ -51,10 +90,10 @@ def _decode_paths(raw: bytes) -> list[str]:
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as error:
-        raise MeasurementError("Git path가 UTF-8이 아니다") from error
+        raise MeasurementError(_t("enforce.path_not_utf8")) from error
     fields = text.split("\0")
     if fields[-1] != "":
-        raise MeasurementError("Git NUL path stream이 잘렸다")
+        raise MeasurementError(_t("enforce.path_stream_truncated"))
     return [field for field in fields[:-1] if field]
 
 
@@ -64,11 +103,11 @@ def _config(root: Path) -> tuple[dict, list[str]]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        return {}, [f"config 없음: {path}"]
+        return {}, [_t("enforce.config_missing", path=path)]
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        return {}, [f"config 판독 실패: {type(error).__name__}"]
+        return {}, [_t("enforce.config_unreadable", error_type=type(error).__name__)]
     if not isinstance(data, dict):
-        return {}, ["config root가 object가 아니다"]
+        return {}, [_t("enforce.config_not_object")]
     return data, problems
 
 
@@ -85,11 +124,11 @@ def _index_entries(root: Path) -> list[tuple[str, str, str]]:
     entries: list[tuple[str, str, str]] = []
     for record in records:
         if "\t" not in record:
-            raise MeasurementError("git ls-files record에 TAB이 없다")
+            raise MeasurementError(_t("enforce.ls_files_no_tab"))
         metadata, path = record.split("\t", 1)
         fields = metadata.split()
         if len(fields) != 3:
-            raise MeasurementError("git ls-files metadata 형식이 다르다")
+            raise MeasurementError(_t("enforce.ls_files_metadata"))
         mode, _blob, stage = fields
         entries.append((mode, stage, path))
     return entries
@@ -177,19 +216,19 @@ def ready_problems(root: Path = ROOT) -> list[str]:
     instance = config.get("instance") if isinstance(config, dict) else None
     context = instance.get("context") if isinstance(instance, dict) else None
     if context not in ("personal", "work"):
-        problems.append("instance.context는 personal 또는 work로 명시해야 한다")
+        problems.append(_t("enforce.context_required"))
     rules = root / "system" / "instance-rules.md"
     try:
         text = rules.read_text(encoding="utf-8")
     except FileNotFoundError:
-        problems.append(f"instance-rules 없음: {rules}")
+        problems.append(_t("enforce.rules_missing", path=rules))
     except (OSError, UnicodeDecodeError) as error:
-        problems.append(f"instance-rules 판독 실패: {type(error).__name__}")
+        problems.append(_t("enforce.rules_unreadable", error_type=type(error).__name__))
     else:
         if "CHANGEME" in text:
-            problems.append("instance-rules에 CHANGEME가 남아 있다")
+            problems.append(_t("enforce.rules_changeme"))
         if not text.strip():
-            problems.append("instance-rules가 비어 있다")
+            problems.append(_t("enforce.rules_empty"))
     return problems
 
 
@@ -229,20 +268,16 @@ def cmd_prepush(root: Path) -> int:
         print("push allowed: pre-setup kit tree (no instance config; setup.sh + templates present)")
         return 0
     if context is None:
-        print("push blocked: instance.context를 판정할 수 없다", file=sys.stderr)
+        print(_t("enforce.push_unknown_context"), file=sys.stderr)
         return 1
     if context == "work":
-        print("push blocked: work instance는 local pre-push에서 원격 반출을 허용하지 않는다",
-              file=sys.stderr)
+        print(_t("enforce.push_work"), file=sys.stderr)
         return 1
     return 0
 
 
 def _fallback(event: str, reason: str) -> str:
-    authority = (
-        "state/NOW.md와 존재할 때 _private/state/NOW.md를 함께 읽어라. "
-        "local overlay 부재는 unavailable이지 상태 없음이 아니다."
-    )
+    authority = _t("enforce.fallback_authority")
     if event == "Stop":
         return json.dumps({"decision": "block", "reason": f"[kit] {reason}"}, ensure_ascii=False)
     hook_event = "UserPromptSubmit" if event in ("UserPromptSubmit", "PostToolUse") else event
@@ -300,11 +335,11 @@ def _hook_subprocess(root: Path, event: str, payload: str) -> tuple[int, str]:
 def cmd_hook(root: Path, event: str, claimed_root: str | None) -> int:
     payload = sys.stdin.read()
     if not _valid_hook_root(root, claimed_root):
-        print(_fallback(event, "hook project root 불일치로 상태 주입 또는 게이트 실행을 거부했다"))
+        print(_fallback(event, _t("enforce.hook_root_mismatch")))
         return 0
     code, output = _hook_subprocess(root, event, payload)
     if code != 0:
-        print(_fallback(event, f"{event} hook 실행 실패(exit {code})"))
+        print(_fallback(event, _t("enforce.hook_failed", event=event, code=code)))
         return 0
     if event in ("SessionStart", "Stop"):
         try:
@@ -312,10 +347,10 @@ def cmd_hook(root: Path, event: str, claimed_root: str | None) -> int:
         except json.JSONDecodeError:
             parsed = None
         if event == "SessionStart" and not isinstance(parsed, dict):
-            print(_fallback(event, "SessionStart hook이 유효 JSON을 내지 않았다"))
+            print(_fallback(event, _t("enforce.sessionstart_invalid_json")))
             return 0
         if event == "Stop" and output.strip() and not isinstance(parsed, dict):
-            print(_fallback(event, "Stop gate가 유효 JSON을 내지 않았다"))
+            print(_fallback(event, _t("enforce.stop_invalid_json")))
             return 0
     if output:
         sys.stdout.write(output)
@@ -346,7 +381,7 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_prepush(root)
         if args.command == "hook":
             return cmd_hook(root, args.event, args.claimed_root)
-        parser.error("--issues 또는 command가 필요하다")
+        parser.error(_t("enforce.command_required"))
     except MeasurementError as error:
         print(f"enforce measurement failed: {error}", file=sys.stderr)
         return 2

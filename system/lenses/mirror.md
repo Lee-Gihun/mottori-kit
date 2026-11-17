@@ -1,5 +1,5 @@
-<!-- source: mirror.ko.md sha256:486737f9bc5e9450c258d1502a4e1828b3def896e42100277d323495dc47be7a source-of-truth: ko -->
-Korean: `mirror.ko.md`
+<!-- source: ko/system/lenses/mirror.md sha256:486737f9bc5e9450c258d1502a4e1828b3def896e42100277d323495dc47be7a source-of-truth: ko -->
+Korean: `ko/system/lenses/mirror.md`
 
 # Mirror lens
 

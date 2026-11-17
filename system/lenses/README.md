@@ -1,5 +1,5 @@
-<!-- source: README.ko.md sha256:be1353f29b15d0a108d77e2155dff272735239f58a7fc17c62d637346b926dea source-of-truth: ko -->
-Korean: `README.ko.md`
+<!-- source: ko/system/lenses/README.md sha256:be1353f29b15d0a108d77e2155dff272735239f58a7fc17c62d637346b926dea source-of-truth: ko -->
+Korean: `ko/system/lenses/README.md`
 
 # Thinking lenses
 

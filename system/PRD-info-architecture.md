@@ -1,11 +1,11 @@
-<!-- source: PRD-info-architecture.ko.md sha256:50bbd8c749cf8823dc235f0d6f9df6ba4053c5ffce3165acb019fafc96a341b6 source-of-truth: ko -->
+<!-- source: ko/system/PRD-info-architecture.md sha256:9a368bedd57a1ad50144c37d837fe13d22dd2d99a43f74a5263362bc81b3ac2b source-of-truth: ko -->
 # PRD — Information trust and correction
 
 > **Status: current engine requirements, revised 2026-10-08.** Adopting a requirement is separate from completing its implementation and verification.
-> The Korean `.ko.md` is the source of truth. This English `.md` is a translation bound to that source's content hash.
+> The Korean `ko/system/PRD-info-architecture.md` is the source of truth. This English file is a translation bound to that source's content hash.
 > Distinguish unmet requirements and the latest observations in `design-memory-runtime.md#verification`.
 > Role: what to trust, how to handle conflicts and corrections, and how to judge success.
-> Session behavior belongs in `PRD-session-memory.ko.md`; implementation and verification connections belong in `design-memory-runtime.md`.
+> Session behavior belongs in `ko/system/PRD-session-memory.md`; implementation and verification connections belong in `design-memory-runtime.md`.
 
 <a id="purpose"></a>
 ## 1. Purpose and the cost of failure

@@ -1,5 +1,5 @@
-<!-- source: fence.ko.md sha256:095998056ee8a8a5c15bc155ff5d5d647b91aa2c96aa7a049ae9afa0b42b07be source-of-truth: ko -->
-Korean: `fence.ko.md`
+<!-- source: ko/system/lenses/fence.md sha256:095998056ee8a8a5c15bc155ff5d5d647b91aa2c96aa7a049ae9afa0b42b07be source-of-truth: ko -->
+Korean: `ko/system/lenses/fence.md`
 
 # Fence lens
 

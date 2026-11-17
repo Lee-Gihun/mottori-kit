@@ -22,7 +22,22 @@ ROOT = ROOT_LEXICAL.resolve()
 SCHEMA_VERSION = 1
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
 SLOT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
-TERMINAL_STATUSES = {"success", "failed", "failed-missing-result", "scope_violation"}
+# The one list of run statuses fresh_worker.py writes; receipts.py and batch coverage read it here.
+# Every finished status is terminal for coverage: a failed or preserved run is a result to inspect,
+# not a missing slot to rerun. An interrupted run has no finished_at and stays uncovered.
+FINISHED_STATUSES = (
+    "success",
+    "failed",
+    "failed-missing-result",
+    "scope_violation",
+    "artifact-capture-failed",
+    "artifact-capture-incomplete",
+    "read-material-changed",
+    "expected-output-missing",
+)
+INTERRUPTED_STATUS = "interrupted"
+FAILED_STATUSES = frozenset(FINISHED_STATUSES[1:]) | {INTERRUPTED_STATUS}
+TERMINAL_STATUSES = frozenset(FINISHED_STATUSES)
 
 
 class BatchError(ValueError):

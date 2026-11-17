@@ -1,5 +1,5 @@
-<!-- source: silence.ko.md sha256:97bbac1e8d7954f1dabc25721f67aca6cd3c0bf93230e0dd5fabd97d68fee49c source-of-truth: ko -->
-Korean: `silence.ko.md`
+<!-- source: ko/system/lenses/silence.md sha256:97bbac1e8d7954f1dabc25721f67aca6cd3c0bf93230e0dd5fabd97d68fee49c source-of-truth: ko -->
+Korean: `ko/system/lenses/silence.md`
 
 # Silence lens
 

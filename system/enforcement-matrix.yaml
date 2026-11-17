@@ -2834,6 +2834,24 @@
       "status": "DETECTED"
     },
     {
+      "id": "hook-claude-stop-deliver",
+      "origin": "hook",
+      "source_key": "claude:Stop:1:0",
+      "sources": [
+        ".claude/settings.json Stop"
+      ],
+      "invariant": "턴 종료 때 내놓기 전 점검(deliver.py hook)을 실행한다. 기본은 기록만 하고, 설정한 신호만 한 번 막는다.",
+      "boundary": "hook",
+      "fail_close": "점검 자체의 실패는 막지 않고 state/.hook-errors.log에 남긴다.",
+      "fixtures": {
+        "positive": "tools/test_deliver.py",
+        "negative": "tools/test_deliver.py"
+      },
+      "bypass_log": false,
+      "residual": "조언용 점검이라 실패해도 턴을 막지 않는다. 훅이 불리지 않는 런타임에서는 돌지 않는다.",
+      "status": "DETECTED"
+    },
+    {
       "id": "hook-codex-session",
       "origin": "hook",
       "source_key": "codex:SessionStart:0:0",
@@ -3626,6 +3644,42 @@
       "status": "DETECTED"
     },
     {
+      "id": "doctor-38",
+      "origin": "doctor",
+      "source_key": "도구 · 세션 고정 컨텍스트",
+      "sources": [
+        "tools/doctor.py CHECKS \"도구 · 세션 고정 컨텍스트\""
+      ],
+      "invariant": "세션마다 고정으로 들어가는 컨텍스트가 설정의 경고선을 넘으면 WARN으로 알린다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": null,
+        "negative": null
+      },
+      "bypass_log": false,
+      "residual": "경고만 하고 막지 않는다. 경고선은 측정이 아니라 출발값이다.",
+      "status": "DETECTED"
+    },
+    {
+      "id": "doctor-39",
+      "origin": "doctor",
+      "source_key": "작업 폴더 · 자람",
+      "sources": [
+        "tools/doctor.py CHECKS \"작업 폴더 · 자람\""
+      ],
+      "invariant": "디스크 남은 자리, .git 크기, tmp/의 오래된 바이트, 길잡이 없는 일 폴더 수가 설정의 경고선을 넘으면 WARN으로 알린다. 읽기만 하고 시간 상한을 넘긴 항목은 재지 못함으로 보고한다.",
+      "boundary": "doctor",
+      "fail_close": "doctor가 FAIL이면 종료코드 1을 낸다.",
+      "fixtures": {
+        "positive": "tools/test_doctor_json.py",
+        "negative": "tools/test_doctor_json.py"
+      },
+      "bypass_log": false,
+      "residual": "경고만 하고 막거나 지우지 않는다. 경고선은 측정이 아니라 출발값이다. 시간 상한을 넘긴 항목은 재지 못한다.",
+      "status": "DETECTED"
+    },
+    {
       "id": "doctor-25",
       "origin": "doctor",
       "source_key": "도구 · 원장",
@@ -4048,15 +4102,15 @@
       "sources": [
         "tools/gate.py cmd_check"
       ],
-      "invariant": "stop_hook_active payload는 dirty 또는 pending gate 검사를 생략하지 않는다.",
+      "invariant": "stop_hook_active가 참(boolean true)인 재진입 Stop은 검사를 돌리되 한 번 통과시키고, 미해결 표시와 그 이유는 남겨 다음 Stop과 다음 프롬프트가 다시 다룬다.",
       "boundary": "hook",
-      "fail_close": "dirty 또는 pending 위반은 payload 값과 무관하게 block JSON을 낸다.",
+      "fail_close": "재진입이 아니면(값이 boolean true가 아니면) dirty 또는 pending 위반은 block JSON을 낸다. 재진입 통과 뒤에도 pending은 지워지지 않는다.",
       "fixtures": {
         "positive": "tools/test_enforce.py",
         "negative": "tools/test_enforce.py"
       },
       "bypass_log": true,
-      "residual": "dispatcher가 Stop hook 자체를 호출하지 않는 경우는 canary 검토 영역이다.",
+      "residual": "재진입 Stop 한 번은 미해결 상태로 턴을 끝낸다. dispatcher가 Stop hook 자체를 호출하지 않는 경우는 canary 검토 영역이다.",
       "status": "ENFORCED"
     },
     {

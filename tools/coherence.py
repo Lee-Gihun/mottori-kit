@@ -10,6 +10,7 @@ import os, re, subprocess, sys, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import memlib as M
+from i18n import STRINGS, t
 
 ROOT = M.ROOT
 QUIET = "--quiet" in sys.argv
@@ -24,6 +25,19 @@ STATUS_DOCS = [tuple(x) for x in M.check_config("status_docs", [])]
 DATE_PAT = re.compile(r"(20\d{2})-(\d{2})-(\d{2})")
 
 
+def trailer_count(text, key):
+    """Read a count from a catalog line in either language, or None when no form matches.
+
+    The line was printed by another tool under its own language setting, so both forms are tried.
+    """
+    for lang in ("en", "ko"):
+        pattern = re.escape(STRINGS[key][lang]).replace(r"\{count\}", r"(\d+)")
+        match = re.search(pattern, text)
+        if match:
+            return int(match.group(1))
+    return None
+
+
 def run(cmd):
     return subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
 
@@ -35,7 +49,8 @@ def check_links():
     n = int(m.group(1)) if m else None
     detail = [l for l in r.stdout.splitlines() if l.startswith("BROKEN")]
     if n is None:
-        detail = [f"linkcheck 측정 실패 (exit {r.returncode}): {(r.stderr or r.stdout).strip()[-160:]}"]
+        detail = [t("coherence.linkcheck_failed_detail", code=r.returncode,
+                    detail=(r.stderr or r.stdout).strip()[-160:])]
     return n, detail
 
 
@@ -43,8 +58,8 @@ def check_ledger():
     if not os.path.isdir(os.path.join(ROOT, "_private/ledger/facts")):
         return None, []
     r = run(["python3", "tools/rec.py", "check"])
-    m = re.search(r"문제: (\d+)건", r.stdout)
-    n = int(m.group(1)) if m else -1
+    n = trailer_count(r.stdout, "rec.check_trailer")
+    n = -1 if n is None else n
     detail = [l for l in r.stdout.splitlines() if l.startswith("PROBLEM")]
     return n, detail
 
@@ -54,7 +69,7 @@ def check_hubs():
     for d, idx in HUBS:
         dpath, ipath = os.path.join(ROOT, d), os.path.join(ROOT, d, idx)
         if not os.path.exists(ipath):
-            issues.append(f"{d}: 인덱스 없음 ({idx})")
+            issues.append(t("coherence.hub_no_index", dir=d, index=idx))
             continue
         itext = open(ipath, encoding="utf-8").read()
         imtime = os.path.getmtime(ipath)
@@ -69,8 +84,8 @@ def check_hubs():
             if os.path.getmtime(fp) > imtime and f not in itext:
                 missing.append(f)
         if missing:
-            issues.append(f"{d}/{idx}: 미기재 신입 {len(missing)}개 — " + ", ".join(sorted(missing)[:5])
-                          + (" …" if len(missing) > 5 else ""))
+            issues.append(t("coherence.hub_unlisted", dir=d, index=idx, count=len(missing),
+                            names=", ".join(sorted(missing)[:5]) + (" …" if len(missing) > 5 else "")))
     return issues
 
 
@@ -83,12 +98,12 @@ def check_status_docs():
         head = open(p, encoding="utf-8").read(600)
         m = DATE_PAT.search(head)
         if not m:
-            issues.append(f"{f}: 헤더에 갱신일 없음")
+            issues.append(t("coherence.status_no_date", path=f))
             continue
         d = datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
         age = (TODAY - d).days
         if age > max_days:
-            issues.append(f"{f}: 갱신 {age}일 경과 (허용 {max_days}일, 헤더 {d})")
+            issues.append(t("coherence.status_stale", path=f, age=age, max_days=max_days, date=d))
     return issues
 
 
@@ -97,13 +112,13 @@ def main():
 
     n_links, d_links = check_links()
     if n_links is None:
-        problems.append("linkcheck 측정 실패")
+        problems.append(t("coherence.linkcheck_failed"))
     elif n_links != 0:
-        problems.append(f"깨진 링크 {n_links}")
+        problems.append(t("coherence.broken_links", count=n_links))
 
     n_led, d_led = check_ledger()
     if n_led not in (0, None):
-        problems.append(f"원장 문제 {n_led}")
+        problems.append(t("coherence.ledger_problems", count=n_led))
 
     hub_issues = check_hubs()
     problems += hub_issues
@@ -113,21 +128,21 @@ def main():
 
     if QUIET:
         if problems:
-            print(f"[coherence] 이슈 {len(problems)}건: " + " | ".join(problems[:4])
-                  + (" …" if len(problems) > 4 else ""))
+            print(t("coherence.quiet_issues", count=len(problems),
+                    items=" | ".join(problems[:4]) + (" …" if len(problems) > 4 else "")))
         else:
-            print("[coherence] 이상 없음")
+            print(t("coherence.quiet_clean"))
         M.log_run("coherence", f"issues={len(problems)}")
         return 1 if problems else 0
 
-    print(f"[coherence] {TODAY} — 링크 {'OK' if n_links == 0 else n_links}"
-          f" · 원장 {'OK' if n_led == 0 else ('없음' if n_led is None else n_led)}"
-          f" · 허브 {'OK' if not hub_issues else f'{len(hub_issues)}건'}"
-          f" · 유통기한 {'OK' if not stale else f'{len(stale)}건'}")
-    for sec, items in (("링크", d_links), ("원장", d_led), ("허브", hub_issues), ("유통기한", stale)):
+    ledger = "OK" if n_led == 0 else (t("coherence.ledger_absent") if n_led is None else n_led)
+    print(t("coherence.summary", today=TODAY, links="OK" if n_links == 0 else n_links, ledger=ledger,
+            hubs="OK" if not hub_issues else t("coherence.count", count=len(hub_issues)),
+            stale="OK" if not stale else t("coherence.count", count=len(stale))))
+    for sec, items in (("links", d_links), ("ledger", d_led), ("hubs", hub_issues), ("stale", stale)):
         for it in items:
-            print(f"  [{sec}] {it}")
-    print(f"[coherence] 총 {len(problems)}건")
+            print(f"  [{t('coherence.section.' + sec)}] {it}")
+    print(t("coherence.total", count=len(problems)))
     M.log_run("coherence", f"issues={len(problems)}")
     return 1 if problems else 0
 

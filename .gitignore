@@ -17,17 +17,12 @@
 # Restore only the engine.
 !/.gitignore
 !/README.md
-!/README.ko.md
 !/LICENSE
 !/SETUP.md
-!/SETUP.ko.md
 !/CHECKLIST.md
-!/CHECKLIST.ko.md
 !/CHANGELOG.md
-!/CHANGELOG.ko.md
 !/CLAUDE.md
 !/AGENTS.md
-!/AGENTS.ko.md
 !/setup.sh
 !/tools/
 !/templates/
@@ -36,6 +31,8 @@
 !/.codex/
 !/state/
 !/.github/
+# Korean translations mirror the engine paths above (ko/X.md pairs with X.md).
+!/ko/
 
 # Deny these paths again inside restored directories.
 # Instance configuration. Its template is tracked under templates/.
@@ -51,7 +48,21 @@
 # Cross-runtime debate: track only the README rules; prompts, logs, and rounds belong to the instance.
 /system/debate/*
 !/system/debate/README.md
-!/system/debate/README.ko.md
+# Inside ko/, track only Korean documents for engine paths; instance-owned and generated paths stay untracked.
+/ko/*
+!/ko/*.md
+!/ko/.claude/
+!/ko/system/
+!/ko/templates/
+/ko/system/memory-config.json
+/ko/system/memory-config.json.*
+/ko/system/instance-rules.md
+/ko/system/rituals.local.md
+/ko/system/decisions.md
+/ko/system/memory-map.html
+/ko/system/build-log.md
+/ko/system/debate/*
+!/ko/system/debate/README.md
 # All state belongs to the instance. Keep only the directory placeholder.
 /state/*
 !/state/.gitkeep

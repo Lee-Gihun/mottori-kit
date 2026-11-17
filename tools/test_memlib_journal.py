@@ -355,6 +355,56 @@ def _visibility_contract_on_fixture():
         assert r.stdout.split() == ["public", "private", "private"], r.stdout
 
 
+def test_state_tokens_and_catalog_fallbacks():
+    """State tokens keep their exact Korean form, and memlib's English fallbacks match the catalog."""
+    import ast
+    import i18n
+    readable_ko = {
+        "compaction": "컴팩션 발생",
+        "compaction_tail": " — 이후 컨텍스트는 요약본",
+        "retroactive": "(소급)",
+        "generated_notice": "*생성 ",
+        "section_tracks": "트랙 온도판",
+        "section_threads": "살아 있는 스레드 (서류철)",
+        "section_decisions": "최근 결정·국면",
+        "section_events": "최근 사건",
+        "section_pointers": "정본 포인터",
+        "section_local_threads": "로컬 스레드 (서류철)",
+        "section_local_decisions": "최근 로컬 결정·국면",
+        "section_local_events": "최근 로컬 사건",
+    }
+    assert {name: row["ko"] for name, row in M.STATE_TOKENS.items()} == readable_ko
+    assert all(set(row) == {"en", "ko"} and row["en"] for row in M.STATE_TOKENS.values())
+    # The doctor PreCompact probe and its catalog name the same English marker.
+    assert i18n.STRINGS["doctor.precompact_marker"]["en"].endswith(M.STATE_TOKENS["compaction"]["en"])
+    protocol = {
+        "CONFIG_WARNING_MISSING": "config 없음",
+        "CONFIG_WARNING_INVALID": "config 로드/검증 실패",
+        "CONFIG_WARNING_VISIBILITY": "journal_visibility 사용 불가",
+        "CONFIG_WARNING_NO_TRACKS": "tracks 미정의 — NOW 온도판이 빈다",
+        "CONFIG_WARNING_NOT_OBJECT": "object 아님",
+        "CONFIG_WARNING_REGISTRY_PARSE": "private thread registry 파싱 실패",
+    }
+    assert {name: getattr(M, name) for name in protocol} == protocol
+    assert M.UPDATED_LABELS["ko"] == ("마지막 갱신", "마지막 업데이트", "마지막 정비")
+    for line in ("*마지막 갱신: 11/02 note*", "Last updated: 11/02 note", "마지막 정비：11/02 note"):
+        assert M.UPDATED_RE.search(line).group(2).startswith("11/02"), line
+    assert M.JOURNAL_LINE.match("- 2026-01-01T00:00:00+09:00 [잡/state] Korean track key")
+
+    tree = ast.parse(open(M.__file__, encoding="utf-8").read())
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+             and getattr(node.func, "id", None) == "message"]
+    assert len(calls) >= 30, len(calls)
+    for call in calls:
+        key, english = call.args[0], call.args[1]
+        if isinstance(key, ast.JoinedStr):
+            continue  # schema_change_<v>, checked below
+        assert key.value in i18n.STRINGS, key.value
+        assert i18n.STRINGS[key.value]["en"] == english.value, key.value
+    for version, template in M.SCHEMA_CHANGES.items():
+        assert i18n.STRINGS[f"memlib.schema_change_{version}"]["en"] == template, version
+
+
 def main():
     journals = journal_cases()
     configs = config_cases()
@@ -365,6 +415,7 @@ def main():
     for case in configs:
         _run_config_case(case)
     run_test(test_journal_body_exact_boundary, __file__)
+    run_test(test_state_tokens_and_catalog_fallbacks, __file__)
     _visibility_contract_on_fixture()
     print(f"PASS: journal {len(journals)} generated cases, config {len(configs)} cases, seed={SEED}")
 

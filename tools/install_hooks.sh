@@ -10,19 +10,27 @@ if [[ "$MODE" != "--check" && "$MODE" != "--repair" ]]; then
   echo "usage: bash tools/install_hooks.sh --check|--repair" >&2
   exit 2
 fi
-LANG_CODE="${MOTTORI_LANG:-ko}"
 
+# Print a catalog message from tools/i18n.py in the instance language: say KEY FALLBACK [name=value]...
+# A fixture may hold only this script and the hook template; then the English FALLBACK, already
+# filled in by the caller, is printed instead.
+say() {
+  local key="$1" fallback="$2"
+  shift 2
+  if [[ -f "$ROOT/tools/i18n.py" ]] && python3 "$ROOT/tools/i18n.py" "$key" "$@" 2>/dev/null; then
+    return 0
+  fi
+  printf '%s\n' "$fallback"
+}
+
+# doctor.py reads the first line of --check and accepts the status word in either language.
 status_line() {
   local status="$1" target="$2"
-  if [[ "$LANG_CODE" == "en" ]]; then
-    echo "$status: $target"
-    return
-  fi
   case "$status" in
-    current) echo "현재(current): $target" ;;
-    missing) echo "없음(missing): $target" ;;
-    owned-drift) echo "소유 표류(owned-drift): $target" ;;
-    foreign) echo "외부 훅(foreign): $target" ;;
+    current) say install_hooks.status_current "current: $target" "target=$target" ;;
+    missing) say install_hooks.status_missing "missing: $target" "target=$target" ;;
+    owned-drift) say install_hooks.status_owned_drift "owned-drift: $target" "target=$target" ;;
+    foreign) say install_hooks.status_foreign "foreign: $target" "target=$target" ;;
   esac
 }
 
@@ -107,30 +115,25 @@ STATUS="$(classify "$HOOK")"
 PUSH_STATUS="$(classify "$PUSH_HOOK")"
 if [[ "$MODE" == "--check" ]]; then
   if [[ "$STATUS" == "current" && "$PUSH_STATUS" == "current" ]]; then
-    if [[ "$LANG_CODE" == "en" ]]; then
-      echo "current: $HOOK + $PUSH_HOOK"
-    else
-      echo "현재(current): $HOOK + $PUSH_HOOK"
-    fi
+    say install_hooks.current_pair "current: $HOOK + $PUSH_HOOK" "hook=$HOOK" "push_hook=$PUSH_HOOK"
     exit 0
   fi
   status_line "$STATUS" "$HOOK"
   status_line "$PUSH_STATUS" "$PUSH_HOOK"
   if [[ "$STATUS" == "owned-drift" ]]; then
-    if [[ "$LANG_CODE" == "en" ]]; then
-      echo "template sha256: $(sha256 "$TEMPLATE")"
-      echo "installed sha256: $(sha256 "$HOOK")"
-    else
-      echo "템플릿 sha256: $(sha256 "$TEMPLATE")"
-      echo "설치본 sha256: $(sha256 "$HOOK")"
-    fi
+    TEMPLATE_SHA="$(sha256 "$TEMPLATE")"
+    INSTALLED_SHA="$(sha256 "$HOOK")"
+    say install_hooks.template_sha "template sha256: $TEMPLATE_SHA" "sha=$TEMPLATE_SHA"
+    say install_hooks.installed_sha "installed sha256: $INSTALLED_SHA" "sha=$INSTALLED_SHA"
     diff -u "$HOOK" "$TEMPLATE" | sed -n '1,40p' || true
   fi
   exit 1
 fi
 
 if [[ "$STATUS" == "foreign" || "$PUSH_STATUS" == "foreign" ]]; then
-  echo "foreign pre-commit/pre-push를 덮어쓰지 않는다: $HOOK ($STATUS), $PUSH_HOOK ($PUSH_STATUS)" >&2
+  say install_hooks.foreign_refused \
+    "refusing to overwrite a foreign pre-commit/pre-push: $HOOK ($STATUS), $PUSH_HOOK ($PUSH_STATUS)" \
+    "hook=$HOOK" "status=$STATUS" "push_hook=$PUSH_HOOK" "push_status=$PUSH_STATUS" >&2
   exit 2
 fi
 
@@ -183,7 +186,7 @@ rollback() {
 if ! cmp -s "$TEMPLATE" "$HOOK" || [[ ! -x "$HOOK" ]] \
    || ! cmp -s "$TEMPLATE" "$PUSH_HOOK" || [[ ! -x "$PUSH_HOOK" ]]; then
   rollback
-  echo "repair 검증 실패, 원상 복구: $HOOK" >&2
+  say install_hooks.repair_failed "repair verification failed, restored: $HOOK" "hook=$HOOK" >&2
   exit 1
 fi
 
@@ -192,7 +195,7 @@ fi
 # Fixtures without a baseline are hook-only tests and intentionally skip this step.
 if [[ -f "$ROOT/state/.gate-baseline.json" ]] && ! python3 "$ROOT/tools/gate.py" seal-baseline >/dev/null; then
   rollback
-  echo "baseline seal 실패, hook 원상 복구" >&2
+  say install_hooks.seal_failed "baseline seal failed, hook restored" >&2
   exit 1
 fi
 
@@ -201,21 +204,14 @@ NONCE="probe-$$-$(date +%s)"
 GOT="$("$HOOK" --mottori-probe "$NONCE" 2>&1 || true)"
 if [[ "$GOT" != "$NONCE" ]]; then
   rollback
-  echo "git dispatcher probe 실패, 원상 복구: $HOOK" >&2
+  say install_hooks.probe_failed "git dispatcher probe failed, restored: $HOOK" "hook=$HOOK" >&2
   exit 1
 fi
 
 printf 'pre-commit %s\npre-push %s\n' "$(sha256 "$HOOK")" "$(sha256 "$PUSH_HOOK")" > "$STAMP"
 
-if [[ "$LANG_CODE" == "en" ]]; then
-  echo "current: $HOOK + $PUSH_HOOK (exact template + executable + direct hook probe + sealed baseline)"
-else
-  echo "현재(current): $HOOK + $PUSH_HOOK (정확한 템플릿 + 실행 가능 + 직접 훅 검사 + 봉인된 기준선)"
-fi
-if [[ "$LANG_CODE" == "en" ]]; then
-  [[ -z "$BACKUP" ]] || echo "backup: $BACKUP"
-  [[ -z "$PUSH_BACKUP" ]] || echo "backup: $PUSH_BACKUP"
-else
-  [[ -z "$BACKUP" ]] || echo "백업(backup): $BACKUP"
-  [[ -z "$PUSH_BACKUP" ]] || echo "백업(backup): $PUSH_BACKUP"
-fi
+say install_hooks.repaired \
+  "current: $HOOK + $PUSH_HOOK (exact template + executable + direct hook probe + sealed baseline)" \
+  "hook=$HOOK" "push_hook=$PUSH_HOOK"
+[[ -z "$BACKUP" ]] || say install_hooks.backup "backup: $BACKUP" "path=$BACKUP"
+[[ -z "$PUSH_BACKUP" ]] || say install_hooks.backup "backup: $PUSH_BACKUP" "path=$PUSH_BACKUP"

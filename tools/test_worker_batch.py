@@ -140,8 +140,46 @@ def test_prompt_sha_mismatch_fails():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_every_finished_worker_status_counts_as_covered():
+    """A run that finished with a preserved or failed artifact is covered, not missing."""
+    root, prompts, fake = _fixture()
+    try:
+        manifest, slots = _create(root, prompts)
+        _run_slots(root, manifest, slots, prompts, fake)
+        metas = sorted((root / "_private" / "work" / "runs").glob("*/meta.json"))
+        statuses = ("artifact-capture-failed", "artifact-capture-incomplete",
+                    "read-material-changed", "scope_violation", "failed-missing-result")
+        for path, status in zip(metas, statuses):
+            meta = json.loads(path.read_text(encoding="utf-8"))
+            meta["status"] = status
+            path.write_text(json.dumps(meta), encoding="utf-8")
+        result = _verify(root, manifest)
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        assert result.stdout == "PASS\n"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_status_vocabulary_is_shared_by_worker_and_ledger():
+    sys.path.insert(0, str(HERE))
+    import fresh_worker
+    import receipts
+    import worker_batch
+    assert fresh_worker.B is worker_batch
+    assert receipts.FAILED_STATUSES is worker_batch.FAILED_STATUSES
+    assert set(worker_batch.FINISHED_STATUSES) == {
+        "success", "failed", "failed-missing-result", "scope_violation",
+        "artifact-capture-failed", "artifact-capture-incomplete", "read-material-changed",
+        "expected-output-missing",
+    }
+    assert worker_batch.FAILED_STATUSES == (
+        set(worker_batch.FINISHED_STATUSES) - {"success"}) | {worker_batch.INTERRUPTED_STATUS}
+
+
 TESTS = [
     test_normal_ten_slot_batch_passes,
+    test_every_finished_worker_status_counts_as_covered,
+    test_status_vocabulary_is_shared_by_worker_and_ledger,
     test_one_missing_terminal_is_inconclusive_and_listed,
     test_prompt_sha_mismatch_fails,
 ]

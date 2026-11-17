@@ -44,8 +44,8 @@ flowchart TD
 
 | Concern | Source of truth | Consumer |
 |---|---|---|
-| Claim authority, correction, and data boundaries | [Information PRD](PRD-info-architecture.ko.md) and instance rules | Records, documents, answers |
-| Continuity and improvement requirements | [Session PRD](PRD-session-memory.ko.md) | This design and instance observations |
+| Claim authority, correction, and data boundaries | [Information PRD](../ko/system/PRD-info-architecture.md) and instance rules | Records, documents, answers |
+| Continuity and improvement requirements | [Session PRD](../ko/system/PRD-session-memory.md) | This design and instance observations |
 | State/configuration schema and visibility | [memlib.py](../tools/memlib.py) and instance configuration | NOW rendering and hook context |
 | Fact schema and provenance | [rec.py](../tools/rec.py) | Search, hotset, audit chain |
 | Transcript scope and speaker roles | [recall.py](../tools/recall.py) | Search slices and retrieval evaluation |
@@ -167,7 +167,7 @@ verification responsibility; the worker does not automatically edit user configu
 ## 5. Fresh work and bounded return
 
 The exact normative byte and capability contract remains in
-[session PRD section 10.5](PRD-session-memory.ko.md#105-fresh-bounded-worker-kit-dr-007). This design does not
+[session PRD section 10.5](../ko/system/PRD-session-memory.md#105-fresh-bounded-worker-kit-dr-007). This design does not
 relax it. The dispatcher provides an exact prompt snapshot and declared read/write scope. Complete evidence
 stays in a private run record; the bounded receipt points back to it.
 
@@ -327,8 +327,8 @@ Code regressions cannot close the PRDs' real-user requirements.
 <a id="migration"></a>
 ## 9. Document and language compatibility
 
-The two PRD paths remain entry points. Their `.ko.md` files are normative Korean sources; their `.md` files
-are complete English translations bound by the language inventory and source-hash stamps. Preserve fixed
+The two PRD paths remain entry points. Their Korean files under `ko/system/` are normative sources; their
+English files are complete translations bound by the language inventory and source-hash stamps. Preserve fixed
 anchors and the exact section 10.5 byte/capability link. A later source change makes the translation stale
 until it is reviewed and rebound; a stamp alone does not establish translation quality.
 

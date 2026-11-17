@@ -11,6 +11,70 @@ outstanding, `python3 tools/doctor.py` fails after the pull.
 
 ---
 
+## v0.10 · 2026-11-18 (turn-end cost, pre-delivery check, language layout)
+
+### `[Note]` The turn-end check now takes well under a second in an installed workspace
+
+Evidence: `decision:KIT-DR-020`, `test:tools/test_devtree_gate.py::test_installed_check_runs_no_cited_suite`.
+
+In an installed workspace the turn-end check, `baseline`, and `precommit` run the link check and the state check only. The kit's own release checks run in the kit development tree and in `python3 tools/gate.py release`. After `git pull`, follow the usual update path in `SETUP.md` section 5a: check the hooks, run `python3 tools/gate.py baseline`, then `python3 tools/doctor.py`. `python3 tools/gate.py status` prints the scope in its first line. `MOTTORI_GATE_SCOPE=release` forces the full checks. Gate hook failures are appended to `state/.hook-errors.log`.
+
+### `[Note]` Session-start injection keeps the dossier list and the newest decisions
+
+Evidence: `decision:KIT-DR-021`, `test:tools/test_state_runtime.py::test_hook_context_keeps_dossiers_and_newest_decisions_with_long_journals`.
+
+Nothing to do. With a long journal the injection used to cut the middle of NOW, which removed the dossier list and recent decisions. It now fills by section. Compaction events fold into one line, and "journal N days ago" counts from your last real event, so that number may jump on the first render after the pull. A trigger is counted as shown once per day. `triggers.py add` refuses `file_change:`, `state:`, and `event:` conditions, which never fired. Use `date:YYYY-MM-DD`.
+
+### `[Note]` A pre-delivery check records documents handed over unread
+
+Evidence: `decision:KIT-DR-022`, `test:tools/test_deliver.py::test_default_only_records`.
+
+`tools/deliver.py` runs as the second Stop hook on Claude Code. By default it only records, in `state/.deliver.jsonl`, when a document written in the turn is delivered without being reopened. It blocks nothing until you ask. To let a signal stop the turn once, add an optional block to `system/memory-config.json`, for example `"deliver": {"block": ["unopened"]}`. Available signals are `unopened` and `reader`. An optional `"send_tools"` list names the tools that count as delivering a file to you. `python3 tools/deliver.py stats` shows how often each signal fired and how often the answer changed after a block.
+
+### `[Note]` Worker receipts lead with the verdict, and `--expect` checks outputs
+
+Evidence: `decision:KIT-DR-023`, `test:tools/test_fresh_worker.py::test_expect_missing_or_empty_output_downgrades_a_pass`.
+
+A receipt now starts with `verdict:`, `unknowns:`, and `full:` before the body. `python3 tools/fresh_worker.py --expect PATH` fails the run with exit code 6 when the worker did not leave a non-empty file at PATH. If your scripts call `tools/ask_codex.sh --resume-root` or pass `--strict-egress`, remove those arguments. Both are gone, together with the `codex_root_thread.py` helper. A prompt that names a denied path is still refused. To forbid a folder, say it in words without writing the path.
+
+### `[Note]` Korean editions moved to `ko/`
+
+Evidence: `decision:KIT-DR-024`, `test:tools/test_language.py::test_pair_index_fixture`.
+
+A Korean edition such as `README.ko.md` is now `ko/README.md`, and `ko/INDEX.md` lists every pair. `git pull` moves the tracked files. An existing workspace may keep old ignored copies of instance files with the `.ko.md` suffix, such as the Korean copy of your instance rules. They are yours. Move them under `ko/` or delete them. Korean slash commands are no longer registered as separate commands.
+
+### `[Note]` Recall prints less by default, and never searches another project
+
+Evidence: `decision:KIT-DR-025`, `test:tools/test_recall.py::test_default_output_is_capped_and_says_how_to_see_more`.
+
+`python3 tools/recall.py find` prints the source and a short excerpt per match and stops at 4,000 bytes. Add `--full` for the previous output. If you moved or renamed the workspace folder and recall reports that this folder has no transcripts yet, add the old absolute path to `instance.root_aliases` in `system/memory-config.json`. `python3 tools/rec.py hot` now prints the hotset. `python3 tools/context_budget.py` reports what every session starts with, and `doctor` warns when it passes the lines under `thresholds` in the config.
+
+### `[Note]` Tool output follows the language the workspace was installed in
+
+Evidence: `decision:KIT-DR-026`, `test:tools/test_i18n.py::test_configured_language_beats_locale`.
+
+`state/NOW.md`, the session-start injection, and command output are now English in an English install and Korean in a Korean install. New installs save the language as `instance.lang` in `system/memory-config.json`. A workspace installed earlier has no such line and keeps following the shell locale. To pin it, add `"lang": "ko"` or `"lang": "en"` inside `instance`. Journals and ledgers written in one language are still read in the other.
+
+### `[Note]` Handing work over, closing a job, and watching growth
+
+Evidence: `decision:KIT-DR-027`, `test:tools/test_triggers.py::test_sticky_triggers_never_auto_sleep_and_lead_the_hook`.
+
+Nothing to do. `/handoff` on Claude Code, or the same procedure in `system/rituals.md` on request in Codex, has the leaving session write a note under `_private/state/handoff/` and log one line that points to it. `python3 tools/triggers.py add --sticky` creates a notice that does not fall asleep after being shown. `doctor` has one more check that warns about free disk space, the size of `.git`, stale files under `tmp/`, and job folders without a guide page. It deletes nothing. Its lines can be changed under `thresholds` with keys that start with `growth_`, and the job folders it looks at with `"growth": {"work_dirs": [...]}`. `python3 tools/hook_canary.py` now runs Codex with your user config loaded, because Codex keeps project trust there.
+
+### `[Note]` Fixes from an independent verification
+
+Evidence: `decision:KIT-DR-021`, `decision:KIT-DR-022`, `decision:KIT-DR-023`, `decision:KIT-DR-025`.
+
+A Claude session is recalled only when the working folder it records is this workspace or a declared alias. Two folders whose names map to the same transcript folder no longer see each other's conversations. A long dossier list no longer breaks the session-start injection: what does not fit is counted with the command that lists it. `deliver.py stats` links a re-entry only to the block of the same turn. Receipt header values cannot add header lines, and cut unknowns are counted. The default recall output stays within its cap including notices. `context_budget.py` counts imports with non-ASCII paths, and the state warning line default is now below the injection cap.
+
+### `[Note]` Lens documents were rewritten in plain language
+
+Evidence: `decision:KIT-DR-019`.
+
+The thirteen lens documents and their index under `system/lenses/` were rewritten so that a reader with no context can pick and apply a lens. The folder can be used without the rest of the kit.
+
+---
+
 ## v0.9 · 2026-10-08 (memory and reviewed engine transfer)
 
 ### `[Note]` Upgrade engine code and review instance configuration separately

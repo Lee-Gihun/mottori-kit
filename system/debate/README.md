@@ -1,4 +1,4 @@
-Korean: `README.ko.md`
+Korean: `ko/system/debate/README.md`
 
 # Cross-runtime debate
 
@@ -17,7 +17,9 @@ Ignoring a file prevents ordinary Git inclusion; it does not authorize sending i
    answer the question; do not attach an entire session, dossier collection, or personal corpus by default.
 3. Check the instance data boundary before dispatch. A prompt, a path, and a tool read can each disclose
    information. Use only permitted material. Where necessary, pose a generic technical question without
-   private source text, or mark the review unavailable.
+   private source text, or mark the review unavailable. The runner refuses any prompt whose text names a
+   private path, even to forbid it. Write a prohibition in words ("do not open the private folder"), and carry
+   a previous round's content into the next prompt instead of naming the record's path.
 4. Copy [the round template](../../templates/debate-round.md) to an ignored instance prompt such as
    `system/debate/_p_review.md`. The tracked template stays blank. Keep the discussion record in a protected
    instance location such as `_private/debate/` and retain references to the worker run records.
@@ -39,8 +41,9 @@ python3 tools/fresh_worker.py --runtime codex system/debate/_p_review.md
 
 The example path must be replaced with the prompt file actually prepared. Run the selected command, not
 both merely to increase the number of reviewers. `bash tools/ask_codex.sh PROMPT_FILE` is the compatibility
-entry for a fresh Codex call. An explicitly requested resume is a different operation; its failure must not
-silently fall back to a fresh session.
+entry for a fresh Codex call. An explicitly requested resume (`--resume <SID>`) is a different operation; its
+failure must not silently fall back to a fresh session. It also bypasses the worker contract below: no run
+record, receipt cap, or feature lockdown.
 
 The [worker contract](../PRD-session-memory.md#105-fresh-bounded-worker-kit-dr-007) owns exact capability,
 receipt, and persistence requirements:
@@ -55,7 +58,8 @@ receipt, and persistence requirements:
 - Both adapters disable connectors, web, command network access, plugins, and fan-out. These restrictions
   do not make otherwise prohibited model input permissible.
 - The runner retains the prompt, event stream, final result, metadata, and content hashes under
-  `_private/work/runs/`. The caller receives a bounded receipt. Read the result and relevant evidence before
+  `_private/work/runs/`. The caller receives a bounded receipt; `python3 tools/receipts.py show <run-id>` prints
+  the full result. Read the result and relevant evidence before
   claiming what the reviewer saw, executed, or established.
 
 Keep the execution handle until completion or a recorded interruption. The worker owns no scheduler and a

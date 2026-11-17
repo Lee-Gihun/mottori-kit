@@ -1,89 +1,100 @@
-# 인물 원장: 사람 한 명을 층으로 적는다
+<!-- source: ko/system/person-ledger.md sha256:0a5a07919d5481326da9a1c07c3f473bf0160c71a03dcd9049bfd828d82ef50a source-of-truth: ko -->
+Korean: `ko/system/person-ledger.md`
 
-> 호출: **이미 판정된 것은 무엇이고, 내가 아직 물어야 할 것은 무엇인가?**
+# Person ledger: recording one person in layers
 
-딥패스 0번 상설석(`deep-pass.md`)의 연료다. 가중치가 모르는 유일한 인물이 이 사람이라
-유일하게 두꺼운 파일을 가진다.
+> Question it answers: **What has already been decided, and what do I still need to ask?**
 
-## 이 파일이 하는 일은 "그가 누구인가"가 아니다
+This is a ledger of what has already been decided about the owner and what is still to be asked. A deep pass
+(`deep-pass.md`) also reads it when it checks the owner's decisions. The owner is the one person a model cannot
+know from training, so the owner alone gets a thick file.
 
-두 질문만 답한다. **이미 판정된 것**과 **아직 물어야 할 것.** 인물 묘사는 목적이 아니라
-그 둘을 못 채웠을 때 생기는 부산물이고, 부산물이 본문을 잡아먹는 것이 이 문서의 주된 실패다.
+## This file does not answer "who is he"
 
-크기의 최적점도 여기서 나온다. 원장이 0줄이면 매번 다 물어야 하고 **그 비용은 그의 주의력**
-이다. 무한이면 다 외삽하게 되고 그건 실재 인물 좌석을 연기하는 것이다. 그래서 기준은
-분량이 아니라 하나다.
+It answers two questions only: **what has already been decided** and **what still has to be asked.** A portrait
+of the person is not the goal. It is a by-product that appears when those two are not filled, and the main
+failure of this document is the by-product swallowing the body.
 
-```
-들어갈 자격   ① 짧은 큐로 가중치에서 복원되지 않는다        (울타리)
-        AND   ② 두 번 말하게 하면 그가 짜증날 것이다        (한계효용)
-```
-
-①만 만족하면 잡학이고, ②만 만족하면 어차피 아는 것이다. 둘 다여야 한 줄을 얻는다.
-
-## 표본 편향을 맨 위에 적는다
-
-**모든 인물 원장은 어떤 채널의 출력이고, 채널은 자기 자신을 보고하지 않는다.** 그래서 첫
-블록에 무엇으로 지었고 **따라서 무엇이 원리적으로 못 들어오는지**를 적는다. 이것을 파일
-아래쪽 정정으로 미루면, 편향을 이미 아는 상태에서 계속 편향된 결론을 낸다.
-
-전형적인 구멍: 대화 로그로 지은 원장에는 **그가 사람들과 해결한 것이 안 들어온다.** 로그에
-없으니 "그런 관계가 없다"로 읽히고, 그 오독은 사람에 대한 가장 아픈 종류의 오독이다.
-
-## 네 층
+The right size follows from this. With zero lines, everything must be asked every time, and **the cost is his
+attention**. With unlimited lines, everything gets guessed by extrapolation, which amounts to acting out a real
+person. So the criterion is not length but one test.
 
 ```
-L1  발화    그가 한 말. 원문·날짜·출처.  원점이다 — 인용은 되고 요약은 파생물이다
-L2  판정    그가 실제로 내린 결정과 그때 댄 이유. 관측된 것
-L3  해석    내 모델. 등급 최하위. 날짜·근거·반증 조건이 없으면 들어갈 수 없다
-L4  미지    아직 물어야 할 것. 답을 추측하지 말고 물을 문장으로 적는다
+Admission   1. A model cannot work it out from a short cue          (fence lens)
+      AND   2. He would be annoyed at having to say it twice       (marginal lens)
 ```
 
-**L1·L2는 쌓고 L3는 벌어서 넣는다.** 등급이 다른 것을 한 문단에 섞으면 최하위가 최고
-등급의 신뢰를 빌린다. 유창한 산문이 정확히 그 방식으로 작동한다.
+Meeting only the first makes it trivia. Meeting only the second means the model knows it anyway. A line gets in
+only when both hold.
 
-**L3에는 세 칸이 붙는다.** 언제 썼나 · 무엇을 보고 · **무엇이 관측되면 틀린 것인가.**
-세 번째가 없으면 그것은 해석이 아니라 인상이다. 그리고 L3는 **산문이 아니라 항목으로**
-쓴다. 문단은 줄 단위로 감사할 수 없고, 감사할 수 없는 것은 본인도 못 고친다.
+## Write the sampling bias at the top
 
-**L4는 L3의 배출구다.** 외삽하고 싶어지는 순간이 곧 L4에 한 줄 쓸 순간이다. 물어볼 수 있는
-사람이면 좌석을 비우고 묻는다 — 이 좌석만은 대기 시간이 0이다.
+**Every person ledger is the output of some channel, and a channel does not report on itself.** So the first
+block says what the ledger was built from and **therefore what in principle cannot get in**. If this is pushed
+down into a later correction, conclusions keep coming out biased while the bias is already known.
 
-## 저술하지 말고 수확한다
+A typical gap: a ledger built from conversation logs **does not contain what he resolved with other people.** It
+is absent from the logs, so it reads as "no such relationship exists", and that misreading is the most painful
+kind of misreading about a person.
 
-원장이 굶는 이유는 규칙이 약해서가 아니라 **손으로 따로 써야 해서**다. 저널·사실 원장·회상은
-저절로 쌓이는데 원장만 별도 저술을 요구하면, 바쁜 구간에서 정확히 굶는다. 바쁜 구간이 재료가
-가장 많은 구간이라 손실이 가장 크다.
+## Four layers
 
-그래서 L1·L2 후보는 이미 쌓이는 재료에서 **뽑아 올리고**, 채택만 판단으로 한다.
-자동 채택은 금지다 — 자동으로 채택하면 L3가 L1의 옷을 입는다.
+```
+L1  Statement       What he said. Original text, date, source. The origin: it can be quoted; a summary is derived
+L2  Decision        Decisions he actually made and the reasons he gave then. Observed
+L3  Interpretation  My model. Lowest grade. It cannot enter without a date, evidence, and a refutation condition
+L4  Unknown         What still has to be asked. Do not guess the answer; write it as a question to ask
+```
 
-## 지우지 않고 취소한다
+**L1 and L2 accumulate. L3 has to earn its place.** Mixing grades in one paragraph lets the lowest grade borrow
+the trust of the highest. Fluent prose works exactly that way.
 
-틀린 해석은 삭제가 아니라 취소선과 정정 링크로 남긴다. **내가 무엇을 믿었는지가 내 실패
-양식에 대한 데이터**이고, 그것을 지우면 같은 오류를 다시 낸다. 같은 이유로 본인의 정정은
-최고 등급으로 보존한다 — 본인이 내 모델을 직접 고친 기록이라 위조 비용이 가장 크다.
+**L3 carries three fields:** when it was written, what it was based on, and **what observation would show it
+wrong.** Without the third, it is an impression, not an interpretation. Write L3 **as items, not prose.** A
+paragraph cannot be audited line by line, and what cannot be audited cannot be corrected, even by the person.
 
-**프레임 만료를 날짜만으로 판단하지 않는다.** 특정 결정을 전제로 쓴 절은 그 결정이 닫히는
-순간 낡은 것이 아니라 **인용하면 틀린 것**이 된다. 절 머리에 전제를 적어두면 만료가 보인다.
+**L4 takes what would otherwise overflow into L3.** The moment you want to extrapolate is the moment to write
+one line in L4. If the person can be asked, ask instead of guessing. This person can be asked right away.
 
-## 실패 양식
+## Harvest instead of authoring
 
-- **유창성 팽창**: 산문은 자라는데 운용 층이 안 자란다. 검출은 층별 분량 비율.
-- **실패 표본**: 정정 로그만 자라면 그것은 인물의 초상이 아니라 **내 실패 지도**다.
-  그가 일관되게 옳아서 정정할 일이 없던 것은 원리적으로 이 로그에 못 들어온다.
-  일부러 반대 표본을 넣는다 — 정정 없이 반복 확인된 선호.
-- **감정 read 고착**: 특정 시점의 상태 판독을 몇 달 뒤에 현재형으로 인용하는 것.
-  상태 판독에는 반드시 as-of를 박고, 갱신은 원문 편집이 아니라 새 항목으로 한다.
-- **원장 면제**: 다른 문서에는 증거 규칙을 걸면서 이 파일만 봐주는 것.
+A ledger starves not because the rule is weak but because **it has to be written separately by hand.** The
+journal, the fact ledger, and recall fill up on their own. If only this ledger needs separate authoring, it
+starves exactly in busy periods. Busy periods have the most material, so the loss is largest.
 
-## 폐기·재검토
+So L1 and L2 candidates are **lifted from material that already accumulates**, and only adoption takes judgment.
+Automatic adoption is forbidden. If adopted automatically, an interpretation (L3) gets recorded as a statement
+(L1).
 
-원장 조회가 판정을 한 번도 바꾸지 않거나, L4가 실제 질문으로 한 번도 안 나가면
-이 구조는 비용만 남는다. 그때는 L1과 정정 기록만 남기고 나머지를 접는다.
+## Cancel instead of deleting
 
-## 규범 근거 연결
+A wrong interpretation is not deleted. It stays with a strikethrough and a link to the correction. **What I
+believed is data about how I fail**, and deleting it repeats the same error. For the same reason, the person's
+own corrections are kept at the highest grade. They are records of the person directly correcting my model, so
+they are the most costly to forge.
 
-등급 분리, 자동 채택 금지, 취소 기록 보존은 유창한 파생 해석이 소유자의 원문처럼
-승격되는 귀속 오류를 막기 위한다. 본문의 L1∼L4는 숫자를 측정한 결과가 아니라 근거 거리에
-따른 스키마 라벨이며, “3회” 같은 승격 기준은 이 문서의 운영 상한이지 모집단 주장이 아니다.
+**Do not judge a frame's expiry by date alone.** A section written on the premise of a particular decision does
+not just become old when that decision closes. It becomes **wrong to quote**. Writing the premise at the head of
+the section makes the expiry visible.
+
+## Failure modes
+
+- **Fluency inflation:** prose grows while the operating layers do not. Detect it with the length ratio by layer.
+- **Failure sample:** if only the correction log grows, it is a **map of my failures**, not a portrait of the
+  person. Things he was consistently right about, so that nothing needed correcting, cannot in principle enter
+  this log. Add counter-samples on purpose: preferences confirmed repeatedly without correction.
+- **Frozen mood reading:** quoting a reading of his state at one point in time as present-tense months later.
+  Always put a reference date on a state reading, and update by adding a new item, not by editing the original.
+- **Ledger exemption:** applying evidence rules to other documents while letting this file off.
+
+## Retirement and review
+
+If looking up the ledger never changes a decision, or no L4 item ever goes out as a real question, this
+structure is only cost. Then keep L1 and the correction record and fold the rest.
+
+## Links to normative grounds
+
+Grade separation, the ban on automatic adoption, and keeping cancelled records prevent an attribution error in
+which a fluent derived interpretation is promoted as if it were the owner's own words. L1 through L4 are schema
+labels based on distance from evidence, not measured quantities. A promotion criterion such as "three times" is
+this document's operating limit, not a claim about a population.

@@ -8,6 +8,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -27,7 +28,7 @@ def _git(root: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
 def _repo(context: str = "personal") -> Path:
     root = Path(tempfile.mkdtemp(prefix="enforce-fixture-"))
     (root / "tools").mkdir()
-    for name in ("enforce.py",):
+    for name in ("enforce.py", "i18n.py"):
         shutil.copy2(HERE / name, root / "tools" / name)
     (root / "system").mkdir()
     (root / "system" / "memory-config.json").write_text(json.dumps({
@@ -231,7 +232,7 @@ def test_N6_sealed_baseline_requires_explicit_adoption_and_records_it() -> None:
         gate.PENDING = lambda: str(root / ".git" / "pending")
         gate.LOCK = lambda: str(root / ".git" / "lock")
         gate._save_baseline({"linkcheck": {"known"}})
-        gate.measure = lambda: {"linkcheck": {"known", "new-n6-a", "new-n6-b"}}
+        gate.measure = lambda **_: {"linkcheck": {"known", "new-n6-a", "new-n6-b"}}
 
         assert gate.cmd_baseline() != 0
         saved, state = gate._load_baseline()
@@ -276,10 +277,10 @@ def test_N6_sealed_baseline_requires_explicit_adoption_and_records_it() -> None:
         assert state == "corrupt"
         baseline.write_text(sealed, encoding="utf-8")
 
-        gate.measure = lambda: {"linkcheck": {"known", "new-n6-a", "new-n6-b", "new-n6-c"}}
+        gate.measure = lambda **_: {"linkcheck": {"known", "new-n6-a", "new-n6-b", "new-n6-c"}}
         assert gate.cmd_baseline() != 0, "approval must be bound to the previous baseline and target set"
 
-        gate.measure = lambda: {"linkcheck": {"known"}}
+        gate.measure = lambda **_: {"linkcheck": {"known"}}
         assert gate.cmd_baseline() == 0
         document = json.loads(baseline.read_text(encoding="utf-8"))
         assert document["adoptions"][-1]["issue_id"] == "new-n6-b"
@@ -331,7 +332,7 @@ def test_N6_baseline_refuses_when_control_plane_lock_is_unavailable() -> None:
         gate._root_ok = lambda: True
         gate.PENDING = lambda: str(root / ".git" / "pending")
         gate._save_baseline({"linkcheck": {"known", "removed"}})
-        gate.measure = lambda: {"linkcheck": {"known"}}
+        gate.measure = lambda **_: {"linkcheck": {"known"}}
         gate._lock = unavailable_lock
         assert gate.cmd_baseline() != 0
         saved, state = gate._load_baseline()
@@ -357,7 +358,7 @@ def test_N6_first_sealed_baseline_is_the_only_implicit_adoption() -> None:
         gate.BASELINE = str(baseline)
         gate.SIGNING_KEY = lambda: str(key)
         gate._root_ok = lambda: True
-        gate.measure = lambda: {"linkcheck": {"first-install-issue"}}
+        gate.measure = lambda **_: {"linkcheck": {"first-install-issue"}}
         gate.PENDING = lambda: str(root / ".git" / "pending")
         gate.LOCK = lambda: str(root / ".git" / "lock")
         assert gate.cmd_baseline() == 0
@@ -398,7 +399,8 @@ def test_prepush_allows_presetup_kit_tree_and_blocks_unknown_context() -> None:
     try:
         (root / "system" / "memory-config.json").unlink()
         blocked = subprocess.run([sys.executable, str(root / "tools" / "enforce.py"), "prepush"],
-                                 cwd=root, text=True, capture_output=True)
+                                 cwd=root, text=True, capture_output=True,
+                                 env=dict(os.environ, MOTTORI_LANG="ko"))
         assert blocked.returncode != 0 and "판정할 수 없다" in blocked.stderr, blocked.stderr
         (root / "setup.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
         (root / "templates").mkdir()
@@ -453,51 +455,299 @@ def test_W09_strict_scope_requires_a_prefix() -> None:
         raise AssertionError("--strict-scope without --write-prefix must fail before dispatch")
 
 
-def test_H03_H04_stop_hook_active_never_skips_a_pending_gate() -> None:
+def test_enforce_messages_follow_language_and_survive_without_catalog() -> None:
+    """English output has no Hangul, and a missing i18n.py still yields the English text."""
+    root = _repo("personal")
+    try:
+        (root / "system" / "memory-config.json").unlink()
+        enforce = str(root / "tools" / "enforce.py")
+
+        def prepush(lang: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run([sys.executable, enforce, "prepush"], cwd=root, text=True,
+                                  capture_output=True, env=dict(os.environ, MOTTORI_LANG=lang))
+
+        english = prepush("en")
+        assert english.returncode != 0
+        assert "push blocked: cannot determine instance.context" in english.stderr, english.stderr
+        assert not re.search("[가-힣]", english.stdout + english.stderr), english.stderr
+        hook = subprocess.run([sys.executable, enforce, "hook", "--runtime", "claude",
+                               "--event", "SessionStart", "--claimed-root", "/nonexistent"],
+                              cwd=root, text=True, capture_output=True, input="{}",
+                              env=dict(os.environ, MOTTORI_LANG="en"))
+        context = json.loads(hook.stdout)["hookSpecificOutput"]["additionalContext"]
+        assert "_private/state/NOW.md" in context and not re.search("[가-힣]", context), context
+        (root / "tools" / "i18n.py").unlink()
+        alone = prepush("ko")
+        assert alone.returncode != 0
+        assert "push blocked: cannot determine instance.context" in alone.stderr, alone.stderr
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_enforce_fallback_text_matches_catalog() -> None:
+    sys.path.insert(0, str(HERE))
+    import enforce
+    import i18n
+    for key, text in enforce.FALLBACK_TEXT.items():
+        assert i18n.STRINGS[key]["en"] == text, key
+    spec = importlib.util.spec_from_file_location("fresh_worker_fallback_test", HERE / "fresh_worker.py")
+    worker = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(worker)
+    for key, text in worker.FALLBACK_TEXT.items():
+        assert i18n.STRINGS[key]["en"] == text, key
+
+
+def test_worker_refusals_follow_language() -> None:
+    """fresh_worker input refusals: Korean under ko, Hangul-free English under en and alone."""
+    root = Path(tempfile.mkdtemp(prefix="worker-lang-"))
+    try:
+        (root / "tools").mkdir()
+        for name in ("fresh_worker.py", "memlib.py", "worker_batch.py", "claude_auth.py", "i18n.py"):
+            shutil.copy2(HERE / name, root / "tools" / name)
+        (root / "empty.md").write_text("", encoding="utf-8")
+
+        def refuse(lang: str) -> str:
+            env = dict(os.environ, MOTTORI_LANG=lang)
+            env.pop("MOTTORI_INSTANCE", None)
+            run = subprocess.run([sys.executable, "tools/fresh_worker.py", "--runtime", "codex",
+                                  "--strict-scope", "empty.md"], cwd=root, text=True,
+                                 capture_output=True, env=env)
+            assert run.returncode == 2, run.stdout + run.stderr
+            return run.stderr
+
+        assert "--strict-scope에는" in refuse("ko")
+        english = refuse("en")
+        assert "--strict-scope needs at least one --write-prefix" in english, english
+        assert not re.search("[가-힣]", english), english
+        (root / "tools" / "i18n.py").unlink()
+        assert "--strict-scope needs at least one --write-prefix" in refuse("ko")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def _stop_fixture(root):
+    """Point the gate's markers at a scratch directory and stub out measurement."""
     sys.path.insert(0, str(HERE))
     import gate
-    root = Path(tempfile.mkdtemp(prefix="stop-active-"))
-    original = {
-        "DIRTY": gate.DIRTY,
-        "PENDING": gate.PENDING,
-        "LOCK": gate.LOCK,
-        "root_ok": gate._root_ok,
-        "load": gate._load_baseline,
-        "measure": gate.measure,
-        "verdict": gate._verdict,
-        "log": gate.M.log_run,
-        "stdin": sys.stdin,
-        "stdout": sys.stdout,
-    }
+    saved = {name: getattr(gate, name) for name in (
+        "DIRTY", "PENDING", "LOCK", "FINGERPRINT", "BASELINE", "SIGNING_KEY", "_root_ok",
+        "_load_baseline", "measure", "_worktree_fingerprint")}
+    saved["log"] = gate.M.log_run
+    gate.DIRTY = lambda: str(root / "dirty")
+    gate.PENDING = lambda: str(root / "pending")
+    gate.LOCK = lambda: str(root / "lock")
+    gate.FINGERPRINT = lambda: str(root / "fingerprint")
+    gate.BASELINE = str(root / "baseline.json")
+    gate.SIGNING_KEY = lambda: str(root / "no-key")
+    gate._root_ok = lambda: True
+    gate._worktree_fingerprint = lambda: "fixture-fingerprint"
+    gate.M.log_run = lambda *args, **kwargs: None
+    return gate, saved
+
+
+def _restore(gate, saved):
+    gate.M.log_run = saved.pop("log")
+    for name, value in saved.items():
+        setattr(gate, name, value)
+
+
+def _run_check(gate, payload):
+    previous_stdin, previous_stdout = sys.stdin, sys.stdout
     try:
-        gate.DIRTY = lambda: str(root / "dirty")
-        gate.PENDING = lambda: str(root / "pending")
-        gate.LOCK = lambda: str(root / "lock")
-        gate._root_ok = lambda: True
-        gate._load_baseline = lambda: ({"fixture": set()}, "ok")
-        gate.measure = lambda: {"fixture": {"new-issue"}}
-        gate._verdict = lambda current, baseline, state: ("fixture blocked", False)
-        gate.M.log_run = lambda *args, **kwargs: None
-        Path(gate.DIRTY()).write_text("1", encoding="utf-8")
-        for payload in ({"stop_hook_active": True}, {"stop_hook_active": "false"}):
-            Path(gate.DIRTY()).write_text("1", encoding="utf-8")
-            sys.stdin = io.StringIO(json.dumps(payload))
-            captured = io.StringIO()
-            sys.stdout = captured
-            assert gate.cmd_check() == 0
-            assert json.loads(captured.getvalue())["decision"] == "block"
+        sys.stdin = io.StringIO(json.dumps(payload))
+        captured = io.StringIO()
+        sys.stdout = captured
+        code = gate.cmd_check()
     finally:
-        gate.DIRTY = original["DIRTY"]
-        gate.PENDING = original["PENDING"]
-        gate.LOCK = original["LOCK"]
-        gate._root_ok = original["root_ok"]
-        gate._load_baseline = original["load"]
-        gate.measure = original["measure"]
-        gate._verdict = original["verdict"]
-        gate.M.log_run = original["log"]
-        sys.stdin = original["stdin"]
-        sys.stdout = original["stdout"]
+        sys.stdin, sys.stdout = previous_stdin, previous_stdout
+    return code, captured.getvalue()
+
+
+def test_H03_H04_stop_hook_active_passes_once_and_keeps_pending() -> None:
+    """A reentrant Stop lets the turn end once; the unresolved finding stays pending."""
+    root = Path(tempfile.mkdtemp(prefix="stop-active-"))
+    gate, saved = _stop_fixture(root)
+    try:
+        gate._load_baseline = lambda: ({"linkcheck": set(), "now-check": set()}, "ok")
+        gate.measure = lambda **_: {"linkcheck": {"new-issue"}, "now-check": set()}
+        Path(gate.DIRTY()).write_text("1", encoding="utf-8")
+        code, output = _run_check(gate, {"stop_hook_active": True})
+        assert code == 0 and output == "", output
+        assert "new-issue" in Path(gate.PENDING()).read_text(encoding="utf-8")
+        # Only a real boolean counts as reentrant; any other value still blocks.
+        code, output = _run_check(gate, {"stop_hook_active": "false"})
+        assert code == 0 and json.loads(output)["decision"] == "block", output
+        assert Path(gate.PENDING()).exists()
+    finally:
+        _restore(gate, saved)
         shutil.rmtree(root, ignore_errors=True)
+
+
+def test_session_check_keeps_release_checkers_in_baseline() -> None:
+    """A session-scope pass compares and tightens only what it measured."""
+    root = Path(tempfile.mkdtemp(prefix="session-baseline-"))
+    gate, saved = _stop_fixture(root)
+    scopes = []
+    try:
+        gate._save_baseline({"linkcheck": {"known", "fixed"}, "now-check": set(),
+                             "evidencecheck": {"release-only"}, "manifest": {"manifest-only"}})
+
+        def session_measure(**kwargs):
+            scopes.append(kwargs.get("scope"))
+            return {"linkcheck": {"known"}, "now-check": set()}
+
+        gate.measure = session_measure
+        Path(gate.DIRTY()).write_text("1", encoding="utf-8")
+        code, output = _run_check(gate, {})
+        assert code == 0 and output == "", output
+        assert scopes == ["session"], scopes
+        saved_issues, state = gate._load_baseline()
+        assert state == "ok", state
+        assert saved_issues == {"linkcheck": {"known"}, "now-check": set(),
+                                "evidencecheck": {"release-only"},
+                                "manifest": {"manifest-only"}}, saved_issues
+        assert not Path(gate.DIRTY()).exists() and not Path(gate.PENDING()).exists()
+        assert Path(gate.FINGERPRINT()).read_text(encoding="utf-8") == "fixture-fingerprint"
+    finally:
+        _restore(gate, saved)
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_session_check_still_detects_a_removed_session_checker() -> None:
+    root = Path(tempfile.mkdtemp(prefix="session-removed-"))
+    gate, saved = _stop_fixture(root)
+    try:
+        gate._load_baseline = lambda: ({"linkcheck": set(), "now-check": set(),
+                                        "evidencecheck": set()}, "ok")
+        gate.measure = lambda **_: {"now-check": set()}
+        Path(gate.DIRTY()).write_text("1", encoding="utf-8")
+        code, output = _run_check(gate, {})
+        reason = json.loads(output)["reason"]
+        assert "linkcheck" in reason and "evidencecheck" not in reason, reason
+    finally:
+        _restore(gate, saved)
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_installed_baseline_measures_session_scope_and_keeps_release_entries() -> None:
+    root = _repo()
+    gate, saved = _stop_fixture(root / ".git")
+    previous_root, previous_scope = gate.M.ROOT, os.environ.pop("MOTTORI_GATE_SCOPE", None)
+    scopes = []
+    try:
+        gate.M.ROOT = str(root)
+        gate._save_baseline({"linkcheck": {"old"}, "now-check": set(),
+                             "evidencecheck": {"release-only"}})
+
+        def measured(**kwargs):
+            scopes.append(kwargs.get("scope"))
+            return {"linkcheck": set(), "now-check": set()}
+
+        gate.measure = measured
+        assert gate.cmd_baseline() == 0
+        assert scopes == ["session"], scopes
+        issues, state = gate._load_baseline()
+        assert state == "ok" and issues["evidencecheck"] == {"release-only"}, issues
+        assert issues["linkcheck"] == set(), issues
+    finally:
+        gate.M.ROOT = previous_root
+        if previous_scope is not None:
+            os.environ["MOTTORI_GATE_SCOPE"] = previous_scope
+        _restore(gate, saved)
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_release_baseline_still_migrates_a_removed_checker() -> None:
+    """Only a session measurement keeps unmeasured entries; release replaces the whole set."""
+    root = _repo()
+    gate, saved = _stop_fixture(root / ".git")
+    previous_root, previous_scope = gate.M.ROOT, os.environ.get("MOTTORI_GATE_SCOPE")
+    try:
+        gate.M.ROOT = str(root)
+        os.environ["MOTTORI_GATE_SCOPE"] = "release"
+        gate._save_baseline({"linkcheck": set(), "retired-checker": {"old"}})
+        gate.measure = lambda **_: {"linkcheck": set(), "now-check": set(),
+                                    "evidencecheck": set(), "manifest": set()}
+        assert gate.cmd_baseline() == 0
+        issues, state = gate._load_baseline()
+        assert state == "ok" and "retired-checker" not in issues, issues
+    finally:
+        gate.M.ROOT = previous_root
+        if previous_scope is None:
+            os.environ.pop("MOTTORI_GATE_SCOPE", None)
+        else:
+            os.environ["MOTTORI_GATE_SCOPE"] = previous_scope
+        _restore(gate, saved)
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_resume_reports_pending_reason_without_measuring() -> None:
+    root = Path(tempfile.mkdtemp(prefix="resume-pending-"))
+    gate, saved = _stop_fixture(root)
+    previous_stdout = sys.stdout
+
+    def forbidden(**_):
+        raise AssertionError("resume must not measure")
+
+    refresh = gate._refresh_test_evidence
+    try:
+        gate.measure = forbidden
+        gate._refresh_test_evidence = forbidden
+        Path(gate.DIRTY()).write_text("1", encoding="utf-8")
+        captured = io.StringIO()
+        sys.stdout = captured
+        assert gate.cmd_resume() == 0
+        sys.stdout = previous_stdout
+        assert captured.getvalue() == "", "a dirty marker alone is left for the next Stop"
+        Path(gate.PENDING()).write_text("linkcheck: README.md -> gone.md", encoding="utf-8")
+        captured = io.StringIO()
+        sys.stdout = captured
+        assert gate.cmd_resume() == 0
+        sys.stdout = previous_stdout
+        context = json.loads(captured.getvalue())["hookSpecificOutput"]["additionalContext"]
+        assert "README.md -> gone.md" in context, context
+        assert Path(gate.PENDING()).exists() and Path(gate.DIRTY()).exists()
+    finally:
+        sys.stdout = previous_stdout
+        gate._refresh_test_evidence = refresh
+        _restore(gate, saved)
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_fixture_git_setup_ignores_outer_commit_pinning() -> None:
+    """A commit hook's GIT_DIR and GIT_INDEX_FILE must not reach the extracted tree's Git."""
+    sys.path.insert(0, str(HERE))
+    import gate
+    outer = _repo()
+    tree = Path(tempfile.mkdtemp(prefix="extracted-tree-"))
+    pinning = {"GIT_DIR": str(outer / ".git"), "GIT_WORK_TREE": str(outer),
+               "GIT_INDEX_FILE": str(outer / ".git" / "index")}
+    previous = {key: os.environ.get(key) for key in pinning}
+    try:
+        (outer / "README.md").write_text("staged change\n", encoding="utf-8")
+        _git(outer, "add", "README.md")
+        (outer / "untracked.md").write_text("outer untracked\n", encoding="utf-8")
+        index_before = (outer / ".git" / "index").read_bytes()
+        head_before = _git(outer, "rev-parse", "HEAD").stdout
+        (tree / "fixture.md").write_text("extracted\n", encoding="utf-8")
+        os.environ.update(pinning)
+        try:
+            assert gate._ensure_git_tree(str(tree))
+        finally:
+            for key, value in previous.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+        assert (outer / ".git" / "index").read_bytes() == index_before
+        assert _git(outer, "rev-parse", "HEAD").stdout == head_before
+        assert (tree / ".git").is_dir()
+        listed = _git(tree, "ls-files").stdout.split()
+        assert listed == ["fixture.md"], listed
+    finally:
+        shutil.rmtree(outer, ignore_errors=True)
+        shutil.rmtree(tree, ignore_errors=True)
 
 
 def test_sync_inventory_is_single_source_and_partial_copy_rolls_back() -> None:
@@ -629,7 +879,47 @@ def test_E1_rec_check_crash_is_doctor_fail() -> None:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_doctor_reads_tool_trailers_in_either_language() -> None:
+    """doctor parses rec.py and coherence.py summary lines printed under either language."""
+    sys.path.insert(0, str(HERE))
+    import doctor
+    import memlib
+    root = Path(tempfile.mkdtemp(prefix="doctor-forms-"))
+    facts = root / "_private" / "ledger" / "facts"
+    facts.mkdir(parents=True)
+    (facts / "one.md").write_text("fact\n", encoding="utf-8")
+    old_root, old_sh = memlib.ROOT, doctor.sh
+
+    class Result:
+        def __init__(self, stdout: str, returncode: int = 0) -> None:
+            self.stdout, self.stderr, self.returncode = stdout, "", returncode
+
+    try:
+        memlib.ROOT = str(root)
+        for out in ("[check] 문제: 2건\n", "[check] problems: 2\n"):
+            doctor.sh = lambda *args, out=out, **kwargs: Result(out)
+            status, _detail = doctor.c_ledger()
+            assert status == doctor.WARN, (out, status)
+        doctor.sh = lambda *args, **kwargs: Result("[check] nothing\n")
+        assert doctor.c_ledger()[0] == doctor.FAIL
+        for out, expected in (("[coherence] 이슈 3건: a | b\n", doctor.WARN),
+                              ("[coherence] 3 issue(s): a | b\n", doctor.WARN),
+                              ("[coherence] 이상 없음\n", doctor.PASS),
+                              ("[coherence] no issues\n", doctor.PASS),
+                              ("garbled\n", doctor.FAIL)):
+            doctor.sh = lambda *args, out=out, **kwargs: Result(out, 1 if "3" in out else 0)
+            assert doctor.c_coherence()[0] == expected, out
+        assert doctor._config_warning("config 없음: /x") in ("config 없음: /x", "config missing: /x")
+        markers = set(doctor.STRINGS["doctor.precompact_marker"].values())
+        assert markers == {"[system/state] compaction occurred", "[system/state] 컴팩션 발생"}
+    finally:
+        memlib.ROOT = old_root
+        doctor.sh = old_sh
+        shutil.rmtree(root, ignore_errors=True)
+
+
 TESTS = [
+    test_doctor_reads_tool_trailers_in_either_language,
     test_G03_markdown_symlink_is_blocked,
     test_G04_submodule_gitlink_is_blocked,
     test_G02_unicode_markdown_path_is_not_git_quoted,
@@ -639,7 +929,16 @@ TESTS = [
     test_S2_G4_work_push_is_hard_blocked,
     test_S2_G5_ready_rejects_missing_context_and_template_rules,
     test_W09_strict_scope_requires_a_prefix,
-    test_H03_H04_stop_hook_active_never_skips_a_pending_gate,
+    test_enforce_messages_follow_language_and_survive_without_catalog,
+    test_enforce_fallback_text_matches_catalog,
+    test_worker_refusals_follow_language,
+    test_H03_H04_stop_hook_active_passes_once_and_keeps_pending,
+    test_session_check_keeps_release_checkers_in_baseline,
+    test_session_check_still_detects_a_removed_session_checker,
+    test_installed_baseline_measures_session_scope_and_keeps_release_entries,
+    test_release_baseline_still_migrates_a_removed_checker,
+    test_resume_reports_pending_reason_without_measuring,
+    test_fixture_git_setup_ignores_outer_commit_pinning,
     test_sync_inventory_is_single_source_and_partial_copy_rolls_back,
     test_sync_second_destination_copy_failure_rolls_back_first_copy,
     test_E1_rec_check_crash_is_doctor_fail,

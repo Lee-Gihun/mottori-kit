@@ -27,7 +27,7 @@ try:
     subprocess_rc = int(raw_rc)
     text = open(path, encoding="utf-8").read()
 except (OSError, UnicodeError, ValueError) as exc:
-    print(f"측정불능: linkcheck 출력 또는 종료코드를 읽을 수 없음 ({exc})")
+    print(f"unmeasurable: cannot read linkcheck output or exit code ({exc})")
     raise SystemExit(1)
 
 pattern = re.compile(
@@ -36,15 +36,15 @@ pattern = re.compile(
 )
 matches = [match for line in text.splitlines() if (match := pattern.fullmatch(line))]
 if len(matches) != 1:
-    print(f"측정불능: linkcheck 요약 줄이 정확히 하나가 아님 (found={len(matches)})")
+    print(f"unmeasurable: not exactly one linkcheck summary line (found={len(matches)})")
     raise SystemExit(1)
 match = matches[0]
 if subprocess_rc != 0:
-    print(f"측정불능: linkcheck 비정상 종료 (exit={subprocess_rc})")
+    print(f"unmeasurable: linkcheck exited abnormally (exit={subprocess_rc})")
     raise SystemExit(1)
 broken = int(match.group(1))
 if broken != 0:
-    print(f"측정불능: linkcheck exit=0이지만 broken={broken}")
+    print(f"unmeasurable: linkcheck exit=0 but broken={broken}")
     raise SystemExit(1)
 print(broken)
 PY
@@ -96,14 +96,14 @@ try:
     if any(summary[key] != value for key, value in expected.items()):
         raise ValueError("summary/check mismatch")
 except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
-    print(f"측정불능: doctor JSON 요약을 읽을 수 없음 ({exc})")
+    print(f"unmeasurable: cannot read the doctor JSON summary ({exc})")
     raise SystemExit(1)
 
 if subprocess_rc != 0:
-    print(f"측정불능: doctor 비정상 종료 (exit={subprocess_rc}, FAIL={summary['fail']})")
+    print(f"unmeasurable: doctor exited abnormally (exit={subprocess_rc}, FAIL={summary['fail']})")
     raise SystemExit(1)
 if summary["fail"] != 0:
-    print(f"측정불능: doctor exit=0이지만 FAIL={summary['fail']}")
+    print(f"unmeasurable: doctor exit=0 but FAIL={summary['fail']}")
     raise SystemExit(1)
 print(summary["fail"], summary["warn"])
 PY
@@ -139,30 +139,30 @@ unset MOTTORI_INSTANCE CLAUDE_PROJECT_DIR
 fail=0
 step() { printf '%-34s %s\n' "$1" "$2"; }
 
-git clone -q "$KIT" "$DEST" || { echo "clone 실패"; exit 1; }
+git clone -q "$KIT" "$DEST" || { echo "clone failed"; exit 1; }
 # Overlay the uncommitted delivery tree onto the clone: use a patch for modifications,
 # deletions, modes, and symlinks, then copy new untracked files.
 ( cd "$KIT" && git diff --binary HEAD ) > "$TMP/worktree.patch"
 if [ -s "$TMP/worktree.patch" ]; then
-  ( cd "$DEST" && git apply "$TMP/worktree.patch" ) || { echo "작업트리 patch 적용 실패"; exit 1; }
+  ( cd "$DEST" && git apply "$TMP/worktree.patch" ) || { echo "worktree patch failed to apply"; exit 1; }
 fi
 ( cd "$KIT" && git ls-files -o --exclude-standard -z ) | while IFS= read -r -d '' f; do
   [ -e "$KIT/$f" ] || [ -L "$KIT/$f" ] || continue
-  mkdir -p "$DEST/$(dirname "$f")" && cp -Rp "$KIT/$f" "$DEST/$f" || { echo "복사 실패: $f"; exit 1; }
+  mkdir -p "$DEST/$(dirname "$f")" && cp -Rp "$KIT/$f" "$DEST/$f" || { echo "copy failed: $f"; exit 1; }
 done || exit 1
 cd "$DEST"
 # Index delivery files so data-exposure checks treat them as the next committed engine.
-git add -A >/dev/null 2>&1 || { echo "git add 실패"; exit 1; }
-step "작업트리 복제 (patch+untracked)" "ok ($(git ls-files | wc -l | tr -d ' ') tracked)"
+git add -A >/dev/null 2>&1 || { echo "git add failed"; exit 1; }
+step "worktree copy (patch+untracked)" "ok ($(git ls-files | wc -l | tr -d ' ') tracked)"
 
 # Run default setup noninteractively, with stdin closed.
 out="$(bash setup.sh < /dev/null 2>&1)"; rc=$?
 if [ $rc -ne 0 ] || [ ! -f system/memory-config.json ]; then
-  step "setup.sh (비대화형, 인자 없음)" "FAIL exit=$rc"
-  # Show setup failures from its nested checks.
+  step "setup.sh (noninteractive, no args)" "FAIL exit=$rc"
+  # Show setup failures from its nested checks (setup.sh may print them in either language).
   echo "$out" | grep -E "^\[ FAIL \]|BROKEN|회귀 실패|검증이 실패" | head -8; fail=1
 else
-  step "setup.sh (비대화형, 인자 없음)" "ok  (config·instance-rules·decisions·rituals.local 생성)"
+  step "setup.sh (noninteractive, no args)" "ok  (config, instance-rules, decisions, rituals.local created)"
 fi
 
 # Install the hook backstop.
@@ -175,7 +175,7 @@ lc_judgment="$(judge_linkcheck "$lc_file" "$lc_rc")"; lc_judge_rc=$?
 if [ $lc_judge_rc -eq 0 ]; then
   step "linkcheck broken" "$lc_judgment"
 else
-  step "linkcheck broken" "측정불능"
+  step "linkcheck broken" "unmeasurable"
   echo "$lc_judgment"
   grep BROKEN "$lc_file" | head -5
   fail=1
@@ -190,17 +190,17 @@ nf=""; nw=""
 if [ "${nf:-x}" = "0" ]; then
   step "doctor FAIL / warn" "0 / ${nw:-?}"
 else
-  step "doctor FAIL / warn" "측정불능 / ?"
+  step "doctor FAIL / warn" "unmeasurable / ?"
   echo "$metrics"
   tail -6 "$doctor_err"
   fail=1
 fi
 
-# A second setup without --force must refuse to overwrite the instance.
+# A second setup without --force must refuse to overwrite the instance (either language).
 out2="$(bash setup.sh < /dev/null 2>&1)"; rc2=$?
-if [ $rc2 -eq 0 ] && echo "$out2" | grep -Eq "이미 세팅|already set up"; then step "setup.sh 재실행 (덮지 않음)" "ok"; else
-  step "setup.sh 재실행 (덮지 않음)" "FAIL exit=$rc2"; fail=1; fi
+if [ $rc2 -eq 0 ] && echo "$out2" | grep -Eq "이미 세팅|already set up"; then step "setup.sh rerun (no overwrite)" "ok"; else
+  step "setup.sh rerun (no overwrite)" "FAIL exit=$rc2"; fail=1; fi
 
 echo
-[ $fail -eq 0 ] && echo "fresh install: PASS" || echo "fresh install: FAIL (위 항목)"
+[ $fail -eq 0 ] && echo "fresh install: PASS" || echo "fresh install: FAIL (items above)"
 exit $fail

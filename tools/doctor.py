@@ -13,10 +13,43 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from i18n import language, t
+from i18n import STRINGS, language, t
+
+HANGUL = re.compile("[\uac00-\ud7a3]")
+
+
+def _form_values(key, message, prefix=False):
+    """Match message against either language form of a catalog entry.
+
+    Placeholders become groups. Returns the placeholder values, or None when neither form
+    matches. Other tools print these lines under their own language setting, and an older
+    engine may still print the Korean form, so readers accept both.
+    """
+    def group(match):
+        name = match.group(1)
+        return f"(?P<{name}>\\d+)" if name == "count" else f"(?P<{name}>.*)"
+
+    for lang in ("en", "ko"):
+        pattern = re.sub(r"\\\{(\w+)\\\}", group, re.escape(STRINGS[key][lang]))
+        match = re.match(pattern if prefix else pattern + r"\Z", message)
+        if match:
+            return match.groupdict()
+    return None
+
+
+def _form_count(text, key):
+    """Return the {count} of the first line in text that starts with either form of key."""
+    for line in text.splitlines():
+        values = _form_values(key, line, prefix=True)
+        if values:
+            return int(values["count"])
+    return None
+
+
 ROOT = os.path.dirname(HERE)
 VERBOSE = "--verbose" in sys.argv
 JSON_OUTPUT = "--json" in sys.argv
@@ -44,30 +77,31 @@ def sh(*cmd, cwd=ROOT):
 def _config_warning(message):
     if language() == "ko":
         return message
-    match = re.match(r"config 없음: (.*)", message)
-    if match:
-        return t("doctor.config_warn_missing", path=match.group(1))
-    match = re.match(r"config 로드/검증 실패: (.*)", message)
-    if match:
-        return t("doctor.config_warn_load", error_type=match.group(1))
+    values = _form_values("doctor.config_warn_missing", message)
+    if values:
+        return t("doctor.config_warn_missing", **values)
+    values = _form_values("doctor.config_warn_load", message)
+    if values:
+        return t("doctor.config_warn_load", **values)
     match = re.match(r"journal_visibility .*\(config schema=(.*), engine schema=(.*)\)", message)
     if match:
         return t("doctor.config_warn_visibility", config=match.group(1), engine=match.group(2))
-    if message == "tracks 미정의 — NOW 온도판이 빈다":
+    if message in STRINGS["doctor.config_warn_tracks"].values():
         return t("doctor.config_warn_tracks")
-    match = re.match(r"private thread registry\[(\d+)\] (.*) — skip", message)
-    if match:
-        problems = {
-            "object 아님": "doctor.config_warn_problem_object",
-            "key/name invalid": "doctor.config_warn_problem_key",
-            "dossier invalid": "doctor.config_warn_problem_dossier",
-            "public key collision": "doctor.config_warn_problem_collision",
-            "duplicate key": "doctor.config_warn_problem_duplicate",
-        }
-        problem = t(problems.get(match.group(2), "doctor.config_warn_unknown"))
-        return t("doctor.config_warn_private", index=match.group(1), problem=problem)
-    if message.startswith("private thread registry 파싱 실패:"):
+    values = _form_values("doctor.config_warn_private", message)
+    if values and values["index"].isdigit():
+        problems = ("doctor.config_warn_problem_object", "doctor.config_warn_problem_key",
+                    "doctor.config_warn_problem_dossier", "doctor.config_warn_problem_collision",
+                    "doctor.config_warn_problem_duplicate")
+        problem = next((key for key in problems if values["problem"] in STRINGS[key].values()),
+                       "doctor.config_warn_unknown")
+        return t("doctor.config_warn_private", index=values["index"], problem=t(problem))
+    if any(message.startswith(form + ":")
+           for form in STRINGS["doctor.config_warn_private_parse"].values()):
         return t("doctor.config_warn_private_parse")
+    # An engine that already prints English warnings needs no translation.
+    if not HANGUL.search(message):
+        return message
     return t("doctor.config_warn_unknown")
 
 
@@ -378,7 +412,7 @@ def _canary_evidence(runtime):
     except FileNotFoundError:
         return "fired/effect=unknown"
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
-        return f"fired/effect=unknown (canary 결과 판독 실패: {type(error).__name__})"
+        return t("doctor.canary_unreadable", error_type=type(error).__name__)
 
 
 def _precompact_fixture_config():
@@ -447,8 +481,10 @@ def _simulate_precompact(runtime):
         for name in os.listdir(state_dir):
             if re.match(r"journal-\d{4}-\d{2}\.md$", name):
                 journals.append(os.path.join(state_dir, name))
-        marker = "[system/state] 컴팩션 발생"
-        effect = any(marker in open(path, encoding="utf-8").read() for path in journals)
+        # The journal may have been written under either language.
+        markers = STRINGS["doctor.precompact_marker"].values()
+        texts = [open(path, encoding="utf-8").read() for path in journals]
+        effect = any(marker in text for text in texts for marker in markers)
         if run.returncode != 0:
             tail = (run.stderr or run.stdout).strip().splitlines()
             detail = f" · {tail[-1][:120]}" if tail else ""
@@ -457,7 +493,7 @@ def _simulate_precompact(runtime):
             error_log = os.path.join(state_dir, ".hook-errors.log")
             fallback_lines = (open(error_log, encoding="utf-8").read().strip().splitlines()
                               if os.path.isfile(error_log) else [])
-            fallback = fallback_lines[-1] if fallback_lines else "없음"
+            fallback = fallback_lines[-1] if fallback_lines else t("doctor.precompact_fallback_none")
             return FAIL, t("doctor.precompact_no_effect", fallback=fallback[:120])
         return PASS, t("doctor.precompact_effect", marker=t("doctor.precompact_marker"))
 
@@ -493,9 +529,9 @@ def c_precommit_install():
     r = sh("bash", script, "--check")
     detail = (r.stdout + r.stderr).strip().splitlines()
     first = detail[0] if detail else f"exit={r.returncode}"
-    if r.returncode == 0 and first.startswith(("current:", "현재(current):")):
+    if r.returncode == 0 and first.startswith(tuple(STRINGS["doctor.form.hooks_current"].values())):
         return PASS, first
-    if first.startswith(("missing:", "없음(missing):")):
+    if first.startswith(tuple(STRINGS["doctor.form.hooks_missing"].values())):
         return WARN, t("doctor.repair_needed", detail=first)
     return FAIL, first
 
@@ -550,12 +586,15 @@ def c_coherence():
     if r.returncode not in (0, 1) or "Traceback" in r.stderr or "Error" in r.stderr:
         first = (r.stderr.strip().splitlines() or ["?"])[-1]
         return FAIL, t("doctor.checker_crashed", code=r.returncode, detail=first[:100])
-    m = re.search(r"(?:총|이슈) (\d+)건", r.stdout)
-    if m is None and ("이상 없음" in r.stdout or "링크 OK" in r.stdout):
+    n = _form_count(r.stdout, "coherence.quiet_issues")
+    if n is None:
+        n = _form_count(r.stdout, "coherence.total")
+    clean_forms = (list(STRINGS["coherence.quiet_clean"].values())
+                   + list(STRINGS["doctor.form.coherence_links_ok"].values()))
+    if n is None and any(form in r.stdout for form in clean_forms):
         return PASS, t("doctor.coherence_ok", count=0)
-    if m is None:
+    if n is None:
         return FAIL, t("doctor.output_unreadable", output=(r.stdout+r.stderr).strip()[:90])
-    n = int(m.group(1))
     return (PASS if not n else WARN), t("doctor.coherence_ok", count=n)
 
 
@@ -646,6 +685,236 @@ def c_recall():
     return (PASS if n else WARN), t("doctor.recall_ok", count=n)
 
 
+def c_context_budget():
+    """Warn, never fail, when the fixed per-session context crosses a configured warning line."""
+    import context_budget as CB
+    report = CB.measure()
+    total = report["total"]
+    if report["warnings"]:
+        return WARN, t("doctor.context_over", bytes=total["bytes"], tokens=total["tokens"],
+                       items=", ".join(report["warnings"]))
+    return PASS, t("doctor.context_ok", bytes=total["bytes"], tokens=total["tokens"])
+
+
+GROWTH_DEFAULT_LIMITS = {
+    "growth_disk_free_min_bytes": 5 * 1024 ** 3,
+    "growth_git_max_bytes": 1024 ** 3,
+    "growth_tmp_stale_days": 14,
+    "growth_tmp_stale_max_bytes": 500 * 1024 ** 2,
+    "growth_unguided_work_dirs_max": 10,
+    "growth_scan_budget_ms": 1500,
+}
+GROWTH_DEFAULT_WORK_DIRS = ["_private/work"]
+# Top-level page names that tell a reader what a job folder is and what may be deleted.
+GROWTH_GUIDE_PREFIXES = ("README", "STATE", "HANDOFF", "DOSSIER", "INDEX")
+GROWTH_EXAMPLES = 5
+
+
+class _OutOfTime(Exception):
+    """Raised when a growth measurement reaches the shared deadline."""
+
+
+def _size_text(n):
+    if n < 1024:
+        return f"{n} B"
+    for unit in ("KB", "MB", "GB"):
+        n /= 1024
+        if n < 1024 or unit == "GB":
+            return f"{n:.1f} {unit}"
+
+
+def _growth_git_bytes(root, deadline):
+    """Return the object store size from git count-objects, or None when root has no .git.
+
+    count-objects reads pack indexes and loose object counts only, so it stays cheap on a
+    large history. Inherited GIT_* variables could point Git at another repository.
+    """
+    if not os.path.exists(os.path.join(root, ".git")):
+        return None
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise _OutOfTime
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    try:
+        r = subprocess.run(["git", "-C", root, "count-objects", "-v"], capture_output=True,
+                           text=True, env=env, timeout=remaining)
+    except subprocess.TimeoutExpired:
+        raise _OutOfTime from None
+    if r.returncode:
+        return None
+    fields = dict(line.split(": ", 1) for line in r.stdout.splitlines() if ": " in line)
+    kib = sum(int(fields.get(k, 0)) for k in ("size", "size-pack", "size-garbage"))
+    return kib * 1024
+
+
+def _growth_stale_tmp(tmp, cutoff, deadline):
+    """Sum bytes of files under tmp last modified before cutoff, grouped by top-level entry.
+
+    Symlinks are not followed so a link to a large tree elsewhere is not counted. The walk
+    checks the deadline at every entry so a folder with very many files stops on time.
+    """
+    by_top = {}
+    stack = [(tmp, None)]
+    while stack:
+        path, top = stack.pop()
+        try:
+            entries = os.scandir(path)
+        except OSError:
+            continue
+        with entries:
+            for entry in entries:
+                if time.monotonic() > deadline:
+                    raise _OutOfTime
+                name = top or entry.name
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        stack.append((entry.path, name))
+                        continue
+                    st = entry.stat(follow_symlinks=False)
+                except OSError:
+                    continue
+                if st.st_mtime < cutoff:
+                    by_top[name] = by_top.get(name, 0) + st.st_size
+    return by_top
+
+
+def _growth_unguided(root, work_dirs, deadline):
+    """List job folders, directly under each configured work dir, with no top-level guide page.
+
+    Returns None when none of the configured work dirs exists.
+    """
+    found, seen_any = [], False
+    for rel in work_dirs:
+        base = os.path.join(root, rel)
+        if not os.path.isdir(base):
+            continue
+        seen_any = True
+        for child in sorted(os.scandir(base), key=lambda e: e.name):
+            if time.monotonic() > deadline:
+                raise _OutOfTime
+            if child.name.startswith(".") or not child.is_dir(follow_symlinks=False):
+                continue
+            try:
+                guided = any(e.name.upper().startswith(GROWTH_GUIDE_PREFIXES)
+                             and e.is_file(follow_symlinks=False)
+                             for e in os.scandir(child.path))
+            except OSError:
+                continue
+            if not guided:
+                found.append(f"{rel.rstrip('/')}/{child.name}")
+    return found if seen_any else None
+
+
+def _growth_report(root, config, disk_usage=shutil.disk_usage):
+    """Measure four signs that the workspace is growing and return (status, detail, items).
+
+    The items are free disk space, the .git object store, bytes in tmp/ untouched for a
+    configured number of days, and job folders without a guide page. Each crossing of its
+    warning line is a WARN, never a FAIL: deleting is the owner's decision, so the detail
+    says only what is how large and where to look. Nothing is written, moved, or deleted.
+    All measurements share one deadline; an item that does not finish in time is reported
+    as not measured instead of stalling doctor. A missing folder makes its item not
+    applicable, so a fresh installation has no warning from this check.
+    """
+    configured = config.get("thresholds", {}) if isinstance(config, dict) else {}
+    limits = {k: configured.get(k, v) for k, v in GROWTH_DEFAULT_LIMITS.items()}
+    growth = config.get("growth", {}) if isinstance(config, dict) else {}
+    work_dirs = growth.get("work_dirs", GROWTH_DEFAULT_WORK_DIRS) if isinstance(growth, dict) \
+        else GROWTH_DEFAULT_WORK_DIRS
+    if not isinstance(work_dirs, list):
+        work_dirs = GROWTH_DEFAULT_WORK_DIRS
+    work_dirs = [d for d in work_dirs if isinstance(d, str) and d]
+    budget_ms = limits["growth_scan_budget_ms"]
+    days = limits["growth_tmp_stale_days"]
+    deadline = time.monotonic() + budget_ms / 1000
+    names = {
+        "disk": t("doctor.growth_item_disk"),
+        "git": t("doctor.growth_item_git"),
+        "tmp": t("doctor.growth_item_tmp", days=days),
+        "work": t("doctor.growth_item_work"),
+    }
+    items = {}
+
+    def measure(key, fn):
+        # An unreadable folder is reported like a timeout: this check warns, it never fails.
+        try:
+            items[key] = fn()
+        except (_OutOfTime, OSError):
+            items[key] = {"state": "unmeasured"}
+
+    def disk():
+        free = disk_usage(root).free
+        limit = limits["growth_disk_free_min_bytes"]
+        return {"state": "over" if free < limit else "ok", "value": free, "limit": limit}
+
+    def work():
+        found = _growth_unguided(root, work_dirs, deadline)
+        if found is None:
+            return {"state": "na"}
+        limit = limits["growth_unguided_work_dirs_max"]
+        return {"state": "over" if len(found) > limit else "ok", "value": len(found),
+                "limit": limit, "examples": found[:GROWTH_EXAMPLES]}
+
+    def git():
+        size = _growth_git_bytes(root, deadline)
+        if size is None:
+            return {"state": "na"}
+        limit = limits["growth_git_max_bytes"]
+        return {"state": "over" if size > limit else "ok", "value": size, "limit": limit}
+
+    def tmp():
+        path = os.path.join(root, "tmp")
+        if not os.path.isdir(path):
+            return {"state": "na"}
+        by_top = _growth_stale_tmp(path, time.time() - days * 86400, deadline)
+        total = sum(by_top.values())
+        limit = limits["growth_tmp_stale_max_bytes"]
+        largest = sorted(by_top, key=lambda k: -by_top[k])[:GROWTH_EXAMPLES]
+        return {"state": "over" if total > limit else "ok", "value": total, "limit": limit,
+                "examples": [f"tmp/{k} {_size_text(by_top[k])}" for k in largest]}
+
+    # Cheap items first so the open-ended tmp/ walk gets whatever time is left.
+    for key, fn in (("disk", disk), ("work", work), ("git", git), ("tmp", tmp)):
+        measure(key, fn)
+
+    parts, warnings = [], []
+    for key in ("disk", "git", "tmp", "work"):
+        row = items[key]
+        state = row["state"]
+        if state == "na":
+            parts.append(t("doctor.growth_na", item=names[key]))
+        elif state == "unmeasured":
+            warnings.append(t("doctor.growth_unmeasured", item=names[key], ms=budget_ms))
+        else:
+            value = str(row["value"]) if key == "work" else _size_text(row["value"])
+            parts.append(f"{names[key]} {value}")
+        if state != "over":
+            continue
+        if key == "disk":
+            warnings.append(t("doctor.growth_disk_low", size=_size_text(row["value"]),
+                              limit=_size_text(row["limit"])))
+        elif key == "git":
+            warnings.append(t("doctor.growth_git_over", size=_size_text(row["value"]),
+                              limit=_size_text(row["limit"])))
+        elif key == "tmp":
+            warnings.append(t("doctor.growth_tmp_over", size=_size_text(row["value"]),
+                              days=days, limit=_size_text(row["limit"]),
+                              items=", ".join(row["examples"])))
+        else:
+            warnings.append(t("doctor.growth_work_over", count=row["value"], limit=row["limit"],
+                              items=", ".join(row["examples"])))
+    lines = ([" · ".join(parts)] if parts else []) + warnings
+    return (WARN if warnings else PASS), "\n      ".join(lines), items
+
+
+def c_workspace_growth():
+    """Warn, never fail, when the workspace shows signs of unchecked growth."""
+    import memlib as M
+    config = M._CFG if isinstance(M._CFG, dict) else {}
+    status, detail, _items = _growth_report(M.ROOT, config)
+    return status, detail
+
+
 def c_ledger():
     import memlib as M
     d = os.path.join(M.ROOT, "_private", "ledger", "facts")
@@ -655,11 +924,10 @@ def c_ledger():
     r = sh(sys.executable, "tools/rec.py", "check")
     if r.returncode != 0 or "Traceback" in r.stderr:
         detail = (r.stderr.strip().splitlines() or [f"exit {r.returncode}"])[-1]
-        return FAIL, f"rec.py check 실패: {detail[:120]}"
-    m = re.search(r"문제: (\d+)건", r.stdout)
-    if not m:
-        return FAIL, "rec.py check 결과에 `문제: N건` trailer가 없다"
-    bad = int(m.group(1))
+        return FAIL, t("doctor.ledger_check_failed", detail=detail[:120])
+    bad = _form_count(r.stdout, "rec.check_trailer")
+    if bad is None:
+        return FAIL, t("doctor.ledger_no_trailer")
     return (PASS if not bad else WARN), t("doctor.ledger_counts", facts=n, issues=bad)
 
 
@@ -769,7 +1037,7 @@ def c_symlinks():
             target = blob.stdout.strip() if blob.returncode == 0 else "<index target unreadable>"
             shown.append(f"{link[-52:]}  ->  {target[-52:]}")
         more = t("doctor.more", count=len(links) - len(shown)) if len(links) > len(shown) else ""
-        return FAIL, (f"work index의 추적 symlink {len(links)}개\n      "
+        return FAIL, (t("doctor.work_symlinks", count=len(links)) + "\n      "
                       + "\n      ".join(shown) + more)
     priv = os.path.realpath(os.path.join(ROOT, "_private"))
     into_private = []
@@ -945,10 +1213,11 @@ def c_ignored():
         absolute = [row for row in enforce.index_issues(Path(ROOT))
                     if not row[0].startswith("work-local-change:")]
     except Exception as error:
-        msgs.append(f"index privacy 측정 실패: {type(error).__name__}")
+        msgs.append(t("doctor.index_privacy_failed", error_type=type(error).__name__))
     else:
         if absolute:
-            msgs.append("index privacy 위반: " + ", ".join(issue for issue, _ in absolute[:6]))
+            msgs.append(t("doctor.index_privacy_violation",
+                          issues=", ".join(issue for issue, _ in absolute[:6])))
     still = [x for x in not_ignored if x not in tracked]
     if still:
         msgs.append(t("doctor.ignore_misses", items=", ".join(still)))
@@ -990,6 +1259,8 @@ CHECKS = [
     (t("doctor.check.tools_regression"),      c_regression),
     (t("doctor.check.tools_receipts"),        c_worker_receipts),
     (t("doctor.check.tools_recall"),          c_recall),
+    (t("doctor.check.tools_context"),         c_context_budget),
+    (t("doctor.check.workspace_growth"),      c_workspace_growth),
     (t("doctor.check.tools_ledger"),          c_ledger),
     (t("doctor.check.tools_portrait"),        c_portrait),
     (t("doctor.check.valve_egress"),          c_egress),

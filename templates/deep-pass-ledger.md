@@ -1,4 +1,4 @@
-Korean: `deep-pass-ledger.ko.md`
+Korean: `ko/templates/deep-pass-ledger.md`
 
 # Deep-pass ledger template
 

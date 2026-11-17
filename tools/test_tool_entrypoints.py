@@ -15,7 +15,7 @@ PY = sys.executable
 
 # Matrix coverage names are intentionally literal for tools/test_matrix_check.py.
 COVERED = (
-    "tools/ask_codex.sh", "tools/codex_root_thread.py", "tools/diarize.py",
+    "tools/ask_codex.sh", "tools/diarize.py",
     "tools/eval_recall.py", "tools/portrait.py", "tools/sync_engine.sh",
     "tools/transcribe.py", "tools/wf_gardener.js",
 )
@@ -64,19 +64,46 @@ def test_portrait_normal_and_unknown_command():
     assert negative.returncode == 2
 
 
-def test_codex_root_thread_handles_malformed_corpus():
-    with tempfile.TemporaryDirectory(prefix="codex-root-thread-") as td:
-        session = pathlib.Path(td, ".codex", "sessions", "bad.jsonl")
-        session.parent.mkdir(parents=True)
-        session.write_text("not json\n", encoding="utf-8")
-        env = dict(os.environ, HOME=td, PYTHONDONTWRITEBYTECODE="1")
-        result = run(PY, "tools/codex_root_thread.py", env=env)
-        assert result.returncode == 0 and result.stdout == "\n"
+def test_ask_codex_has_no_root_thread_lookup():
+    """Resume needs an explicit thread id; nothing picks a thread from another project's history."""
+    with tempfile.TemporaryDirectory(prefix="ask-codex-resume-") as td:
+        prompt = pathlib.Path(td, "prompt.md")
+        prompt.write_text("prompt\n", encoding="utf-8")
+        marker = pathlib.Path(td, "codex-called")
+        fake_bin = pathlib.Path(td, "bin")
+        fake_bin.mkdir()
+        fake = fake_bin / "codex"
+        fake.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
+        fake.chmod(0o755)
+        env = dict(os.environ, HOME=td, PATH=f"{fake_bin}{os.pathsep}{os.environ['PATH']}")
+        result = run("bash", "tools/ask_codex.sh", str(prompt), "--resume-root", env=env)
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "--resume <SID>" in result.stdout and "--resume-root" not in result.stdout
+        assert not marker.exists()
+        assert not (ROOT / "tools" / "codex_root_thread.py").exists()
+
+
+def test_ask_codex_logs_a_failed_fresh_run():
+    """A failed fresh dispatch leaves FAILED in the log, so it is distinguishable from an interruption."""
+    with tempfile.TemporaryDirectory(prefix="ask-codex-fail-") as td:
+        root = pathlib.Path(td)
+        (root / "tools").mkdir()
+        (root / "system" / "debate").mkdir(parents=True)
+        shutil.copy(ROOT / "tools" / "ask_codex.sh", root / "tools" / "ask_codex.sh")
+        (root / "tools" / "fresh_worker.py").write_text("raise SystemExit(3)\n", encoding="utf-8")
+        (root / "p.md").write_text("prompt\n", encoding="utf-8")
+        result = subprocess.run(["bash", "tools/ask_codex.sh", "p.md"], cwd=root,
+                                capture_output=True, text=True, timeout=20)
+        assert result.returncode == 3, result.stdout + result.stderr
+        log = (root / "system" / "debate" / "_dispatch.log").read_text(encoding="utf-8")
+        assert "FAILED fresh (exit 3)" in log and "DONE fresh" not in log, log
 
 
 def test_shell_wrappers_reject_missing_required_input():
-    ask = run("bash", "tools/ask_codex.sh")
+    ask = run("bash", "tools/ask_codex.sh", env=dict(os.environ, MOTTORI_LANG="ko"))
     assert ask.returncode != 0 and "프롬프트 파일 없음" in ask.stdout
+    ask = run("bash", "tools/ask_codex.sh", env=dict(os.environ, MOTTORI_LANG="en"))
+    assert ask.returncode != 0 and "prompt file missing" in ask.stdout
     if not (ROOT / "tools" / "sync_engine.sh").is_file():
         print("- sync_engine wrapper: not applicable here (kit-side tool)")
         return
@@ -116,7 +143,8 @@ TESTS = (
     test_diarize_help_and_negative_option,
     test_diarize_help_works_without_audio_stack,
     test_portrait_normal_and_unknown_command,
-    test_codex_root_thread_handles_malformed_corpus,
+    test_ask_codex_has_no_root_thread_lookup,
+    test_ask_codex_logs_a_failed_fresh_run,
     test_shell_wrappers_reject_missing_required_input,
     test_wf_gardener_syntax_positive_and_negative,
 )

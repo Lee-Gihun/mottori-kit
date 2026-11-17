@@ -11,6 +11,7 @@ import io
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -214,10 +215,24 @@ def _opencode_line(output):
     return next(line for line in output.splitlines() if " opencode " in line)
 
 
+@contextlib.contextmanager
+def _language(value):
+    saved = os.environ.get("MOTTORI_LANG")
+    os.environ["MOTTORI_LANG"] = value
+    try:
+        yield
+    finally:
+        if saved is None:
+            os.environ.pop("MOTTORI_LANG", None)
+        else:
+            os.environ["MOTTORI_LANG"] = saved
+
+
 def test_status_does_not_call_a_half_wired_opencode_wired():
     """The state file alone is not wiring: the slash commands must exist and match their source."""
     harness = load_tool()
-    with tempfile.TemporaryDirectory() as tmp:
+    # The assertions below pin the Korean status words.
+    with _language("ko"), tempfile.TemporaryDirectory() as tmp:
         root = pathlib.Path(tmp)
         commands = root / ".claude" / "commands"
         commands.mkdir(parents=True)
@@ -283,6 +298,39 @@ def test_stream_reader_separates_text_tools_and_errors():
     assert tools == [] and errors == ["free tier"]
 
 
+def test_english_instance_gets_english_output_and_files():
+    """An English instance reads status, help, and generated adapter files in English."""
+    hangul = re.compile("[\uac00-\ud7a3]")
+    with _language("en"), tempfile.TemporaryDirectory() as tmp:
+        harness = load_tool()
+        root = pathlib.Path(tmp)
+        commands = root / ".claude" / "commands"
+        commands.mkdir(parents=True)
+        for name in harness.COMMANDS:
+            (commands / f"{name}.md").write_text(f"# {name}\n", encoding="utf-8")
+            (commands / f"{name}.ko.md").write_text(f"# {name} ko\n", encoding="utf-8")
+        harness.ROOT = root
+        harness.git_ignored = lambda _rel: True
+        harness.which = lambda _binary: "/usr/local/bin/fake"
+        harness.render_state = lambda public_only=False: "state\n"
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            harness.install_opencode(None)
+            harness.cmd_status(None)
+            harness.cmd_check(None)
+        files = [path.read_text(encoding="utf-8") for path, _ in harness.opencode_command_artifacts()]
+        assert files and all(text.endswith(f"# {name}\n") for text, name in zip(files, harness.COMMANDS)), \
+            "an English instance reads the English command source"
+        text = out.getvalue() + "".join(files) + harness.seed_prompt("")
+        assert not hangul.search(text), text
+    with tempfile.TemporaryDirectory() as tmp:
+        proc = subprocess.run([sys.executable, str(TOOL), "--help"], capture_output=True, text=True,
+                              cwd=tmp, env={"PATH": "/usr/bin:/bin", "MOTTORI_INSTANCE": tmp,
+                                            "MOTTORI_LANG": "en", "HOME": tmp,
+                                            "PYTHONDONTWRITEBYTECODE": "1"})
+        assert proc.returncode == 0 and not hangul.search(proc.stdout), proc.stdout + proc.stderr
+
+
 def test_cli_status_runs_without_an_instance_config():
     """status is the first thing a new user runs; it must not need setup to have happened."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -308,6 +356,7 @@ TESTS = [
     test_model_list_takes_only_provider_qualified_names,
     test_stream_reader_separates_text_tools_and_errors,
     test_cli_status_runs_without_an_instance_config,
+    test_english_instance_gets_english_output_and_files,
 ]
 
 

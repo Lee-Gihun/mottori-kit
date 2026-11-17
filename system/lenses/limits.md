@@ -1,5 +1,5 @@
-<!-- source: limits.ko.md sha256:48507ffaa00cf2544ba249eebb65912af21b43a21a6ac4b280946d0d729463ba source-of-truth: ko -->
-Korean: `limits.ko.md`
+<!-- source: ko/system/lenses/limits.md sha256:48507ffaa00cf2544ba249eebb65912af21b43a21a6ac4b280946d0d729463ba source-of-truth: ko -->
+Korean: `ko/system/lenses/limits.md`
 
 # Limits lens
 

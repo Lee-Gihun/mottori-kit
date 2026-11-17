@@ -1,4 +1,4 @@
-Korean: `debate-round.ko.md`
+Korean: `ko/templates/debate-round.md`
 
 # Debate round template
 

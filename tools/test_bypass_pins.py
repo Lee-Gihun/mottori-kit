@@ -263,13 +263,25 @@ def test_h1_w09_strict_without_prefix_is_rejected():
     test_enforce.test_W09_strict_scope_requires_a_prefix()
 
 
-@hole
-def test_h1_h01_missing_gate_command_currently_silent_success():
-    env = dict(os.environ, CLAUDE_PROJECT_DIR=_missing_project())
-    result = subprocess.run(
-        ["bash", "-c", 'python3 "$CLAUDE_PROJECT_DIR/tools/gate.py" dirty 2>/dev/null || true'],
-        env=env, capture_output=True, text=True)
-    assert result.returncode == 0 and result.stdout == "" and result.stderr == ""
+def test_h1_h01_missing_gate_command_is_logged():
+    """Every gate hook leaves a timestamped line and the stderr in state/.hook-errors.log."""
+    hooks = json.loads((ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))["hooks"]
+    commands = [hook["command"] for event in ("Stop", "PostToolUse", "UserPromptSubmit")
+                for block in hooks[event] for hook in block["hooks"]
+                if "tools/gate.py" in hook["command"]]
+    assert len(commands) == 3, commands
+    for command in commands:
+        project = Path(tempfile.mkdtemp(prefix="bypass-missing-gate-"))
+        try:
+            (project / "state").mkdir()
+            result = subprocess.run(["bash", "-c", command], input="{}",
+                                    env=dict(os.environ, CLAUDE_PROJECT_DIR=str(project)),
+                                    capture_output=True, text=True)
+            log = (project / "state" / ".hook-errors.log").read_text(encoding="utf-8")
+            assert result.returncode == 0, (command, result.stderr)
+            assert "gate.py" in log and "hook failed" in log, (command, log)
+        finally:
+            shutil.rmtree(project, ignore_errors=True)
 
 
 def test_h1_h02_malformed_stop_payload_blocks_when_dirty():
@@ -281,7 +293,7 @@ def test_h1_h02_malformed_stop_payload_blocks_when_dirty():
             gate.DIRTY = lambda: os.path.join(td, "dirty")
             gate.PENDING = lambda: os.path.join(td, "pending")
             Path(gate.DIRTY()).write_text("x", encoding="utf-8")
-            gate.measure = lambda: {"linkcheck": {"new"}}
+            gate.measure = lambda **_: {"linkcheck": {"new"}}
             gate._load_baseline = lambda: ({"linkcheck": set()}, "ok")
             gate._root_ok = lambda: True
             gate.M.log_run = lambda *a, **k: None
@@ -308,14 +320,14 @@ def _stop_active_output(value):
         sys.stdin = old_stdin
 
 
-def test_h1_h03_boolean_stop_active_does_not_skip_gate():
+def test_h1_h03_boolean_stop_active_passes_once_and_keeps_pending():
     import test_enforce
-    test_enforce.test_H03_H04_stop_hook_active_never_skips_a_pending_gate()
+    test_enforce.test_H03_H04_stop_hook_active_passes_once_and_keeps_pending()
 
 
-def test_h1_h04_string_false_stop_active_does_not_skip_gate():
+def test_h1_h04_string_false_stop_active_still_blocks():
     import test_enforce
-    test_enforce.test_H03_H04_stop_hook_active_never_skips_a_pending_gate()
+    test_enforce.test_H03_H04_stop_hook_active_passes_once_and_keeps_pending()
 
 
 def test_h1_h05_sessionstart_failure_has_json_fallback():
@@ -393,9 +405,9 @@ def test_g2_n2_locale_only_meaning_change_is_blocked_by_stamp():
     with tempfile.TemporaryDirectory(prefix="g2-n2-language-") as tmp:
         root = Path(tmp)
         _write(root, "README.md", "# Canonical\n\nSame structure.\n")
-        _write(root, "README.ko.md", "# Locale\n\n영어 정본에는 없는 의미 변경이다.\n")
+        _write(root, "ko/README.md", "# Locale\n\n영어 정본에는 없는 의미 변경이다.\n")
         assert test_language.locale_pair_issues(root, {"README.md"}) == [
-            "README.ko.md: missing translation stamp"
+            "ko/README.md: missing translation stamp"
         ]
 
 

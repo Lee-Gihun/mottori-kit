@@ -1,5 +1,5 @@
-<!-- source: jensen.ko.md sha256:f038f12a2bf1c3875ba8dba1ad7fa44b32f50c431ca90c42dec0063d058f3dbf source-of-truth: ko -->
-Korean: `jensen.ko.md`
+<!-- source: ko/system/lenses/jensen.md sha256:f038f12a2bf1c3875ba8dba1ad7fa44b32f50c431ca90c42dec0063d058f3dbf source-of-truth: ko -->
+Korean: `ko/system/lenses/jensen.md`
 
 # Jensen Huang lens (strategy bundle)
 

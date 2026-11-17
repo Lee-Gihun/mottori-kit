@@ -14,7 +14,6 @@ hookdiag.py
 hook_canary.py
 build_memory_map.py
 ask_codex.sh
-codex_root_thread.py
 portrait.py
 wf_gardener.js
 transcribe.py
@@ -58,3 +57,5 @@ claude_auth.py
 test_claude_auth.py
 test_memory_map.py
 test_memory_subindex.py
+deliver.py
+test_deliver.py

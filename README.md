@@ -1,146 +1,233 @@
-Korean: `README.ko.md`
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/hero-dark.svg">
+    <img src=".github/assets/hero-light.svg" width="100%" alt="mottori-kit. One agent session that runs for weeks and still knows what it decided on day three. The conversation is compacted again and again. The state on disk is injected again after each compaction.">
+  </picture>
+</p>
 
-# mottori-kit
+**The conversation gets compacted. The state does not.**
 
-An **agent workspace engine** that preserves state and depth across endless sessions.
-Claude Code and Codex run under the same rules, and work continues across compaction.
+mottori-kit is a workspace for long agent sessions with Claude Code and Codex. You clone it as a separate
+folder for decisions, research, and documents, and you work inside it. It does not install into an existing
+code repository. The session keeps what it decided, why, and what is still open, across compactions and
+restarts. It is made of files, hooks, and small Python commands. There is no server, no database, and no
+package to install.
 
-`git clone` → `bash setup.sh` → `bash tools/install_hooks.sh --repair` → `bash tools/install_hooks.sh --check` → `python3 tools/doctor.py`.
-These five commands finish within one minute. `tools/test_fresh_install.sh` measures this exact sequence in a
-temporary clone and passes as of 2026-09-17. Declaring your boundaries in `system/instance-rules.md` and
-completing the human checks in CHECKLIST take as long as you need.
+[Setup](SETUP.md) · [Checklist after install](CHECKLIST.md) · [Design decisions](system/kit-decisions.md) ·
+[Changelog](CHANGELOG.md) · <a href="ko/README.md">Korean</a>
 
-**Quick start.** Requires Python 3.8+, git 2.5+, Bash 3.2+, and macOS or Linux. `claude`, `codex`, and
-`node` are optional. If the shell came from another mottori workspace, first run `unset MOTTORI_INSTANCE` or set
-it to the new clone's absolute path. Run `bash setup.sh --name <name> --context personal|work`. A `work` context makes `doctor`
-reject pushes to remotes outside the allowlist. Then run `bash tools/install_hooks.sh --repair`, followed by
-`bash tools/install_hooks.sh --check` and `python3 tools/doctor.py`. `FAIL` must be zero. `warn` is acceptable, and `--` means not applicable. Replace every
-`CHANGEME` in `system/instance-rules.md`. Nothing under `state/` or `_private/` is ever committed, so back it up
-yourself. To update, run `git pull`, check the hooks again, refresh the gate baseline, and rerun `doctor`. See
-SETUP.md section 5a. Before the first Claude or Codex session, `python3 tools/recall.py sessions` should succeed
-with no output.
+## What breaks in a long session
 
----
+| What breaks | What the kit does |
+|---|---|
+| After a few compactions the agent works from a summary of a summary. A week-old note passes for the current state. | State lives in files. Hooks rebuild the current state from those files at every session start and after every compaction, within a 6,000-byte limit. |
+| You return to a thread from ten days ago. The agent rebuilds the easy half and skips the reasons you rejected the obvious option. | The rules have the agent keep one dossier per long thread, with five fields: position, decisions and reasons, rejected options and reasons, open questions, next move. The dossier list is part of the injected state, and the agent rereads the dossier before it continues. |
+| "Done" arrives, and the document was never opened again after the last edit. | On Claude Code, a link and state check runs at the end of a turn in about 0.4 seconds, and a separate hook records when a document is handed over unread. |
+| One broad search pours 200 KB of tool output into the conversation. | Broad work goes to fresh workers through `tools/fresh_worker.py`. Only a receipt of at most 4,096 bytes comes back: the worker's verdict, what stayed unknown, and where the full result is. |
+| The rules file grows until nothing in it is followed. | Seven rules are always loaded, each with its reason. Everything else is read when its situation comes up. |
+| You hit a usage limit and move from Claude Code to Codex in the middle of a task. The new session knows nothing, so you paste the last answer by hand. | Both runtimes start from the same files. A handoff note carries what lived only in the conversation (`/handoff` on Claude Code, the same procedure on request in Codex), and the next session's state view points to it. |
+| Finished work, scratch copies, and transcripts pile up until the disk is full and nothing can be found. | Each job folder carries a one-page status, scratch lives in one place, and `doctor` warns about free disk space, an oversized `.git`, stale scratch, and job folders without a guide. Nothing is deleted for you. |
+| Private notes end up in a commit. | Git ignores everything except the engine folders, so your documents, state, and notes stay out of commits by default. Check staged files before you commit anything under an engine folder. |
 
-## What it solves
+## How one session runs
 
-Endless sessions fail in two different ways, with different causes.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/session-dark.svg">
+    <img src=".github/assets/session-light.svg" width="100%" alt="Five moments in a session. At session start the current state is injected. While you work, the agent logs each decision in one line. An edit marks the workspace as changed. At the end of the turn a check runs. Before compaction, the compaction is recorded. After compaction the session starts again from the files.">
+  </picture>
+</p>
 
-**State loss.** An old snapshot poses as the source of truth. Measurement: a note dated 8/8 still posed as the
-current state on 8/15, and a person had to correct it manually.
-→ State lives on **disk**, not in the conversation. Declared public tracks go to `state/journal-*.md` and
-`state/NOW.md`. Undeclared events and events logged with `--private` go to the local journal and overlay under
-`_private/state/`. The SessionStart hook merges both NOW files and injects the result. A clone with no local data
-reports that state as `unavailable`.
+1. **Session start.** `tools/now.py` builds one view from the journal and injects it: your tracks, the list
+   of thread dossiers, and the newest decisions first. Public state and your private overlay are merged.
+2. **While you work.** The agent records each decision, correction, and lesson in one line:
+   `python3 tools/now.py log "[track/decision] one line"`. That line is the state. The conversation is not.
+3. **After an edit.** A hook marks the workspace as changed. Nothing else happens.
+4. **End of turn.** If something changed, `tools/gate.py` checks links and state freshness, and
+   `tools/deliver.py` records whether a document written in this turn was reopened before it was handed over.
+   A failed check stops the turn once and says why.
+5. **Before compaction.** The compaction is written to the journal. When the session resumes, step 1 runs
+   again, so the agent starts from the files and not from the summary.
 
-**Depth loss.** Compaction summarizes the *current task* to preserve continuity. It therefore flattens the
-reasoning in other threads. When you return to a conclusion from several days ago, the discussion starts over at
-a shallow level.
-→ Give each thread one **dossier**. It has five fields: position, decisions plus reasons, rejected options plus
-reasons, open questions, and next move. Read the dossier before returning to a thread. Append a five-line delta
-before leaving it.
+## Try it
 
-Some information was not lost. It was simply **not searched**. Full conversation transcripts remain under
-`~/.claude/projects/`. In the original instance for this repository, one session occupied 523 MB. `recall.py`
-searches them with grep.
+Requirements: Python 3.8 or later, git 2.5 or later, Bash 3.2 or later, macOS or Linux. `claude`, `codex`, and
+`node` are optional.
+
+```bash
+git clone https://github.com/Lee-Gihun/mottori-kit ~/work
+cd ~/work
+bash setup.sh --name work --context personal   # use --context work on a company machine
+bash tools/install_hooks.sh --repair            # pre-commit backstop (.git/hooks is not cloned)
+bash tools/install_hooks.sh --check
+python3 tools/doctor.py                         # done when FAIL is 0
+```
+
+This takes about a minute. `tools/test_fresh_install.sh` exercises setup, hook repair, link checks, and
+`doctor` in a temporary clone, in English and in Korean, on every release. If the shell came from another
+mottori workspace, run `unset MOTTORI_INSTANCE` first.
+
+Now start Claude Code or Codex in the folder. Once your runtime trusts the hooks, every new session starts
+with a view of the current state. After a day of work on a product launch it looks like this:
+
+```text
+[state injection · public 0d ago · local overlay available]
+The view that merges the public projection and the local overlay is canonical.
+
+## PUBLIC STATE
+# NOW
+
+*Input freshness: journal 0d ago*
+
+## Track status
+- **Launch**: (no update line) (file 0d ago), source `launch/plan.md`
+- **Research**: (no update line) (file 0d ago), source `research/notes.md`
+- **Personal**: canonical not set (config personal_pointer) (personal area: contents are not shown in NOW)
+
+## Live threads (dossiers)
+- Pricing page experiment: dossier `launch/pricing-dossier.md`
+*(Return ritual: when coming back to a deep thread, read its dossier first. PRD §3.3)*
+
+## Recent decisions and phases
+- 2026-11-18T09:12 [system/state] instance set up: work (personal), initialized after cloning the kit
+- 2026-11-18T09:12 [launch/decision] Beta opens Dec 2 with two pricing tiers. Three tiers doubled support questions in the October test.
+- 2026-11-18T09:12 [launch/decision] Free tier rejected: support load without conversion. Revisit after 500 paying accounts.
+
+## Recent events
+- 2026-11-18T09:12 [research/lesson] Retention studies: annual discounts above 20% did not raise 12-month retention in three of four datasets.
+```
+
+Your private overlay follows in the same view. It lives under `_private/` and never enters Git.
+
+Log a decision and it stays. Compact the conversation, close the terminal, come back next week: the next
+session starts from the same lines.
+
+```bash
+python3 tools/now.py log "[launch/decision] Beta opens Dec 2 with two pricing tiers."
+python3 tools/now.py context               # what the next session will be given
+python3 tools/recall.py find "pricing"     # search what was said in past sessions
+```
+
+A new track is private until you list it under `public_tracks` in `system/memory-config.json`. Private lines
+go to the overlay under `_private/` and are injected the same way.
+
+Then declare your own boundaries in `system/instance-rules.md` (replace every `CHANGEME`) and go through
+[CHECKLIST.md](CHECKLIST.md). `SETUP.md` has the full procedure and the update path.
+
+## What it costs
+
+| | Cost | How it is kept there |
+|---|---|---|
+| Fixed context at session start, fresh install | about 7 KB, roughly 1,750 tokens by estimate, counting local files and configured hooks. Most of it is the seven rules | `python3 tools/context_budget.py` measures your own workspace and `doctor` warns when it grows past a line you set |
+| State injection | at most 6,000 bytes | the newest decisions and the dossier list come first. What does not fit is counted, with the command that shows the rest |
+| Check at the end of a turn | about 0.4 s after a small edit and about 0.1 s when nothing changed, measured on a fresh install | the turn-end check covers links and state only. The full release checks run at commit time in the kit's own tree |
+| What a worker returns into your thread | at most 4,096 bytes | the full result stays on disk: `python3 tools/receipts.py show <run>` |
+| Default output of a transcript search | at most 4,000 bytes of compact excerpts | `--full` restores the detailed format and `--max` asks for more matches |
+| Install | about a minute | exercised in a temporary clone by `tools/test_fresh_install.sh` |
+
+## Why checks, and not more rules
+
+This kit was taken out of one workspace where one person has worked with agents every day since May 2026.
+Before this version we read all 6,697 messages that person typed in five months and counted every time they
+had to correct the agent: 2,243 corrections.
+
+Thirteen kinds of recurring mistake already had a written rule against them. After the rule was written,
+twelve of the thirteen kept recurring. For eight of them the rate per 1,000 messages stayed flat or went up.
+In that workspace the commands the rules asked for were being run, and the mistakes still came back. This is
+one person's record, and the kind of work changed over those months. It shows what happened there. It does
+not show what a rule can do in general.
+
+So the kit prefers an instruction placed next to the task, or a narrowly tested check, over a longer
+always-on rules file.
+
+- **Seven rules stay loaded.** A new rule goes into a document that is read in its situation. To add an eighth
+  always-on rule, one of the seven has to leave.
+- **An instruction sits next to the work it governs.** In a small controlled test on 12 invented tasks, none
+  of 72 reports written with a short rule in the task prompt contained an unrequested addition. Without the
+  rule, 19 of 72 did.
+- **A check is narrow, and it keeps its own record.** The delivery check started with four signals. We ran
+  them over 8,817 past turns before trusting them. One was right in 35 of 40 sampled cases and stayed. Two
+  were right in 2 of 40 and 0 of 37 and were removed. Three later candidates were right in 12, 14, and 0 of 40 and
+  were not added. By default no delivery signal stops a turn. Turning one on is your decision, and the replay
+  numbers are there to inform it.
+
+The same record shaped the rest. A turn-end check that took 84 seconds on a fresh install now takes about
+0.4. In the original workspace, most of what the old check stopped was not caused by the turn it stopped.
+
+## One thread, many workers
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/workers-dark.svg">
+    <img src=".github/assets/workers-light.svg" width="100%" alt="Your thread sends a brief to three fresh workers. Each worker returns a receipt of at most 4,096 bytes with a verdict, a count of unknowns, and where the full result is. Full results, run records, and patches stay on disk.">
+  </picture>
+</p>
+
+Human attention is the most expensive resource here, and tokens are the cheapest. You talk to one thread.
+Reading forty files, searching the web, or running a test suite happens in a fresh worker with its own
+context. What comes back is a receipt. The worker's verdict comes first, then what it could not determine,
+then the command that shows the full result.
+
+```bash
+python3 tools/fresh_worker.py --runtime codex --expect out/report.md brief.md
+```
+
+`--expect` makes the run fail when no non-empty file exists at that path after the worker ends.
+
+## Take one piece
+
+You do not have to adopt the workspace to use parts of it.
+
+- [`system/lenses/`](system/lenses/README.md): thirteen thinking lenses, each with the question it asks, when
+  to switch it on, and what it must leave behind. The folder works on its own.
+- [`system/WORKING-WITH-AI.md`](system/WORKING-WITH-AI.md): how to order a large job from an agent so that it
+  can stop, resume, and be checked.
+- `tools/recall.py`: text search over your Claude Code and Codex transcripts, with the scope it searched
+  stated when it finds nothing.
+- `tools/fresh_worker.py` and `tools/receipts.py`: bounded workers and their receipts.
+- `tools/context_budget.py`: what every session of yours starts with, in bytes and approximate tokens.
+
+## What it does not do
+
+- It is not a plugin for an existing code repository. It is the folder you work in.
+- It has no embeddings and no semantic search. Recall is text search over the original transcripts.
+- The turn-end checks run on Claude Code. Codex gets state injection and the compaction record.
+- It does not back up your data. `state/` and `_private/` are outside Git on purpose. Arrange a backup.
+- It does not include the original workspace's decision history, debate rounds, or person ledgers, or its
+  recording watchers. On a company machine, check policy before you run the transcription tools.
+- Windows is not supported.
 
 ## Layout
 
 ```text
-tools/           Engine. The core four are memlib, now, recall, and rec
-  memlib.py      Schema source of truth. All other tools import it
-  now.py         Journal append, NOW rendering, drift checks, and hook entry point
-  recall.py      Targeted transcript search across Claude JSONL and Codex rollouts
-  rec.py         Personal fact ledger with atomic notes and an audit chain
-  fresh_worker.py Isolates broad work in a fresh, ephemeral run and returns only a bounded receipt
-  receipts.py    One-line worker-run ledger, detailed replay, and token-cost histogram
-  ask_codex.sh   Codex entry point. Its default fresh path delegates to fresh_worker
-  doctor.py      Installation verifier with 37 checks, 4 human checks, and `--json` output
-  test_fresh_install.sh Reproduces a first install in a temporary clone
-system/          Rules, two PRDs, rituals, 13 lenses, deep-pass, and WORKING-WITH-AI
-  skills/        Runtime-neutral canonical workflows; tools/skill_adapters.py generates and checks adapters
-.claude/         Five Claude hooks and five slash commands
-.codex/          Two Codex hooks: SessionStart and PreCompact
-kit-state.md     Generated opencode injection state, kept outside Git (harness.py; its output is Korean for now)
-templates/       Files each instance must complete
+AGENTS.md        The seven always-on rules. CLAUDE.md imports it.
+tools/           The engine: now (state), recall (transcripts), rec (fact ledger), gate and deliver (checks),
+                 fresh_worker and receipts (workers), doctor (install verifier), context_budget
+system/          Rituals, lenses, deep-pass, WORKING-WITH-AI, the two specifications, design decisions
+templates/       Files each workspace fills in
+.claude/         Claude Code hooks and slash commands
+.codex/          Codex hooks
+ko/              Korean editions, same paths. ko/INDEX.md maps each pair
+state/           Your state. Ignored by Git
+_private/        Your private overlay. Ignored by Git
 ```
-
-## Philosophy in one sentence
-
-<!-- language:evidence-ko -->
-> "인간의 인지비용을 가장 비싼 자원으로, 토큰을 가장 낮은 비용 자원으로 두고 트레이드오프한다. 하나의 무한 스레드 아래에서 여러 작업이 굴러가도 견디게 해서 사람이 하나만 상대하게 한다." (Treat human cognitive cost as the most expensive resource and tokens as the cheapest, and make that tradeoff. Let multiple tasks run resiliently beneath one endless thread so the person deals with only one.)
-
-**Human attention is the most expensive resource; tokens are the cheapest.** The kit makes that trade for you.
-You face one endless thread. Many tasks run in parallel beneath it and survive interruptions. What comes back is
-a receipt, not a transcript. (Owner decision, 2026-09-17, KIT-DR-012)
-
-Two rules keep that trade safe. **Judge only from receipts.** The result of independent verification purchased
-with tokens must return in one line, so a person does not need to read the transcript. **Verify passage and cause
-separately.** A gate reports only whether the work passed. An independent review checks why it failed.
-2026-09-17 measurement: on the day the installation gate produced PASS, an independent audit corrected two of
-the dispatcher's causal hypotheses.
 
 ## Four design principles
 
-**State lives on disk.** Everything that must persist becomes a file. Tools recalculate what remains from those
-files. Without this, work cannot survive one session. With it, sessions can continue indefinitely.
+**State lives on disk.** Everything that must persist is a file. Tools recompute the rest from those files.
 
-**Generated views and ledgers are separate.** Do not edit `NOW.md`, `hotset.md`, or `memory-map.html` by hand.
-Change the ledger, then regenerate the view. This prevents the picture and the implementation from diverging.
+**Generated views and ledgers are separate.** Do not edit `NOW.md` by hand. Change the journal, then
+regenerate the view. The picture cannot drift from the record.
 
-**Every rule has a Why.** Prefer measured incidents from this workspace, such as journal and run paths. Do not
-copy whole rules from papers or other harnesses (`2609.09134`). A rule without a reason is a candidate for
-deletion. Context files grow without limit because reasons decay before instructions do.
+**Every rule has a reason.** The reason is a measured incident where possible. A rule without a reason is a
+candidate for deletion.
 
-**Seven rules are the operating default.** This is a local design choice, not a universal model capacity limit.
-Keep important boundaries and recovery steps always available; load the rest when relevant. Revisit the split
-when actual missed instructions or unnecessary overhead provide evidence for a change.
+**Judge from receipts, and verify passage and cause separately.** A gate says whether work passed. An
+independent review says why it failed.
 
-## No data is included
+## Evidence
 
-This repository tracks only the engine. `.gitignore` blocks `state/`, `_private/`, and
-`system/memory-config.json` from the beginning. This is structural, not a matter of discipline. Git cannot see
-the files, so it cannot push them by accident.
-
-This also means that **this repository does not back up instance data**. Arrange a separate backup.
-
-## What is not included
-
-- **Three recording watchers** (`watch_recordings`, `ingest_recording`, and `recording_watchd`). They are personal
-  device adapters with account paths embedded in them. Only the transcription engine, `transcribe.py` and
-  `diarize.py`, is included. On a work machine, meeting recording is a consent and retention-policy issue, not a
-  feature issue. Do not run these tools before checking policy.
-- **A checksum ledger for frozen areas.** This is instance-specific data. To use the pattern, run
-  `shasum -a 256 <area>/** > integrity.sha256`, then verify it with `shasum -c`. Keep the ledger **outside** the
-  frozen area.
-- **Past decision records, debate rounds, and person ledgers.** These all belong to the history of the original
-  instance.
-
-## Start
-
-Requirements: Python 3.8 or later, git 2.5 or later, Bash 3.2 or later, and macOS or Linux. `claude`, `codex`, and `node` are
-optional.
-
-```bash
-git clone <this-repository> ~/work
-cd ~/work
-bash setup.sh --name work --context work     # With no arguments it prompts. Without a tty it uses defaults
-bash tools/install_hooks.sh --repair         # Pre-commit backstop. .git/hooks is not cloned
-bash tools/install_hooks.sh --check          # Verify both installed hooks match their templates
-python3 tools/doctor.py                      # Complete when FAIL is 0. warn can be normal. -- means not applicable
-```
-
-Use `--context personal` on a personal machine. A `work` context makes `doctor` reject push-capable remotes that
-are outside the allowlist. Replace every `CHANGEME` in `system/instance-rules.md`. Nothing under `state/` or
-`_private/` is committed, so back it up yourself.
-
-See `SETUP.md` for the full procedure. See `CHECKLIST.md` for human checks after installation. For updates,
-see `SETUP.md` section 5a.
-
-## Normative evidence
-
-The installation commands and backup warning are grounded respectively in the unfamiliar-clone reproduction in
-`tools/test_fresh_install.sh`, the default-deny list in `.gitignore`, and KIT-DR-002 and KIT-DR-011. The commands
-preserve the reproduced installation order. The backup warning states the other side of the same structure:
-blocking tracking also blocks backup. Fixed counts and timings are measurements at the cited test or inventory,
-not permanent performance guarantees.
+Numbers on this page are measurements, not guarantees. Install sequence and timing: `tools/test_fresh_install.sh`.
+Turn-end check scope and timing, state injection, receipts, the delivery check, and the correction counts:
+decision records KIT-DR-020 to KIT-DR-027 in [`system/kit-decisions.md`](system/kit-decisions.md). Default-deny
+tracking: `.gitignore`, KIT-DR-002. The philosophy sentence above is an owner decision (KIT-DR-012).

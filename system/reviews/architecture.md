@@ -1,53 +1,65 @@
-# mottori-kit 구조 리뷰
+# mottori-kit architecture review
 
-검토일: 2026-09-17
-범위: 현재 통합 트리에서 `git ls-files`가 반환한 96개 추적 파일 전체와 그 파일들이 읽거나 만드는 인스턴스 경로
-방법: 추적 파일 집합, 정적 경로 참조, import와 subprocess, 훅 등록, 테스트 등록을 대조했다. manifest의 경로 일치는 실제 `git ls-files -z` 결과로 검사한다 (`tools/test_manifests.py:47-70`, `tools/test_manifests.py:103-110`).
+Review date: 2026-09-17
+Scope: all 96 tracked files that `git ls-files` returned in the current integrated tree, plus the instance
+paths that those files read or create.
+Method: we compared the tracked file set, static path references, imports and subprocess calls, hook
+registrations, and test registrations. The manifest path match is checked against the real
+`git ls-files -z` output (`tools/test_manifests.py:47-70`, `tools/test_manifests.py:103-110`).
 
-## 1. 결론
+## 1. Conclusion
 
-상태 ledger, gate, fresh worker는 깊은 모듈이다. `now.py`의 CLI 뒤에 public/private 라우팅, 잠금,
-원자적 projection과 rollback이 있고 (`tools/now.py:445-598`), gate는 여러 검사기의 안정 이슈 집합만
-소비하며 (`tools/gate.py:119-188`), worker는 격리 실행과 scope 판정 뒤 4,096-byte receipt를 반환한다
+The state ledger, the gate, and the fresh worker are deep modules. A deep module hides a lot of work behind
+a small interface. Behind the `now.py` CLI sit public/private routing, locking, atomic projection, and
+rollback (`tools/now.py:445-598`). The gate (the edit and commit check) consumes only the stable issue
+sets of several checkers (`tools/gate.py:119-188`). The worker runs in isolation, judges the write scope,
+and then returns a receipt of at most 4,096 bytes
 (`tools/fresh_worker.py:711-744`, `tools/fresh_worker.py:889-914`).
 
-통합 트리는 검토와 근거를 새 모듈로 분리했다. review manifest는 추적 text 집합을 재생성하고 사람의
-분류를 보존하며 (`tools/manifest_build.py:32-111`), matrix 검사는 규칙 원점과 fixture를 대조한다
-(`tools/test_manifests.py:139-201`). evidencecheck는 표지 문법, 로컬 ID, 필수 위치를 검사하되 외부
-`paper:`와 `experiment:`는 차단하지 않고 REVIEW로 남긴다 (`tools/evidencecheck.py:74-90`,
-`tools/evidencecheck.py:157-206`). paper-to-kit은 제안 전용 workflow와 runtime adapter를 분리하고 exact
-canonical bytes를 검사한다 (`system/skills/paper-to-kit.md:3-9`, `tools/test_skill_parity.py:62-96`).
+The integrated tree splits review and evidence into new modules. The review manifest regenerates the set
+of tracked text files and keeps the human classification (`tools/manifest_build.py:32-111`). The matrix
+check compares each rule origin with its fixture (`tools/test_manifests.py:139-201`). evidencecheck
+checks marker syntax, local IDs, and required placement. It does not block external `paper:` and
+`experiment:` markers. It leaves them as REVIEW instead (`tools/evidencecheck.py:74-90`,
+`tools/evidencecheck.py:157-206`). paper-to-kit separates the proposal-only workflow from the runtime
+adapters and checks that the adapters match the exact canonical bytes
+(`system/skills/paper-to-kit.md:3-9`, `tools/test_skill_parity.py:62-96`).
 
-남은 구조 위험은 네 가지다.
+Four structural risks remain.
 
-1. sync 대상은 Python `SYNC_FILES`와 셸 복사 목록에 중복 선언된다 (`tools/fresh_worker.py:45`, `tools/sync_engine.sh:13-18`).
-2. doctor의 ledger 검사는 `rec.py check` 종료코드를 보지 않아 crash나 출력 drift를 0건으로 읽을 수 있다 (`tools/doctor.py:650-659`).
-3. release 전체 19개 Python suite와 doctor가 직접 소유한 15개 suite의 목록이 다르다 (`tools/doctor.py:583-622`, `tools/test_fresh_install.sh:91-95`).
-4. memory map은 생성 fixture가 생겼지만 구조 설명 자체는 여전히 상수다 (`tools/build_memory_map.py:56-99`, `tools/test_coherence.py:73-92`).
+1. The sync targets are declared twice: in the Python `SYNC_FILES` and in a shell copy list
+   (`tools/fresh_worker.py:45`, `tools/sync_engine.sh:13-18`).
+2. The doctor ledger check does not read the `rec.py check` exit code. It can read a crash or an output
+   drift as 0 issues (`tools/doctor.py:650-659`).
+3. The release runs all 19 Python suites. The doctor owns its own list of 15 suites. The two lists differ
+   (`tools/doctor.py:583-622`, `tools/test_fresh_install.sh:91-95`).
+4. The memory map now has a generation fixture, but the structure description itself is still a constant
+   (`tools/build_memory_map.py:56-99`, `tools/test_coherence.py:73-92`).
 
-구조적 orphan은 `tools/eval_recall.py` 한 개다. 자기 CLI 외 README, doctor, 회귀 suite에서 호출되지
-않는다 (`tools/eval_recall.py:19-37`, `tools/doctor.py:583-622`). runtime convention 파일,
-`state/.gitkeep`, `LICENSE`는 코드 호출이 없어도 각각 runtime, repository shape, 법적 metadata라는
-consumer가 있으므로 orphan으로 세지 않는다.
+There is one structural orphan: `tools/eval_recall.py`. Outside its own CLI, the README, the doctor, and
+the regression suites do not call it (`tools/eval_recall.py:19-37`, `tools/doctor.py:583-622`). The
+runtime convention files, `state/.gitkeep`, and `LICENSE` have no code callers. We do not count them as
+orphans, because each has a consumer: the runtime, the repository shape, and legal metadata.
 
-## 2. 모듈 지도
+## 2. Module map
 
-| module | 좁은 interface | 숨기는 책임 | 주요 consumer | 검증과 남은 구멍 |
+| module | narrow interface | hidden responsibility | main consumer | verification and remaining gaps |
 |---|---|---|---|---|
-| 상태 ledger | `now.py log/render/check` | visibility 라우팅, journal append, 두 NOW, lock/rollback | hooks, gate, operator | transaction fixture가 있다 (`tools/test_state_runtime.py:533-1054`). |
-| 회상 | `recall.py sessions/find` | Claude/Codex source 발견, cwd 격리, authored 필터, ranking | AGENTS, slash command, doctor | Codex cwd와 injection fixture가 있다 (`tools/test_recall.py:77-109`); Claude parser와 ranking 동률은 별도 fixture가 없다. |
-| 개인 원장 | `rec.py new/find/check/audit` | fact schema, origin audit, hotset, snapshot | AGENTS, coherence, doctor | new-find-check-audit는 검증한다 (`tools/test_rec.py:27-46`); snapshot ring과 중간 실패는 미검증이다. |
-| 훅 | runtime JSON과 installed pre-commit | SessionStart, PreCompact, gate lifecycle | Claude, Codex, Git | runtime와 installer fixture가 분리돼 있다 (`tools/test_hook_runtime.py:16-235`, `tools/test_install_hooks.py:39-99`). |
-| gate | `baseline/status/check/precommit` | checker issue set, baseline, lock/token, extracted index | hooks, pre-commit | checker crash와 index tree를 검사한다 (`tools/test_install_checks.py:181-226`, `tools/test_hook_runtime.py:235-291`). |
-| worker | `fresh_worker.py <runtime> <prompt>` | fresh runtime, run record, usage, write scope, receipt | operator, ask_codex | worktree와 scope fixture가 있다 (`tools/test_fresh_worker.py:454-717`). |
-| 영수증 | `receipts.py list/show/cost` | private run meta 집계와 bounded rendering | operator, doctor | list/show/cost/threshold fixture가 있다 (`tools/test_receipts.py:91-203`). |
-| doctor | 단일 PASS/FAIL/WARN/SKIP 보고 | runtime, wiring, hooks, tools, valves, regressions | setup, operator | 37개 자동 check와 4개 manual을 등록한다 (`tools/doctor.py:979-1027`); ledger 판정은 fail-open 가능하다. |
-| setup/release | `setup.sh`, `test_fresh_install.sh` | instance seed, migration, hooks, doctor, full regressions, rerun | 새 instance operator | full regressions와 setup rerun을 실행한다 (`tools/test_fresh_install.sh:91-104`). |
-| review manifest | `manifest_build.py`, `test_manifests.py` | 96개 text inventory, 분류 보존, rule/source coverage | reviewer, doctor | missing/ghost와 matrix 원점을 검사한다 (`tools/test_manifests.py:73-110`, `tools/test_manifests.py:194-202`). |
-| 근거 계약 | `evidencecheck.py --issues` | marker syntax, local resolver, required placement, REVIEW | gate, pre-commit, reviewer | local missing과 external REVIEW를 분리한다 (`tools/test_evidencecheck.py:69-124`). |
-| paper workflow | canonical workflow와 generated adapter | cards, crosscheck, proposal-only boundary, human gate | Claude/Codex adapter | schema 교차 fixture와 exact-byte parity가 있다 (`tools/test_skill_parity.py:32-96`). |
+| state ledger | `now.py log/render/check` | visibility routing, journal append, two NOW files, lock/rollback | hooks, gate, operator | A transaction fixture exists (`tools/test_state_runtime.py:533-1054`). |
+| recall | `recall.py sessions/find` | Claude/Codex source discovery, cwd isolation, authored filter, ranking | AGENTS, slash command, doctor | Codex cwd and injection fixtures exist (`tools/test_recall.py:77-109`). The Claude parser and ranking ties have no separate fixture. |
+| personal ledger | `rec.py new/find/check/audit` | fact schema, origin audit, hotset, snapshot | AGENTS, coherence, doctor | new-find-check-audit is verified (`tools/test_rec.py:27-46`). The snapshot ring and mid-run failure are not verified. |
+| hooks | runtime JSON and installed pre-commit | SessionStart, PreCompact, gate lifecycle | Claude, Codex, Git | Runtime and installer fixtures are separate (`tools/test_hook_runtime.py:16-235`, `tools/test_install_hooks.py:39-99`). |
+| gate | `baseline/status/check/precommit` | checker issue set, baseline, lock/token, extracted index | hooks, pre-commit | Checker crashes and the index tree are tested (`tools/test_install_checks.py:181-226`, `tools/test_hook_runtime.py:235-291`). |
+| worker | `fresh_worker.py <runtime> <prompt>` | fresh runtime, run record, usage, write scope, receipt | operator, ask_codex | Worktree and scope fixtures exist (`tools/test_fresh_worker.py:454-717`). |
+| receipts | `receipts.py list/show/cost` | aggregation of private run meta and bounded rendering | operator, doctor | list/show/cost/threshold fixtures exist (`tools/test_receipts.py:91-203`). |
+| doctor | single PASS/FAIL/WARN/SKIP report | runtime, wiring, hooks, tools, valves, regressions | setup, operator | It registers 37 automatic checks and 4 manual ones (`tools/doctor.py:979-1027`). The ledger verdict can fail open. |
+| setup/release | `setup.sh`, `test_fresh_install.sh` | instance seed, migration, hooks, doctor, full regressions, rerun | new instance operator | It runs the full regressions and a setup rerun (`tools/test_fresh_install.sh:91-104`). |
+| review manifest | `manifest_build.py`, `test_manifests.py` | inventory of 96 text files, classification kept, rule/source coverage | reviewer, doctor | It checks missing/ghost files and matrix origins (`tools/test_manifests.py:73-110`, `tools/test_manifests.py:194-202`). |
+| evidence contract | `evidencecheck.py --issues` | marker syntax, local resolver, required placement, REVIEW | gate, pre-commit, reviewer | It separates local missing items from external REVIEW items (`tools/test_evidencecheck.py:69-124`). |
+| paper workflow | canonical workflow and generated adapters | cards, crosscheck, proposal-only boundary, human gate | Claude/Codex adapter | A schema cross fixture and exact-byte parity exist (`tools/test_skill_parity.py:32-96`). |
 
-## 3. 결합과 권위
+## 3. Coupling and authority
+
 
 ```text
 event -> now.py -> memlib visibility -> public/private journal -> two NOW -> SessionStart
@@ -62,31 +74,32 @@ DR/CHANGELOG/matrix -> evidencecheck -> blocking issues + nonblocking REVIEW
 paper list -> canonical workflow -> cards/crosscheck/proposals -> human judgment
 ```
 
-권위는 주장 종류별로 갈린다.
+Authority is split by the kind of claim.
 
-| 주장 | 정본 | 파생물 | 근거 |
+| claim | source of truth | derived copy | evidence |
 |---|---|---|---|
-| 현재 상태 | public NOW + local overlay | SessionStart context | `AGENTS.md:26-31`, `tools/now.py:648-696` |
-| 사건 | public/private monthly journal | NOW projection | `system/PRD-session-memory.md:85-99`, `tools/now.py:289-359` |
-| 개인 사실 | private fact files | hotset/snapshot | `tools/rec.py:23-33`, `tools/rec.py:99-130` |
-| 킷 결정 | `system/kit-decisions.md` | README/CHANGELOG 요약 | `system/kit-decisions.md:1-11` |
-| 근거 표지 문법 | `system/evidence-schema.md` | checker 구현과 workflow 표지 | `system/evidence-schema.md:7-30`, `tools/evidencecheck.py:12-23` |
-| review 대상 집합 | `git ls-files`의 text 파일 | `system/review-manifest.yaml` | `tools/manifest_build.py:32-51`, `tools/test_manifests.py:47-70` |
-| workflow 의미 | `system/skills/paper-to-kit.md` | Claude/Codex adapter | `tools/skill_adapters.py:17-63` |
-| worker 실행 | private `meta.json`과 stream/result | stdout receipt | `tools/fresh_worker.py:707-744` |
+| current state | public NOW + local overlay | SessionStart context | `AGENTS.md:26-31`, `tools/now.py:648-696` |
+| events | public/private monthly journal | NOW projection | `system/PRD-session-memory.md:85-99`, `tools/now.py:289-359` |
+| personal facts | private fact files | hotset/snapshot | `tools/rec.py:23-33`, `tools/rec.py:99-130` |
+| kit decisions | `system/kit-decisions.md` | README/CHANGELOG summary | `system/kit-decisions.md:1-11` |
+| evidence marker syntax | `system/evidence-schema.md` | checker implementation and workflow markers | `system/evidence-schema.md:7-30`, `tools/evidencecheck.py:12-23` |
+| review target set | text files from `git ls-files` | `system/review-manifest.yaml` | `tools/manifest_build.py:32-51`, `tools/test_manifests.py:47-70` |
+| workflow meaning | `system/skills/paper-to-kit.md` | Claude/Codex adapter | `tools/skill_adapters.py:17-63` |
+| worker run | private `meta.json` and stream/result | stdout receipt | `tools/fresh_worker.py:707-744` |
 
-public/private 경계는 default deny Git allowlist (`.gitignore:16-57`), journal public-track allowlist
-(`tools/memlib.py:310-337`), transcript cwd filter (`tools/recall.py:62-101`), worker private run record
-(`tools/fresh_worker.py:197-205`)의 네 층이다. `REPORT.md` 같은 실행 산출물은 engine allowlist에 없다
-(`.gitignore:16-33`).
+The public/private boundary has four layers: the default-deny Git allowlist (`.gitignore:16-57`), the
+journal public-track allowlist (`tools/memlib.py:310-337`), the transcript cwd filter
+(`tools/recall.py:62-101`), and the worker private run record (`tools/fresh_worker.py:197-205`). Run
+outputs such as `REPORT.md` are not in the engine allowlist (`.gitignore:16-33`).
 
-## 4. 추적 파일 전수 inventory
+## 4. Full inventory of tracked files
 
-아래 96행은 현재 `git ls-files`와 정확히 같은 집합이다. kind, owner, consumer의 기계 정본은
-`system/review-manifest.yaml`이며, test는 missing과 ghost를 양방향 비교한다
-(`tools/test_manifests.py:73-110`). 직접 경로 참조가 없는 convention 파일도 consumer를 명시했다.
+The 96 rows below are exactly the same set as the current `git ls-files` output. The machine source of
+truth for kind, owner, and consumer is `system/review-manifest.yaml`. The test compares missing and ghost
+files in both directions (`tools/test_manifests.py:73-110`). Convention files with no direct path
+reference also list their consumer.
 
-| 추적 파일 | kind / owner | consumer | 현재 파일 근거 |
+| tracked file | kind / owner | consumer | current file evidence |
 |---|---|---|---|
 | `.claude/commands/dossier.md` | tool / kit | human, Claude | (`.claude/commands/dossier.md:1`) |
 | `.claude/commands/garden.md` | tool / kit | human, Claude | (`.claude/commands/garden.md:1`) |
@@ -139,7 +152,7 @@ public/private 경계는 default deny Git allowlist (`.gitignore:16-57`), journa
 | `templates/rituals.local.md` | template / kit | setup, human | (`templates/rituals.local.md:1`) |
 | `tools/ask_codex.sh` | tool / kit | human, Codex | (`tools/ask_codex.sh:1`) |
 | `tools/build_memory_map.py` | tool / kit | human | (`tools/build_memory_map.py:1`) |
-| `tools/codex_root_thread.py` | tool / kit | ask_codex | (`tools/codex_root_thread.py:1`) |
+| codex_root_thread.py (later removed with `ask_codex.sh --resume-root`) | tool / kit | ask_codex | - |
 | `tools/coherence.py` | tool / kit | doctor, human | (`tools/coherence.py:1`) |
 | `tools/diarize.py` | tool / kit | transcribe, human | (`tools/diarize.py:1`) |
 | `tools/doctor.py` | tool / kit | setup, human | (`tools/doctor.py:1`) |
@@ -185,31 +198,34 @@ public/private 경계는 default deny Git allowlist (`.gitignore:16-57`), journa
 | `tools/transcribe.py` | tool / kit | human | (`tools/transcribe.py:1`) |
 | `tools/wf_gardener.js` | tool / kit | garden command | (`tools/wf_gardener.js:1`) |
 
-## 5. 중복, 모순, 검사 공백
+## 5. Duplication, contradiction, and test gaps
 
-| 구분 | 현재 사실 | 판정 |
+| area | current fact | verdict |
 |---|---|---|
-| sync inventory | source hash 목록과 실제 copy loop가 따로 있다 (`tools/fresh_worker.py:45`, `tools/sync_engine.sh:13-18`). | 단일 authority와 temp-instance rollback fixture가 필요하다. |
-| doctor 중복 | `c_tools_run`이 linkcheck/coherence를 실행하고 전용 check가 다시 실행한다 (`tools/doctor.py:524-580`). | 실행 가능성과 결과 판정을 structured probe 하나로 합칠 후보이다. |
-| release suite 목록 | doctor는 15개 suite를 직접 열거하고 fresh-install은 glob으로 19개 전부를 돈다 (`tools/doctor.py:589-622`, `tools/test_fresh_install.sh:91-95`). | 목록 drift를 막으려면 release owner를 하나로 정해야 한다. |
-| schema authority | memlib은 공통 state schema를 소유하지만 rec, gardener, memory map은 일부 경로와 구조를 독립 정의한다 (`tools/memlib.py:2-6`, `tools/rec.py:21-33`, `tools/wf_gardener.js:10-17`, `tools/build_memory_map.py:56-99`). | “유일한 schema”의 범위를 state/config로 좁히거나 실제 registry를 공유해야 한다. |
-| evidence resolver | local 세 종류는 존재를 검사하고 외부 두 종류는 REVIEW다 (`tools/evidencecheck.py:74-90`, `tools/evidencecheck.py:177-186`). | REVIEW를 PASS로 표현하지 않으므로 현재 경계와 일치한다. 원문 적합성은 여전히 사람 판정이다. |
-| personal ledger | new/find/check/audit fixture는 생겼다 (`tools/test_rec.py:27-70`). | snapshot rotation, atomic failure, malformed frontmatter의 전용 fixture는 남는다. |
-| recall | cwd 격리와 authored filter fixture는 생겼다 (`tools/test_recall.py:77-109`). | Claude transcript parser와 ranking tie의 결정론 검사는 남는다. |
-| memory map | 생성 fixture는 생겼다 (`tools/test_coherence.py:73-92`). | hardcoded store/flow가 실제 registry에서 derive된다는 검사는 없다. |
-| gardener | external agent JSON schema에 의존한다 (`tools/wf_gardener.js:51-101`). | deterministic local fixture가 없다. |
+| sync inventory | The source hash list and the real copy loop are separate (`tools/fresh_worker.py:45`, `tools/sync_engine.sh:13-18`). | It needs a single authority and a temp-instance rollback fixture. |
+| doctor duplication | `c_tools_run` runs linkcheck/coherence, and the dedicated checks run them again (`tools/doctor.py:524-580`). | This is a candidate for merging the "can it run" check and the result verdict into one structured probe. |
+| release suite list | The doctor lists 15 suites by hand. fresh-install runs all 19 through a glob (`tools/doctor.py:589-622`, `tools/test_fresh_install.sh:91-95`). | To stop the lists from drifting, the release needs one owner. |
+| schema authority | memlib owns the shared state schema. rec, gardener, and the memory map define some paths and structures on their own (`tools/memlib.py:2-6`, `tools/rec.py:21-33`, `tools/wf_gardener.js:10-17`, `tools/build_memory_map.py:56-99`). | Either narrow the scope of "the only schema" to state/config, or share a real registry. |
+| evidence resolver | The three local kinds are checked for existence. The two external kinds are REVIEW (`tools/evidencecheck.py:74-90`, `tools/evidencecheck.py:177-186`). | It does not report REVIEW as PASS, so it matches the current boundary. Whether the source fits the claim is still a human judgment. |
+| personal ledger | A new/find/check/audit fixture now exists (`tools/test_rec.py:27-70`). | Dedicated fixtures for snapshot rotation, atomic failure, and malformed frontmatter are still missing. |
+| recall | Fixtures for cwd isolation and the authored filter now exist (`tools/test_recall.py:77-109`). | Determinism tests for the Claude transcript parser and ranking ties are still missing. |
+| memory map | A generation fixture now exists (`tools/test_coherence.py:73-92`). | No test checks that the hardcoded store/flow is derived from a real registry. |
+| gardener | It depends on an external agent JSON schema (`tools/wf_gardener.js:51-101`). | It has no deterministic local fixture. |
 
-삭제·병합 우선순위는 P0 sync inventory 단일화와 doctor ledger fail-close, P1 doctor 중복 실행과 release
-suite owner 통합, P2 `eval_recall.py` 연결 또는 삭제 순서다. `now.py`, `gate.py`, `fresh_worker.py`는
-caller가 알아야 할 복잡성을 실제로 감추므로 삭제 후보가 아니다.
+The order of priority for deletion and merging is as follows. P0: make the sync inventory a single list,
+and make the doctor ledger check fail closed. P1: remove the duplicate runs in the doctor, and merge the
+release suite owner. P2: connect or delete `eval_recall.py`. `now.py`, `gate.py`, and `fresh_worker.py`
+really hide complexity that the caller would otherwise need to know. They are not deletion candidates.
 
-## 6. 철학 대조
+## 6. Comparison with the philosophy
 
-README의 목적함수는 사람의 주의를 비싸게, 토큰을 싸게 두고 transcript 대신 검증된 receipt를
-올리는 것이다 (`README.md:57-72`). 구조는 worker receipt (`tools/fresh_worker.py:711-744`), 상태
-projection (`tools/now.py:550-700`), manifest coverage (`tools/test_manifests.py:103-110`), checker issue
-set (`tools/gate.py:119-170`)으로 이를 구현한다.
+The objective in the README is to treat human attention as expensive and tokens as cheap, and to send up
+verified receipts instead of transcripts (`README.md:57-72`). The structure implements this with the
+worker receipt (`tools/fresh_worker.py:711-744`), the state projection (`tools/now.py:550-700`), manifest
+coverage (`tools/test_manifests.py:103-110`), and the checker issue set (`tools/gate.py:119-170`).
 
-반대로 짧은 판정이 원인이나 범위를 숨기면 철학을 배반한다. doctor ledger의 거짓 PASS 가능성,
-sync의 이중 목록, doctor와 release의 suite 목록 차이가 그 자리다. 다음 개선의 목적은 파일 수 감축이
-아니라 authority를 한 seam에 모으고, 그 interface를 통과한 결과만 receipt로 인정하는 것이다.
+A short verdict that hides its cause or scope betrays this philosophy. Three places do this now: the
+possible false PASS in the doctor ledger check, the double list in sync, and the different suite lists in
+the doctor and the release. The goal of the next improvement is not to reduce the file count. The goal is
+to gather each authority at one seam, and to accept as a receipt only a result that has passed through
+that interface.

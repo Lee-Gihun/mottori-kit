@@ -8,11 +8,14 @@ from pathlib import Path
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from worker_batch import FAILED_STATUSES  # noqa: E402
+from i18n import t  # noqa: E402
+
 
 ROOT = Path(os.environ.get("MOTTORI_INSTANCE", Path(__file__).resolve().parent.parent)).expanduser().resolve()
 RUNS = ROOT / "_private" / "work" / "runs"
-FAILED_STATUSES = {"failed", "failed-missing-result", "interrupted", "scope_violation"}
-RECEIPT_MAX_BYTES = 4096
+WAVE_RECEIPT_MAX_BYTES = 4096
 WAVE_MAX_RUNS = 8
 
 
@@ -137,10 +140,10 @@ def _print_list(records, errors):
               f"usage={_usage_text(row['usage'])} scope={row['scope']}{patch} "
               f"prompt={row['prompt']} id={row['run_id']}")
     totals = _totals(records)
-    print(f"합계 runs={totals['runs']} tokens={_usage_text(totals['usage'])} "
-          f"failures={totals['failures']}")
+    print(t("receipts.total", runs=totals['runs'], tokens=_usage_text(totals['usage']),
+            failures=totals['failures']))
     if errors:
-        print(f"경고 unreadable={len(errors)}", file=sys.stderr)
+        print(t("receipts.unreadable", count=len(errors)), file=sys.stderr)
 
 
 def _public_row(row):
@@ -153,7 +156,7 @@ def _public_row(row):
 def _duration(value):
     match = re.fullmatch(r"([1-9][0-9]*)([dh])", value)
     if not match:
-        raise argparse.ArgumentTypeError("기간은 7d 또는 24h 형식이어야 한다")
+        raise argparse.ArgumentTypeError(t("receipts.bad_duration"))
     amount = int(match.group(1))
     return datetime.timedelta(days=amount) if match.group(2) == "d" \
         else datetime.timedelta(hours=amount)
@@ -189,68 +192,14 @@ def _utf8_prefix(text, byte_limit):
     return text.encode("utf-8")[:byte_limit].decode("utf-8", errors="ignore")
 
 
-def _utf8_suffix(text, byte_limit):
-    if byte_limit <= 0:
-        return ""
-    return text.encode("utf-8")[-byte_limit:].decode("utf-8", errors="ignore")
-
-
-def _clip_utf8(text, byte_limit):
-    raw = text.encode("utf-8")
-    if len(raw) <= byte_limit:
-        return text
-    marker = f"\n\n[… 중간 절단: 원문 {len(raw)} bytes …]\n\n"
-    room = max(0, byte_limit - len(marker.encode("utf-8")))
-    head = _utf8_prefix(text, int(room * 0.42))
-    tail = _utf8_suffix(text, room - len(head.encode("utf-8")))
-    if "\n" in head:
-        head = head[:head.rfind("\n") + 1]
-    if "\n" in tail:
-        tail = tail[tail.find("\n") + 1:]
-    return _utf8_prefix(head.rstrip() + marker + tail.lstrip(), byte_limit)
-
-
-def _receipt(meta, result):
-    scope = meta.get("scope") if isinstance(meta.get("scope"), dict) else {}
-    egress = meta.get("egress") if isinstance(meta.get("egress"), dict) else {}
-    worktree = meta.get("worktree") if isinstance(meta.get("worktree"), dict) else {}
-    patch_line = ""
-    if worktree.get("mode") is not None:
-        patch_line = (
-            f"patch: {len(worktree['files'])} files "
-            f"(+{worktree['added']}/-{worktree['deleted']})\n"
-        )
-    fixed = (
-        "FRESH_WORKER v1\n"
-        f"run: {_meta_value(meta, 'run')}\n"
-        f"runtime: {_meta_value(meta, 'runtime')}\n"
-        f"capability: {_meta_value(meta, 'capability')}\n"
-        f"status: {_meta_value(meta, 'status')}\n"
-        f"process_exit: {_meta_value(meta, 'process_exit')}\n"
-        f"wrapper_exit: {_meta_value(meta, 'wrapper_exit')}\n"
-        f"prompt_sha256: {_meta_value(meta, 'prompt_sha256')}\n"
-        f"stream_sha256: {_meta_value(meta, 'stream_sha256')}\n"
-        f"result_sha256: {_meta_value(meta, 'result_sha256')}\n"
-        f"result_bytes: {_meta_value(meta, 'result_bytes')}\n"
-        f"egress: {egress.get('private_ref_count', 0)} private refs\n"
-        f"scope: {scope.get('status', '-')} (changed {scope.get('changed_count', '-')}, "
-        f"violations {scope.get('violation_count', '-')})\n"
-        f"{patch_line}"
-        "result:\n"
-    )
-    body = result if result else "[final result unavailable; inspect the private run record]"
-    room = max(0, RECEIPT_MAX_BYTES - len(fixed.encode("utf-8")))
-    return fixed + _clip_utf8(body, room)
-
-
 def cmd_show(args):
     if not re.fullmatch(r"[A-Za-z0-9._+-]+", args.id):
-        print(f"run을 찾을 수 없다: {args.id}", file=sys.stderr)
+        print(t("receipts.run_not_found", run_id=args.id), file=sys.stderr)
         return 1
     records, _ = load_runs()
     row = next((record for record in records if record["run_id"] == args.id), None)
     if row is None:
-        print(f"run을 찾을 수 없다: {args.id}", file=sys.stderr)
+        print(t("receipts.run_not_found", run_id=args.id), file=sys.stderr)
         return 1
     meta = row["_meta"]
     scope = meta.get("scope") if isinstance(meta.get("scope"), dict) else {}
@@ -267,8 +216,11 @@ def cmd_show(args):
         result = (row["_dir"] / "result.txt").read_text(encoding="utf-8", errors="replace")
     except OSError:
         result = ""
+    # Import on demand: doctor imports this module and must not load the worker engine.
+    import fresh_worker
     print("RECEIPT")
-    sys.stdout.write(_receipt(meta, result))
+    # A clipped receipt points here for the full text, so this view never clips the result.
+    sys.stdout.write(fresh_worker._receipt(meta, result, max_bytes=None))
     return 0
 
 
@@ -284,10 +236,10 @@ def _run_date(row):
 
 def cmd_cost(_args):
     records, errors = load_runs()
-    print("런타임별 토큰 합계 (input/output/total)")
+    print(t("receipts.cost_title"))
     runtimes = sorted({row["runtime"] for row in records if row["runtime"] != "-"})
     if not runtimes:
-        print("(run 없음)")
+        print(t("receipts.no_runs"))
     for runtime in runtimes:
         subset = [row for row in records if row["runtime"] == runtime]
         total = _totals(subset)
@@ -300,16 +252,16 @@ def cmd_cost(_args):
         bucket["runs"] += 1
         bucket["tokens"] += row["usage"]["total"] or 0
     peak = max((bucket["tokens"] for bucket in daily.values()), default=0)
-    print("하루 단위 히스토그램 (total tokens)")
+    print(t("receipts.daily_title"))
     if not daily:
-        print("(run 없음)")
+        print(t("receipts.no_runs"))
     for day in sorted(daily):
         bucket = daily[day]
         width = 0 if not bucket["tokens"] else max(1, round(bucket["tokens"] / peak * 40))
         bar = "#" * width if width else "-"
         print(f"{day} {bar} runs={bucket['runs']} tokens={bucket['tokens']}")
     if errors:
-        print(f"경고 unreadable={len(errors)}", file=sys.stderr)
+        print(t("receipts.unreadable", count=len(errors)), file=sys.stderr)
     return 0
 
 
@@ -386,7 +338,7 @@ def _wave_receipt(rows):
         verdict = contract["verdict"] if row["status"] == "success" else "INCONCLUSIVE"
         verdict_text = f"{row['status']} · {verdict} · {contract['summary']}"
         evidence = "; ".join(contract["evidence"]) or _run_record_path(row)
-        unknowns = "; ".join(contract["unknowns"]) or "없음"
+        unknowns = "; ".join(contract["unknowns"]) or t("receipts.none")
         rendered.append(
             f"{_field_clip(row['run_id'], 64)} | "
             f"{_field_clip(verdict_text, 132)} | "
@@ -394,25 +346,25 @@ def _wave_receipt(rows):
             f"{_field_clip(unknowns, 92)}\n"
         )
     receipt = header + "".join(rendered)
-    if len(receipt.encode("utf-8")) > RECEIPT_MAX_BYTES:
+    if len(receipt.encode("utf-8")) > WAVE_RECEIPT_MAX_BYTES:
         raise AssertionError("wave receipt byte budget calculation failed")
     return receipt
 
 
 def cmd_aggregate(args):
     if len(args.ids) > WAVE_MAX_RUNS:
-        print(f"한 파도는 run {WAVE_MAX_RUNS}개까지 집계할 수 있다", file=sys.stderr)
+        print(t("receipts.wave_too_many", max=WAVE_MAX_RUNS), file=sys.stderr)
         return 1
     invalid = next((run_id for run_id in args.ids
                     if not re.fullmatch(r"[A-Za-z0-9._+-]+", run_id)), None)
     if invalid is not None:
-        print(f"run을 찾을 수 없다: {invalid}", file=sys.stderr)
+        print(t("receipts.run_not_found", run_id=invalid), file=sys.stderr)
         return 1
     records, _ = load_runs()
     by_id = {row["run_id"]: row for row in records}
     missing = next((run_id for run_id in args.ids if run_id not in by_id), None)
     if missing is not None:
-        print(f"run을 찾을 수 없다: {missing}", file=sys.stderr)
+        print(t("receipts.run_not_found", run_id=missing), file=sys.stderr)
         return 1
     sys.stdout.write(_wave_receipt([by_id[run_id] for run_id in args.ids]))
     return 0

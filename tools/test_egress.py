@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavior tests for model-send egress policy and fresh-worker auditing."""
+"""Behavior tests for model-send egress policy and the fresh-worker prompt refusal."""
 import json
 import os
 from pathlib import Path
@@ -38,16 +38,15 @@ def _script(path, body):
     path.chmod(0o755)
 
 
-def _run(root, prompt, binary, strict=False):
+def _run(root, prompt, binary, lang=None):
     env = dict(
         os.environ,
         MOTTORI_INSTANCE=str(root),
         MOTTORI_FRESH_WORKER_CODEX_BIN=str(binary),
     )
-    argv = [sys.executable, str(WORKER), "--runtime", "codex"]
-    if strict:
-        argv.append("--strict-egress")
-    argv.append(str(prompt))
+    if lang is not None:
+        env["MOTTORI_LANG"] = lang
+    argv = [sys.executable, str(WORKER), "--runtime", "codex", str(prompt)]
     return subprocess.run(argv, cwd=root, env=env, text=True, capture_output=True)
 
 
@@ -187,6 +186,31 @@ def test_default_path_refuses_deny_ref_before_runtime_or_run_record():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_prohibition_naming_a_private_path_is_refused_with_wording_advice():
+    """The check reads text, not intent: a prohibition that spells the path is refused too.
+
+    The refusal tells the dispatcher to state the prohibition in words instead of the path.
+    """
+    root = Path(tempfile.mkdtemp(prefix="egress-prohibition-"))
+    try:
+        _config(root)
+        prompt = root / "prompt.md"
+        prompt.write_text(
+            "Review tools/now.py. Do not open _private/ or anything under it.\n", encoding="utf-8")
+        marker = root / "runtime-started"
+        fake = root / "fake codex"
+        _script(fake, f"from pathlib import Path\nPath({str(marker)!r}).write_text('yes')\n")
+        for lang, advice in (("en", "the private folder"), ("ko", "개인 폴더")):
+            result = _run(root, prompt, fake, lang=lang)
+            assert result.returncode == 2, result.stdout + result.stderr
+            assert "model-send deny ref" in result.stderr and "_private/" in result.stderr
+            assert advice in result.stderr, result.stderr
+        assert not marker.exists()
+        assert not (root / "_private" / "work" / "runs").exists()
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_strict_egress_refuses_before_runtime_or_run_record():
     root = Path(tempfile.mkdtemp(prefix="egress-strict-"))
     try:
@@ -224,12 +248,13 @@ pathlib.Path(args[args.index("--output-last-message") + 1]).write_text("OK\\n")
 print('{"type":"turn.completed"}')
 """,
         )
-        result = _run(root, prompt, fake, strict=True)
+        result = _run(root, prompt, fake)
         assert result.returncode == 0, result.stderr
-        assert "egress: 0 private refs" in result.stdout
+        # A refused reference never reaches a run, so the run record carries no egress fields.
+        assert "egress" not in result.stdout
         run = _run_dir(root, result.stdout)
         meta = json.loads((run / "meta.json").read_text(encoding="utf-8"))
-        assert meta["egress"]["private_refs"] == []
+        assert "egress" not in meta
         assert not (run / "egress.log").exists()
     finally:
         shutil.rmtree(root, ignore_errors=True)
@@ -242,6 +267,7 @@ TESTS = [
     test_N5_allow_prefix_must_be_strictly_below_every_overlapping_deny,
     test_N5_invalid_overlap_stops_fresh_worker_before_runtime,
     test_default_path_refuses_deny_ref_before_runtime_or_run_record,
+    test_prohibition_naming_a_private_path_is_refused_with_wording_advice,
     test_strict_egress_refuses_before_runtime_or_run_record,
     test_public_reference_is_negative_and_allow_prefix_overrides_deny,
 ]

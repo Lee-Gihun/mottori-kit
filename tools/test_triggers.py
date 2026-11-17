@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shlex
 from pathlib import Path
 import shutil
 import subprocess
@@ -109,8 +110,10 @@ def test_hook_limits_and_auto_sleep_after_ignores():
         r = _run(root, "hook", "--date", "2026-09-19", "--format", "text")
         seen |= set(re.findall(r"item \d", r.stdout))
         assert len(seen) == 7, f"carry-over must show every due item within two sessions: {sorted(seen)}"
-        for _ in range(5):
-            _run(root, "hook", "--date", "2026-09-19")
+        # Showings count once per calendar day, so ignoring is measured across days.
+        for day in range(20, 24):
+            _run(root, "hook", "--date", f"2026-09-{day}")
+            _run(root, "hook", "--date", f"2026-09-{day}")
         rows = [json.loads(l) for l in (root / "_private" / "triggers" / "triggers.jsonl")
                 .read_text(encoding="utf-8").splitlines()]
         slept = [x for x in rows if x.get("slept_until")]
@@ -140,9 +143,9 @@ def test_claim_lease_refuses_second_holder_and_due_stays_read_only():
             assert "due 1" in r.stdout, "due without --mark must never count as shown"
         store = root / "_private" / "triggers" / "triggers.jsonl"
         before = store.read_text(encoding="utf-8")
-        for _ in range(3):
-            _run(root, "hook", "--date", "2026-09-19")      # shown reaches the ignore limit
-        r = _run(root, "due", "--date", "2026-09-19")
+        for day in ("2026-09-17", "2026-09-18", "2026-09-19"):
+            _run(root, "hook", "--date", day)      # shown reaches the ignore limit
+        r = _run(root, "due", "--date", "2026-09-20")
         assert "due 0" in r.stdout, "a read-only due hides an about-to-sleep item"
         after = store.read_text(encoding="utf-8")
         assert json.loads(after.splitlines()[0])["slept_until"] is None, "read-only due must not write a sleep"
@@ -204,6 +207,107 @@ def test_scan_experiments_and_decision_rereviews():
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_shown_counts_once_per_calendar_day():
+    root = _fixture()
+    try:
+        r = _run(root, "add", "--when", "date:2026-11-18", "--what", "same day item", "--date", "2026-11-17")
+        tid = r.stdout.split()[1]
+        # Session start, resume, and compaction all run the hook; one day is one showing.
+        for _ in range(6):
+            r = _run(root, "hook", "--date", "2026-11-18", "--format", "text")
+            assert "same day item" in r.stdout, r.stdout
+        store = root / "_private" / "triggers" / "triggers.jsonl"
+        row = json.loads(store.read_text(encoding="utf-8").splitlines()[0])
+        assert row["shown"] == 1 and row["state"] == "open", row
+        for day in ("2026-11-19", "2026-11-20"):
+            _run(root, "hook", "--date", day)
+            _run(root, "hook", "--date", day)
+        row = json.loads(store.read_text(encoding="utf-8").splitlines()[0])
+        assert row["shown"] == 3 and not row.get("slept_until"), row
+        r = _run(root, "hook", "--date", "2026-11-21", "--format", "text")
+        assert r.stdout == "", "a fourth day without fire puts the trigger to sleep"
+        row = json.loads(store.read_text(encoding="utf-8").splitlines()[0])
+        assert row["state"] == "asleep" and row["id"] == tid, row
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_hook_fire_instruction_runs_as_written():
+    root = _fixture()
+    try:
+        r = _run(root, "add", "--id", "t2", "--when", "date:2026-11-18", "--what", "x", "--date", "2026-11-17")
+        assert r.returncode == 0, r.stderr
+        r = _run(root, "hook", "--date", "2026-11-18", "--format", "text")
+        line = [l for l in r.stdout.splitlines() if "fire" in l and "<id>" in l]
+        assert len(line) == 1, r.stdout
+        command = line[0].split("fire: ", 1)[1].split(" · sleep:")[0]
+        command = command.replace("<id>", "t2").replace("'...'", "done")
+        env = dict(os.environ, MOTTORI_INSTANCE=str(root))
+        r = subprocess.run(command.replace("python3 tools/triggers.py",
+                                           f"{shlex.quote(sys.executable)} {shlex.quote(str(TRIGGERS))}"),
+                           shell=True, text=True, capture_output=True, env=env)
+        assert r.returncode == 0 and "fired t2" in r.stdout, (command, r.stdout, r.stderr)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_add_refuses_when_kinds_that_never_fire():
+    root = _fixture()
+    try:
+        for when in ("file_change:notes.md", "state:x", "event:deploy"):
+            r = _run(root, "add", "--when", when, "--what", "x")
+            assert r.returncode == 2 and "not supported yet" in r.stderr, (when, r.stderr)
+        assert not (root / "_private" / "triggers" / "triggers.jsonl").exists()
+        # A stored row of such a kind (written by an older version) must not break the hook.
+        store_dir = root / "_private" / "triggers"
+        store_dir.mkdir(parents=True, exist_ok=True)
+        (store_dir / "triggers.jsonl").write_text(json.dumps({
+            "id": "old", "when": "event:x", "what": "legacy", "tier": "T0", "source": None,
+            "state": "open", "created": "2026-09-01", "fired": None, "outcome": None, "shown": 0,
+            "slept_until": None, "leased_until": None, "history": []}) + "\n", encoding="utf-8")
+        r = _run(root, "hook", "--date", "2026-11-18")
+        assert r.returncode == 0 and r.stdout == "", r
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_sticky_triggers_never_auto_sleep_and_lead_the_hook():
+    """An owner item stays in the five hook slots, first, until it is fired or slept by hand."""
+    root = _fixture()
+    try:
+        for i in range(6):
+            r = _run(root, "add", "--when", "date:2026-09-01", "--what", f"item {i}", "--tier", "T0",
+                     "--date", "2026-08-30")
+            assert r.returncode == 0
+        r = _run(root, "add", "--when", "date:2026-09-05", "--what", "owner decision", "--tier", "T0",
+                 "--date", "2026-08-30", "--sticky")
+        assert r.returncode == 0 and r.stdout.startswith("added tr-"), r
+        sticky_id = r.stdout.split()[1]
+        r = _run(root, "add", "--when", "date:2026-09-01", "--what", "item 5", "--tier", "T0",
+                 "--date", "2026-08-30", "--sticky")
+        assert r.stdout.startswith("exists"), "an existing trigger is pinned, not duplicated"
+        for day in range(19, 26):
+            r = _run(root, "hook", "--date", f"2026-09-{day}", "--format", "text")
+            lines = [l for l in r.stdout.splitlines() if l.startswith("- [T0")]
+            assert 2 <= len(lines) <= 5, r.stdout   # plain rows drop out as they fall asleep
+            # Sticky rows come first: the newest-dated owner item outranks older plain ones.
+            assert {lines[0].split("] ", 1)[1].split(" (")[0],
+                    lines[1].split("] ", 1)[1].split(" (")[0]} == {"owner decision", "item 5"}, lines
+            assert all("; sticky)" in l for l in lines[:2]), lines
+        rows = {json.loads(l)["id"]: json.loads(l) for l in (root / "_private" / "triggers" /
+                "triggers.jsonl").read_text(encoding="utf-8").splitlines()}
+        sticky_rows = [x for x in rows.values() if x.get("sticky")]
+        assert len(sticky_rows) == 2 and all(not x.get("slept_until") for x in sticky_rows), sticky_rows
+        assert any(x.get("state") == "asleep" for x in rows.values() if not x.get("sticky")), \
+            "plain triggers still fall asleep after three days of showings"
+        r = _run(root, "sleep", sticky_id, "--date", "2026-09-25")
+        assert r.returncode == 0
+        r = _run(root, "due", "--date", "2026-09-26")
+        assert "owner decision" not in r.stdout, "an explicit sleep still applies to a sticky trigger"
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 TESTS = [
     test_add_due_fire_and_tier_boundary,
     test_read_only_commands_touch_nothing_on_a_fresh_root,
@@ -211,6 +315,10 @@ TESTS = [
     test_hook_limits_and_auto_sleep_after_ignores,
     test_claim_lease_refuses_second_holder_and_due_stays_read_only,
     test_scan_experiments_and_decision_rereviews,
+    test_shown_counts_once_per_calendar_day,
+    test_hook_fire_instruction_runs_as_written,
+    test_add_refuses_when_kinds_that_never_fire,
+    test_sticky_triggers_never_auto_sleep_and_lead_the_hook,
 ]
 
 
