@@ -145,14 +145,12 @@ I tested that on the part I like best, the thinking lenses: do they improve the 
 models from three vendors compared 26 pairs of answers without knowing which was which, one written with the lens
 skill and one without. Where a judge picked a side, it was the lens side 52%, 58% and 56% of the time, too close
 to tell from chance on 26 pairs. So the lenses stay for the person, which is why the agent shows you its question.
-Whether seeing the question helps a person decide has not been measured.
 
 Rules were the first thing I tried, and they did not hold. In five months of my own sessions there were thirteen
 kinds of mistake the agent already had a rule against, such as handing over a document it had not reopened, and
 twelve of them kept happening. So what has to happen every time is done by a hook or a check instead.
 
-The kit still prescribes a method to the model in 24 places, and [one page](system/specs/model-assumptions.md)
-lists each with its reason. The same page says whom each part is for: you, or a gap in today's models and
+[One page](system/specs/model-assumptions.md) says whom each part is for: you, or a gap in today's models and
 runtimes, such as a session that forgets across a compaction. When a better model arrives, you test the parts
 that fill a gap again and drop the ones whose gap is gone. The page has the steps.
 
@@ -161,15 +159,11 @@ that fill a gap again and drop the ones whose gap is gone. The page has the step
 - Sessions you start in this folder get the kit. It does not install into a code repository, and it is not a
   plugin.
 - Requirements: Python 3.9 or later, Git and Bash. There are no packages to install: the kit uses only Python's
-  standard library. It was tested on macOS and is expected to work on Linux.
+  standard library.
 - On a company machine, read [the checklist](system/CHECKLIST.md) section A before you clone: your IT policy on
   outside repositories, project hooks and outside models.
 - A fresh installation adds about 2,500 tokens to each new session: the [seven rules](AGENTS.md) and the names
   and descriptions of nine skills. The check at the end of a turn usually takes under a second.
-- Claude Code and Antigravity were run in live sessions on a fresh installation. Codex was tested by replaying
-  captured hook inputs and has not been run live yet. [How each was tested](MANUAL.md#hooks).
-- This is a preview. No one new to the kit has used it alone for a week yet, so whether it saves a newcomer's
-  attention is not measured.
 - Everything that is yours is ignored by Git, so back it up yourself. [Where things are](MANUAL.md#where-things-are).
 - Of three optional parts, the delivery check starts on, search by meaning starts on only when an embedding
   server on this machine already answers, and the improvement loop stays off until you turn it on.
