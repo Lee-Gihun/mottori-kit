@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/hero-dark.svg">
-    <img src=".github/assets/hero-light.svg" width="100%" alt="Over 21 days the conversation fills and is compacted four times. On day three a decision is logged to the journal on disk, and after every compaction the state is put back, so the agent still has it on day 21.">
+    <img src=".github/assets/hero-light.svg" width="100%" alt="Over 21 days one conversation moves between a checkout bug at work, a novel&#x27;s fourth chapter and an apartment hunt, and is compacted four times. Under it each topic has its own file on disk, a line no compaction cuts: written down when the topic first comes up, handed back whenever the talk returns to it.">
   </picture>
 </p>
 

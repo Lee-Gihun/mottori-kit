@@ -39,5 +39,5 @@
 <line x1="1084.4" y1="102" x2="1084.4" y2="191.8" stroke="#e3a04f" stroke-width="1.5"/>
 <path d="M1084.4 199L1079.9 190L1088.9 190Z" fill="#e3a04f"/>
 <text x="316" y="160" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">copied once</text>
-<text x="40" y="338" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">Setup never overwrites a file, and git pull never touches your copy. Two more forms are copied when first used.</text>
+<text x="40" y="338" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">instance/ holds your settings and rules. Setup never overwrites a file, and git pull never touches your copy.</text>
 </svg>

@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../../../.github/assets/sources-dark.svg">
-    <img src="../../../.github/assets/sources-light.svg" width="100%" alt="A file in tools/loop/sources/ named after the source defines what it sends, its settings, its steps and its watch. The loop finds it by its name and runs it like the papers source.">
+    <img src="../../../.github/assets/sources-light.svg" width="100%" alt="The loop&#x27;s steps run along the top. A source is one file on disk, tools/loop/sources/&lt;name&gt;.py, which says what it sends, its settings, its steps and what is watched. The loop reads it by name.">
   </picture>
 </p>
 

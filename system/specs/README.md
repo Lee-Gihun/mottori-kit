@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/specs-dark.svg">
-    <img src="../../.github/assets/specs-light.svg" width="100%" alt="A decision record says what was decided, why, what was measured, what was rejected and when to look again. Its evidence line names the tests that hold it, and a check fails when a named test is missing. Records are appended; a later one names the earlier one it changes.">
+    <img src="../../.github/assets/specs-light.svg" width="100%" alt="Decision records are appended one after another. Each one&#x27;s evidence line names the tests that hold it, and a check fails when a named test is gone. A later record names the one it changes.">
   </picture>
 </p>
 

@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/lib-dark.svg">
-    <img src="../../.github/assets/lib-light.svg" width="100%" alt="The commands in tools/ ask the modules in tools/lib/, and every module finds its files through paths.py. A path, a constant or a file&#x27;s shape is defined in one module only.">
+    <img src="../../.github/assets/lib-light.svg" width="100%" alt="The commands ask the shared modules, and every module finds its files through paths.py. A path, a constant or a file&#x27;s shape is defined in one module; the others ask it.">
   </picture>
 </p>
 

@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/skills-dark.svg">
-    <img src="../../.github/assets/skills-light.svg" width="100%" alt="Four skills for thinking and writing and five for state and memory. Each opens by itself when its moment comes, or when you name it.">
+    <img src="../../.github/assets/skills-light.svg" width="100%" alt="One session drawn as growing context. Along it, skills open at their moments: now at the start, lenses before a decision, deep-pass for a decision that cannot be undone, plain-writing for text another person will read, recall to find what you said, large-jobs before a big job.">
   </picture>
 </p>
 

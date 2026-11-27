@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../.github/assets/tools-dark.svg">
-    <img src="../.github/assets/tools-light.svg" width="100%" alt="At session start the hooks run now.py and tasks.py. While you work the agent runs now.py log, recall.py and projects.py. At turn end gate.py checks links and state. Before a commit enforce.py checks what may leave. Any time: doctor.py, options.py, fresh_worker.py.">
+    <img src="../.github/assets/tools-light.svg" width="100%" alt="Along one conversation: at the start and after each compaction the current state is put in front of the agent; while you work each decision is written down and your own earlier words can be found; at the end of each reply a broken link or forgotten state stops it once; at a commit or push broken links and private files are kept out. Any time, you can check the whole setup.">
   </picture>
 </p>
 

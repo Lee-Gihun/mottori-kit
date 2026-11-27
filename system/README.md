@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../.github/assets/system-dark.svg">
-    <img src="../.github/assets/system-light.svg" width="100%" alt="Four layers. Every session: AGENTS.md, the seven rules. At fixed moments: rituals.md. When a situation comes up: a skill. When you want the reason: the design records.">
+    <img src="../.github/assets/system-light.svg" width="100%" alt="Four rows across one long conversation, compacted four times. AGENTS.md is loaded at the start and again after every compaction, rituals.md at fixed moments, a skill when its situation comes up, and the design records only when you ask why. What is read most often is kept shortest.">
   </picture>
 </p>
 

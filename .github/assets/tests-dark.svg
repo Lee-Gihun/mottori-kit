@@ -6,10 +6,10 @@
 <text x="64" y="66" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" font-weight="600" letter-spacing="1.6">A RELEASE: RUN.PY --FULL</text>
 <rect x="64" y="90" width="560" height="160" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
 <text x="84" y="126" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" font-weight="600" letter-spacing="1.6">EVERY CHANGE: RUN.PY</text>
-<text x="84" y="164" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3">every test file, a few side by side</text>
-<text x="84" y="196" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3">a test that never ran fails its file</text>
-<text x="680" y="130" font-size="21" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3">+ the full mutation set</text>
-<text x="680" y="170" font-size="21" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3">+ the installed-shape run</text>
-<text x="680" y="210" font-size="21" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3">+ a fresh install in a clone</text>
+<text x="84" y="164" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3">every test file, several at once</text>
+<text x="84" y="196" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3">a test that never ran counts as failed</text>
+<text x="680" y="130" font-size="21" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3">+ broken copies of the code the tests must catch</text>
+<text x="680" y="170" font-size="21" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3">+ the tests again in an installed layout</text>
+<text x="680" y="210" font-size="21" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3">+ a fresh install from scratch</text>
 <text x="40" y="316" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">Only Python and Git are needed.</text>
 </svg>
