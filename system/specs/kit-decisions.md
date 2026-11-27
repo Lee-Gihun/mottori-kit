@@ -4720,3 +4720,20 @@ correctly, but the reader had to decode two rows of bars before getting to the r
 
 Reconsider: someone new to the kit walks the tutorial alone and gets stuck at a step, or a runtime changes how a
 conversation is compacted.
+
+### DR-098 The README says what the kit does, without defensive notes (2026-11-27 · active)
+
+Decision: the README drops four sentences that hedged instead of saying what the kit does: that it is a preview
+no newcomer has used alone for a week, that whether seeing a lens's question helps a person has not been
+measured, that Codex was tested by replayed hook inputs and not run live, that it was tested on macOS and is
+expected to work on Linux, and that the kit still prescribes a method to the model in 24 places. The page that
+lists each part with its reason stays linked. This changes item 4 of `decision:KIT-DR-083`.
+
+Context: the owner (2026-11-27) said such notes, written defensively, do not belong in the published README,
+should be removed rather than reworded, and that he had never asked for them; the preview note reached
+`decision:KIT-DR-083` inside a list of recommendations he accepted as a whole. What was measured and how each
+runtime was tested stays in the manual and the decision records.
+
+evidence: none
+
+Reconsider: a reader acts on the README as if a part were tested in a way it was not.
