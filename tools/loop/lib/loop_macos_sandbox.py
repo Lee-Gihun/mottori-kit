@@ -79,8 +79,72 @@ def toolchain():
             p = subprocess.run([git, "--exec-path"], capture_output=True, text=True, timeout=10)
             if p.returncode == 0 and p.stdout.strip():
                 found.add(os.path.realpath(p.stdout.strip()))
+        # The folders of the libraries the interpreter loads, where they really are.
+        found.update(os.path.dirname(os.path.realpath(lib)) for lib in linked_libraries())
         _TOOLCHAIN.extend(sorted(found))
     return list(_TOOLCHAIN)
+
+
+_LIBRARIES = []
+
+
+def linked_libraries():
+    """The shared libraries outside the system's that this Python and its extension modules load, by the
+    names they are loaded under, followed to the libraries those load in turn. Homebrew's Python loads
+    sqlite, ssl and others from /opt/homebrew/opt/<name>/lib, outside its own prefix; without them a
+    test inside the sandbox failed on its first import of sqlite3 ("blocked by sandbox")."""
+    if not _LIBRARIES:
+        import glob
+        import sysconfig
+        otool = shutil.which("otool")
+        todo = [os.path.realpath(sys.executable)] + glob.glob(
+            os.path.join(sysconfig.get_path("platstdlib"), "lib-dynload", "*.so"))
+        seen, libs = set(), set()
+        own = tuple(os.path.realpath(p) + os.sep for p in {sys.prefix, sys.base_prefix})
+        while otool and todo:
+            f = todo.pop()
+            if f in seen:
+                continue
+            seen.add(f)
+            try:
+                out = subprocess.run([otool, "-L", f], capture_output=True, text=True, timeout=10).stdout
+            except (OSError, subprocess.SubprocessError):
+                continue
+            for line in out.splitlines()[1:]:
+                lib = line.strip().split(" (")[0]
+                # The system's own come from the shared cache and SYSTEM_READS; @rpath names are relative
+                # to the module, inside the prefix.
+                if lib.startswith("/") and not lib.startswith(("/usr/lib/", "/System/")):
+                    if not os.path.realpath(lib).startswith(own):   # the prefix is allowed already
+                        libs.add(lib)
+                    todo.append(os.path.realpath(lib))
+        _LIBRARIES.extend(sorted(libs) or [""])
+    return [lib for lib in _LIBRARIES if lib]
+
+
+def _link_chain(path):
+    """Every link a lookup of path passes through, in order, ending at the real file. Homebrew starts its
+    Python by a link in /opt/homebrew/opt whose target holds another link; the sandbox must be allowed
+    to read each of them to find the program, or the start fails with "Operation not permitted"."""
+    links, p = [], os.path.abspath(path)
+    for _ in range(40):   # the limit of links a lookup follows
+        parts, cur = p.split(os.sep)[1:], os.sep
+        for i, part in enumerate(parts):
+            cur = os.path.join(cur, part)
+            if os.path.islink(cur):
+                links.append(cur)
+                p = os.path.normpath(os.path.join(os.path.dirname(cur), os.readlink(cur), *parts[i + 1:]))
+                break
+        else:
+            return links
+    return links
+
+
+def program_links():
+    """The links on the way to the programs a test run starts by name or by sys.executable."""
+    names = {sys.executable, getattr(sys, "_base_executable", "") or sys.executable,
+             shutil.which("python3") or "", shutil.which("git") or "", *linked_libraries()}
+    return sorted({link for name in names if name for link in _link_chain(name)})
 
 
 def profile(writable, readable, secret):
@@ -88,7 +152,9 @@ def profile(writable, readable, secret):
     readable, the toolchain and SYSTEM_READS, never under a path of secret; no network of any kind."""
     reads = [writable, *readable, *toolchain(), *SYSTEM_READS]
     devices = " ".join(f'(literal "{d}")' for d in DEVICES)
-    metadata = " ".join(f'(literal "{_quote(p)}")' for p in _ancestors(reads))
+    links = program_links()
+    # A link on the way to a program is readable as a link (where it points), not as a folder.
+    metadata = " ".join(f'(literal "{_quote(p)}")' for p in sorted(set(_ancestors(reads + links)) | set(links)))
     return f"""(version 1)
 (deny default)
 (allow process-fork)
