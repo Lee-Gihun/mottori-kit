@@ -16,6 +16,11 @@ python3 tools/linkcheck.py          # ends with "broken: 0"
 python3 tools/dev/evidencecheck.py  # prints nothing when every evidence marker is well formed and names something here
 ```
 
+Run the suite a second time with a short temporary folder, `TMPDIR=/tmp/k python3 tools/tests/run.py --full`
+(after `mkdir -p /tmp/k`): on macOS the default one is long, on Linux it is `/tmp`, and records that carry a path
+change length with it. A passing run on one machine is not enough for `main`: a change reaches `main` through a
+pull request, and only after its checks on Ubuntu and macOS pass there.
+
 A commit itself runs only the checks an installed instance runs (links and state), and only where the Git hooks
 are installed: `bash setup.sh` installs them, and in a clone where setup has not run nothing checks a commit.
 Continuous integration (`.github/workflows/gates.yml`) runs the same three commands and `git diff --check` on

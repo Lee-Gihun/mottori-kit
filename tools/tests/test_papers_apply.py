@@ -446,6 +446,14 @@ def report_md(root, cyc=CYCLE):
     return (root / cyc / "REPORT.md").read_text()
 
 
+def _reports(root, st):
+    """The applier's report and the cycle's report, as far as they were written, for a failure message."""
+    out = []
+    for p in (root / CYCLE / "REPORT.md", root / st.get("last_dir", "-") / "REPORT.md"):
+        out.append(f"{p.name} in {p.parent.name}: " + (p.read_text()[-1500:] if p.is_file() else "(not written)"))
+    return "\n".join(out)
+
+
 def outcome_of(root, cyc=CYCLE):
     return json.loads((root / cyc / "apply" / "outcome.json").read_text())
 
@@ -798,7 +806,9 @@ def test_papers_cycle_with_an_abandoned_bundle_completes_quietly():
                                cwd=root, capture_output=True, text=True, timeout=600, env=env)
             st = json.loads((root / "_private" / "papers" / "state.json").read_text())
             logt = (root / "_private" / "papers" / "cycle.log").read_text()
-            assert r.returncode == 0 and st["status"] == "ok" and not st["fails"], (n, st, logt[-800:])
+            # The applier's own report says why a stage failed; the cycle log only says that it did.
+            assert r.returncode == 0 and st["status"] == "ok" and not st["fails"], (
+                n, st, logt[-800:], _reports(root, st), r.stderr[-800:])
             assert LS.apply_status(str(root / CYCLE)) == "done" and entry(root)["outcome"] == "abandoned", report_md(root)
             # A finished cycle adds nothing to the journal.
             assert not [x for x in calls(root) if x[0] == "now.py"], calls(root)
