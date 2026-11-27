@@ -52,7 +52,13 @@ jobs:
         run: |
           python3 tools/linkcheck.py
           python3 tools/dev/evidencecheck.py
-          # A clean checkout has no working-copy diff, so check what the event submitted. A push
-          # that creates the branch has no before commit; the empty tree stands in for it.
-          case "$BASE" in ""|0000000000000000000000000000000000000000) BASE=$(git hash-object -t tree /dev/null) ;; esac
+          # A clean checkout has no working-copy diff, so check what the event submitted. Where there
+          # is no earlier commit to compare with, the empty tree stands in and the whole tree is
+          # checked: a push that creates the branch has none, and after a history rewrite the
+          # event's before commit is not in this clone ("bad object") or not an ancestor of HEAD.
+          case "$BASE" in 0000000000000000000000000000000000000000) BASE="" ;; esac
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null \
+             || ! git merge-base --is-ancestor "$BASE" HEAD; then
+            BASE=$(git hash-object -t tree /dev/null)
+          fi
           git diff --check "$BASE" HEAD
