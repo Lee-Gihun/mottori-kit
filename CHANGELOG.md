@@ -91,9 +91,10 @@ embedding server on this machine already answers, and `loop` is off;
 Code keeps transcripts. The improvement loop runs on macOS only and ends at a reviewed patch that the owner's agent
 applies; it never writes into the owner's files. It ships one source, papers, which reads new arXiv papers; a source
 of the owner's own goes in `tools/loop/sources/`. On a Mac whose loop runs Homebrew's Python, the sandbox refused
-to start the interpreter, which Homebrew installs as a link, so every candidate's tests failed before any change; a
-program in the sandbox is now started by its real path
-(`test:tools/tests/test_loop_isolation.py::test_a_program_named_by_a_link_starts_in_the_sandbox`).
+the interpreter, which Homebrew installs as a link, and the libraries it loads from outside its own folder, so every
+candidate's tests failed before any change. The sandbox now follows the links on the way to the interpreter and to
+Git, allows the libraries the interpreter loads (listed with `otool`), and takes its writable folder by its real
+path (`test:tools/tests/test_loop_isolation.py::test_a_program_named_by_a_link_starts_in_the_sandbox`).
 
 ### `[Note]` Language
 

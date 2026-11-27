@@ -35,7 +35,10 @@ def sandbox_profile(writable, root=None, home=None, readable=()):
     home = os.path.realpath(home or pwd.getpwuid(os.getuid()).pw_dir)
     secret = [os.path.join(os.path.realpath(root or ROOT), PRIVATE)] + \
              [os.path.join(home, d) for d in (".claude", ".codex", ".ssh")]
-    return loop_platform.module("sandbox").profile(writable, [os.path.realpath(p) for p in readable], secret)
+    # Real paths only: the sandbox matches the real path, so a writable folder named through a link
+    # (/var is /private/var on macOS) would be neither writable nor readable inside.
+    return loop_platform.module("sandbox").profile(os.path.realpath(writable),
+                                                   [os.path.realpath(p) for p in readable], secret)
 
 
 def object_stores(repo):

@@ -158,18 +158,36 @@ def test_no_test_file_serves_on_a_network_address():
     assert not serving, serving
 
 
+LINKED_RUN = r"""
+import os, subprocess, sys
+sys.path[:0] = [os.path.join(sys.argv[1], "tools", "loop", "lib"), os.path.join(sys.argv[1], "tools", "lib"),
+                os.path.join(sys.argv[1], "tools")]
+import loop_isolate as LI
+work = sys.argv[2]
+# A test inside the sandbox starts Python again by sys.executable, which is the link this ran by.
+inner = "import subprocess, sys; print(subprocess.run([sys.executable, '-c', 'print(7)'], capture_output=True, text=True).stdout.strip())"
+for argv in ([sys.executable, "-c", "print(7)"], [sys.executable, "-c", inner]):
+    r = subprocess.run(LI.sandboxed(LI.sandbox_profile(work), argv), cwd=work, capture_output=True, text=True,
+                       timeout=60, env=LI.sandbox_env(work, work))
+    print(r.returncode, r.stdout.strip(), r.stderr.strip()[-300:])
+"""
+
+
 @macos_only(SANDBOX, sandbox=True)
 def test_a_program_named_by_a_link_starts_in_the_sandbox():
-    """Homebrew's python3 is a link in a folder the sandbox may not read. Started by that name, the
-    sandbox refused it (execvp: Operation not permitted) and every test failed before any change; the
-    loop starts a program by its real path."""
+    """Homebrew's python3 is a link in a folder the sandbox may not read, and the loop runs by that name.
+    The sandbox refused to start it (execvp: Operation not permitted), and a test inside that starts
+    Python again by sys.executable was refused the same way; every test failed before any change. The
+    loop's own Python here runs by such a link, and both starts must work."""
     links, work = tempfile.mkdtemp(), tempfile.mkdtemp()
     try:
         link = os.path.join(links, "python3")
         os.symlink(os.path.realpath(sys.executable), link)
-        r = subprocess.run(LI.sandboxed(LI.sandbox_profile(work), [link, "-c", "print('started')"]),
-                           capture_output=True, text=True, timeout=60, env=LI.sandbox_env(work, work))
-        assert r.returncode == 0 and r.stdout.strip() == "started", (r.returncode, r.stderr[-400:])
+        r = subprocess.run([link, "-c", LINKED_RUN, os.path.dirname(TOOLS), work], cwd=work,
+                           capture_output=True, text=True, timeout=120)
+        lines = r.stdout.strip().splitlines()
+        assert r.returncode == 0 and lines == ["0 7 ", "0 7 "] or [ln.split(" ", 2)[:2] for ln in lines] == [
+            ["0", "7"], ["0", "7"]], (r.returncode, r.stdout[-600:], r.stderr[-600:])
     finally:
         shutil.rmtree(links, ignore_errors=True)
         shutil.rmtree(work, ignore_errors=True)
