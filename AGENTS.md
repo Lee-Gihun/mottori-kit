@@ -35,8 +35,9 @@ rules win.
    source file. It never lets a newer file on disk override a requirement or rule the owner confirmed. Log
    decisions, phase changes, corrections, and lessons in the same turn with `python3 tools/now.py log
    "[track/type] one line"`, where the track is a short lowercase name and the type is usually `decision`,
-   `state`, `correction` or `lesson`. `_private/` is the owner's place for what must stay out of Git and out of
-   anything written for other people; you still read it, as you read everything here. Use
+   `state`, `correction` or `lesson`. The journal, `state/` and `instance/` never enter Git. `_private/` is the
+   owner's place for what must also stay out of anything written for other people; you still read it, as you
+   read everything here. Use
    `log --private` when the owner has said so or has called the material confidential, and say in one line that
    you did. When something only looks that way, such as another person's private matter, suggest once that it
    go there and log it the ordinary way. Do not suggest it for an ordinary work note that names a plan or a
