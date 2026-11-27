@@ -221,4 +221,3 @@ def unlike_snapshot(sha, tree_id, placed, root=None):
         if path not in placed or blob.returncode != 0 or sha256_bytes(blob.stdout) != placed[path]:
             out.append(path)
     return out
-
