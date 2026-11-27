@@ -219,9 +219,14 @@ def run_rows(rows, path):
                 continue
             failed.append(label)
             print(f"FAIL {label} (exit {r.returncode}, {seconds}s" + counted, flush=True)
-            # The tail names the failing check; the whole log would bury the other files' lines.
-            for line in r.stdout.rstrip().splitlines()[-20:]:
+            # Each failed check's own line, then the tail; the whole log would bury the other files'
+            # lines. A failed line above the tail was cut off before, which left a CI run unexplained.
+            lines = r.stdout.rstrip().splitlines()
+            tail = lines[-20:]
+            for line in [x for x in lines[:-20] if x.lstrip().startswith("✗")] + tail:
                 print("    " + line, flush=True)
+            for line in (r.stderr or "").rstrip().splitlines()[-8:]:
+                print("    stderr: " + line, flush=True)
     return failed, skipped
 
 

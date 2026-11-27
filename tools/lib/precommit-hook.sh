@@ -26,7 +26,8 @@ case "$(basename "$0")" in
     # drift in the companion pre-push hook and in the template. Another tool's pre-push hook (Git
     # LFS installs one) is the owner's and stops no commit: doctor reports that pushes are not
     # checked. Replacing this file itself remains outside a repo-local hook's authority.
-    if ! CHECK="$(bash "$ROOT/tools/install_hooks.sh" --check 2>&1)"; then
+    # Only the hook lines on stdout are judged: a locale warning on stderr is not a hook.
+    if ! CHECK="$(bash "$ROOT/tools/install_hooks.sh" --check 2>/dev/null)"; then
       if printf '%s\n' "$CHECK" | cut -f1 | grep -qvxE 'current|chained|foreign'; then
         echo "mottori hook self-check failed (installed hooks differ from tools/lib/precommit-hook.sh):" >&2
         printf '%s\n' "$CHECK" >&2

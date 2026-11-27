@@ -186,10 +186,11 @@ if ! written_ok "$INSTALL_HOOK" "$HOOK" || ! written_ok "$INSTALL_PUSH" "$PUSH_H
 fi
 
 NONCE="probe-$$-$(date +%s)"
-# Probe the executable directly to support Git versions without git hook run.
+# Probe the executable directly to support Git versions without git hook run. Only what the hook
+# prints on stdout counts: bash on Linux warns on stderr when the locale is not installed.
 PROBE="$HOOK"; [[ "$INSTALL_HOOK" -eq 1 ]] || PROBE="$PUSH_HOOK"
 GOT="$NONCE"
-[[ "$INSTALL_HOOK" -eq 0 && "$INSTALL_PUSH" -eq 0 ]] || GOT="$("$PROBE" --mottori-probe "$NONCE" 2>&1 || true)"
+[[ "$INSTALL_HOOK" -eq 0 && "$INSTALL_PUSH" -eq 0 ]] || GOT="$("$PROBE" --mottori-probe "$NONCE" 2>/dev/null || true)"
 if [[ "$GOT" != "$NONCE" ]]; then
   rollback
   echo "git dispatcher probe failed, restored: $HOOK" >&2
