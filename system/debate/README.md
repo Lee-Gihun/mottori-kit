@@ -1,5 +1,12 @@
 # Cross-runtime debate
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/debate-dark.svg">
+    <img src="../../.github/assets/debate-light.svg" width="100%" alt="Claude and Codex take turns: a proposal, an attack on its assumptions, a reply, until they converge. You receive one recommendation or the one decision still open, not the messages.">
+  </picture>
+</p>
+
 Use another runtime to challenge a decision's assumptions and evidence. The owner should receive the
 resolved recommendation or the concrete unresolved decision, rather than relay messages between tools.
 A debate can improve a proposal; agreement does not independently validate it.

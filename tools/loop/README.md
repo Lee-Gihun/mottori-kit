@@ -1,5 +1,12 @@
 # tools/loop/
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/loop-dark.svg">
+    <img src="../../.github/assets/loop-light.svg" width="100%" alt="Once a week: new papers and your corrections, a judge picks at most two proposals, a builder writes each in a temporary clone, the tests run in a sandbox, a reviewer reads the patch, and a patch file with a report is saved. The loop never writes into your files; you or your agent apply the patch.">
+  </picture>
+</p>
+
 The improvement loop: once a week it gathers proposals to change the kit, builds each one in a copy, tests it,
 has it reviewed, and ends at a saved patch. It is off until you turn it on, and it runs on macOS only. How to use
 it, what it sends and what it cannot do are in [system/loop/README.md](../../system/loop/README.md). This page says

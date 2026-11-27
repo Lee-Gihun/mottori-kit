@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 330" width="1280" height="330" role="img" aria-labelledby="t d">
+<title id="t">The regression suite in two sizes</title>
+<desc id="d">Every change runs run.py: every test file, a few side by side. A release runs it with --full, which adds the full mutation set, the installed-shape run and a fresh install in a clone.</desc>
+<rect x="40" y="30" width="1200" height="250" rx="14" fill="none" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="64" y="66" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" font-weight="600" letter-spacing="1.6">A RELEASE: RUN.PY --FULL</text>
+<rect x="64" y="90" width="560" height="160" rx="10" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="84" y="126" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" font-weight="600" letter-spacing="1.6">EVERY CHANGE: RUN.PY</text>
+<text x="84" y="164" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328">every test file, a few side by side</text>
+<text x="84" y="196" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328">a test that never ran fails its file</text>
+<text x="680" y="130" font-size="21" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328">+ the full mutation set</text>
+<text x="680" y="170" font-size="21" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328">+ the installed-shape run</text>
+<text x="680" y="210" font-size="21" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328">+ a fresh install in a clone</text>
+<text x="40" y="316" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e">Only Python and Git are needed.</text>
+</svg>

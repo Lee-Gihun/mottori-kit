@@ -1,5 +1,12 @@
 # tools/lib/
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/lib-dark.svg">
+    <img src="../../.github/assets/lib-light.svg" width="100%" alt="The commands in tools/ ask the modules in tools/lib/, and every module finds its files through paths.py. A path, a constant or a file&#x27;s shape is defined in one module only.">
+  </picture>
+</p>
+
 What the commands in `tools/` share. Nothing here is run by hand.
 
 Two rules hold in this folder. No two modules of the kit import each other, here or in `tools/`. And one fact

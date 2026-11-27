@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 380" width="1280" height="380" role="img" aria-labelledby="t d">
+<title id="t">Each decision record names the tests that hold it</title>
+<desc id="d">Decision records are appended one after another. Each one's evidence line names the tests that hold it, and a check fails when a named test is gone. A later record names the one it changes.</desc>
+<text x="40" y="92" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" font-weight="600" letter-spacing="1.6">RECORDS</text>
+<rect x="203.1" y="68" width="158.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="282.6" y="93" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">KIT-DR-090</text>
+<rect x="396.8" y="68" width="158.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="476.2" y="93" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">KIT-DR-091</text>
+<line x1="366" y1="86" x2="385.6" y2="86" stroke="#d1d9e0" stroke-width="1.5"/>
+<path d="M392.8 86L383.8 90.5L383.8 81.5Z" fill="#d1d9e0"/>
+<rect x="590.4" y="68" width="158.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="669.8" y="93" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">KIT-DR-092</text>
+<line x1="559.6" y1="86" x2="579.2" y2="86" stroke="#d1d9e0" stroke-width="1.5"/>
+<path d="M586.4 86L577.4 90.5L577.4 81.5Z" fill="#d1d9e0"/>
+<rect x="784.1" y="68" width="158.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="863.5" y="93" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">KIT-DR-093</text>
+<line x1="753.3" y1="86" x2="772.9" y2="86" stroke="#d1d9e0" stroke-width="1.5"/>
+<path d="M780.1 86L771.1 90.5L771.1 81.5Z" fill="#d1d9e0"/>
+<rect x="977.7" y="68" width="158.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="1057.1" y="93" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">KIT-DR-094</text>
+<line x1="946.9" y1="86" x2="966.5" y2="86" stroke="#d1d9e0" stroke-width="1.5"/>
+<path d="M973.7 86L964.7 90.5L964.7 81.5Z" fill="#d1d9e0"/>
+<rect x="1171.3" y="68" width="33.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="1188.3" y="93" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">…</text>
+<line x1="1140.6" y1="86" x2="1160.1" y2="86" stroke="#d1d9e0" stroke-width="1.5"/>
+<path d="M1167.3 86L1158.3 90.5L1158.3 81.5Z" fill="#d1d9e0"/>
+<text x="40" y="237" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13" font-weight="600" letter-spacing="1.6">TESTS</text>
+<rect x="168.4" y="200" width="1071.6" height="60" rx="10" fill="#fbf1e3" stroke="#9a5b13" stroke-width="1.5"/>
+<rect x="591.3" y="212" width="242.2" height="36" rx="6" fill="#ffffff"/>
+<text x="712.4" y="237" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9a5b13" text-anchor="middle">test_projects.py</text>
+<line x1="863.5" y1="106" x2="718.5" y2="195.2" stroke="#9a5b13" stroke-width="1.5"/>
+<path d="M712.4 199L717.7 190.5L722.4 198.1Z" fill="#9a5b13"/>
+<rect x="995.7" y="212" width="228.3" height="36" rx="6" fill="#ffffff"/>
+<text x="1109.8" y="237" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9a5b13" text-anchor="middle">test_options.py</text>
+<line x1="1057.1" y1="106" x2="1106.3" y2="192.7" stroke="#9a5b13" stroke-width="1.5"/>
+<path d="M1109.8 199L1101.5 193.4L1109.3 189Z" fill="#9a5b13"/>
+<text x="877.5" y="146" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13">evidence</text>
+<text x="40" y="312" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e">A check fails when a named test is gone. Records are appended, never rewritten.</text>
+</svg>
