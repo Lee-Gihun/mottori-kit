@@ -55,6 +55,11 @@ def toolchain():
     """The folders of the Python and the Git that run here, and of the developer tools, real paths."""
     if not _TOOLCHAIN:
         found = {os.path.realpath(sys.prefix), os.path.realpath(sys.base_prefix)}
+        # The folder the interpreter really runs from, which command() starts it by: in some
+        # installations it is not under the prefix.
+        for exe in {sys.executable, getattr(sys, "_base_executable", sys.executable)}:
+            if exe:
+                found.add(os.path.dirname(os.path.realpath(exe)))
         tools = extra_path()
         if tools:
             developer = os.path.realpath(os.path.dirname(os.path.dirname(tools)))
@@ -108,7 +113,14 @@ def command(rules, argv):
     """argv run under the profile text rules, or None when there is no sandbox program. The text goes
     on the command line, so no file a sandboxed program could rewrite decides what a later start may do."""
     sbx = program()
-    return [sbx, "-p", rules, *argv] if sbx else None
+    if not sbx:
+        return None
+    # A program named by a link is started by its real path. The rules allow real paths only, and
+    # following a link means reading it: Homebrew's python3 is a link in /opt/homebrew/opt, and the
+    # sandbox refused to start it ("execvp() ... Operation not permitted"), so on a Mac whose loop runs
+    # Homebrew's Python every test failed before any change was made.
+    exe = os.path.realpath(argv[0]) if argv and os.path.isabs(argv[0]) else argv[0] if argv else None
+    return [sbx, "-p", rules, *([exe] if argv else []), *argv[1:]]
 
 
 def extra_path():

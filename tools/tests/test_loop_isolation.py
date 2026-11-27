@@ -159,6 +159,23 @@ def test_no_test_file_serves_on_a_network_address():
 
 
 @macos_only(SANDBOX, sandbox=True)
+def test_a_program_named_by_a_link_starts_in_the_sandbox():
+    """Homebrew's python3 is a link in a folder the sandbox may not read. Started by that name, the
+    sandbox refused it (execvp: Operation not permitted) and every test failed before any change; the
+    loop starts a program by its real path."""
+    links, work = tempfile.mkdtemp(), tempfile.mkdtemp()
+    try:
+        link = os.path.join(links, "python3")
+        os.symlink(os.path.realpath(sys.executable), link)
+        r = subprocess.run(LI.sandboxed(LI.sandbox_profile(work), [link, "-c", "print('started')"]),
+                           capture_output=True, text=True, timeout=60, env=LI.sandbox_env(work, work))
+        assert r.returncode == 0 and r.stdout.strip() == "started", (r.returncode, r.stderr[-400:])
+    finally:
+        shutil.rmtree(links, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
+
+
+@macos_only(SANDBOX, sandbox=True)
 def test_the_files_that_served_on_loopback_pass_in_the_sandbox():
     """Run in the loop's own sandbox, as its test stage runs them, both files end with exit 0; a test
     that needs a terminal is counted as skipped there."""
@@ -178,6 +195,7 @@ TESTS = [
     test_no_test_file_serves_on_a_network_address,
     test_the_rules_deny_by_default,
     test_from_inside_only_the_run_folder_and_nothing_outside_the_sandbox,
+    test_a_program_named_by_a_link_starts_in_the_sandbox,
     test_the_files_that_served_on_loopback_pass_in_the_sandbox,
 ]
 
