@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""Opt-in SessionStart E2E for Codex and Claude: fresh positive plus hooks-disabled negative.
+"""Check, with real model calls and only when asked, that a new Codex or Claude session receives
+the SessionStart state: a session with hooks on must see it, and one with hooks off must not.
 
 The nonce exists only in the child process environment and hook output. It is never placed in the
 prompt, repository, or persistent session. Routine doctor must not invoke this model-backed test.
 
-Usage: `python3 tools/hook_canary.py` (Codex), `--claude`, or `--all`.
+Usage: `python3 tools/hook_canary.py` (Codex), `--claude`, or `--all`. Under --all a runtime that
+is not installed is skipped and nothing is saved for it. The Claude run uses the model named by
+MOTTORI_HOOK_CANARY_CLAUDE_MODEL, default haiku.
 """
+import argparse
 import datetime
 import json
 import os
@@ -16,11 +20,16 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-RESULT_PATH = os.path.join(ROOT, "state", "hook-canary.json")
-sys.path.insert(0, HERE)
+TOOLS = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [p for p in (TOOLS, os.path.join(TOOLS, "lib")) if p not in sys.path]
+import paths as P  # noqa: E402
+import safeio  # noqa: E402
+RESULT_PATH = P.hook_canary(ROOT)
 import hookdiag  # noqa: E402
-import i18n  # noqa: E402
 import claude_auth  # noqa: E402
+
+# Messages this module prints in more than one place, or too long to read inline.
+PROCESS_FAILED = "{kind} process failed: {error}"
 
 PROMPT = ("Do not use tools. If startup context contains a line beginning HOOK_CANARY:, "
           "respond with only the value after that prefix. Otherwise respond only ABSENT.")
@@ -83,7 +92,7 @@ def agent_messages(stream):
 def _run(token, hooks_enabled):
     codex = shutil.which("codex")
     if not codex:
-        raise FileNotFoundError(i18n.t("hookdiag.codex_missing"))
+        raise FileNotFoundError("codex CLI missing")
     # The user config stays loaded: Codex records project trust there, and an untrusted project
     # runs no project hooks, so ignoring it would fail the positive case on every real install.
     # Connectors and other external features are switched off one by one below instead.
@@ -97,28 +106,27 @@ def _run(token, hooks_enabled):
     cmd.append(PROMPT)
     env = {key: value for key, value in _runtime_env(token).items()
            if not key.upper().startswith(("CLAUDE_", "ANTHROPIC_"))}
-    return subprocess.run(cmd, capture_output=True, text=True, env=env, cwd=ROOT, timeout=180)
+    return subprocess.run(cmd, capture_output=True, text=True, env=env, cwd=ROOT, timeout=180,
+                          stdin=subprocess.DEVNULL)
 
 
 def _codex_canary(token):
     live = hookdiag.codex_hooks_list(ROOT)
     report = hookdiag.codex_runtime_report(live.get("hooks", []))
-    injector = report["injector"]
-    if not injector["declared"] or not injector["armed"]:
-        print(i18n.t("hook_canary.not_armed", injector=injector), file=sys.stderr)
+    start = report["SessionStart"]
+    if not start["declared"] or not start["armed"]:
+        print(f"canary stopped: SessionStart is not armed ({start})", file=sys.stderr)
         return False
 
     positive = _run(token, True)
     if positive.returncode:
-        print(i18n.t("hook_canary.process_failed", kind="positive",
-                     error=positive.stderr[-1000:]), file=sys.stderr)
+        print(PROCESS_FAILED.format(kind="positive", error=positive.stderr[-1000:]), file=sys.stderr)
         return False
     pos_messages, pos_tools = agent_messages(positive.stdout)
 
     negative = _run(token, False)
     if negative.returncode:
-        print(i18n.t("hook_canary.process_failed", kind="negative",
-                     error=negative.stderr[-1000:]), file=sys.stderr)
+        print(PROCESS_FAILED.format(kind="negative", error=negative.stderr[-1000:]), file=sys.stderr)
         return False
     neg_messages, neg_tools = agent_messages(negative.stdout)
 
@@ -136,8 +144,11 @@ def _codex_canary(token):
 def _run_claude(token, hooks_enabled):
     claude = shutil.which("claude")
     if not claude:
-        raise FileNotFoundError(i18n.t("doctor.claude_missing"))
-    cmd = [claude, "-p", "--no-session-persistence", "--tools", "", "--model", "fable",
+        raise FileNotFoundError((
+            "claude CLI missing; headless verification (claude -p) unavailable"
+        ))
+    cmd = [claude, "-p", "--no-session-persistence", "--tools", "",
+           "--model", os.environ.get("MOTTORI_HOOK_CANARY_CLAUDE_MODEL") or "haiku",
            "--effort", "high", "--permission-mode", "dontAsk", "--setting-sources", "project",
            "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
            "--disable-slash-commands", "--no-chrome", "--settings",
@@ -147,7 +158,9 @@ def _run_claude(token, hooks_enabled):
         cmd.append("--safe-mode")
     cmd.append(PROMPT)
     env = claude_auth.env(_runtime_env(token))
-    return subprocess.run(cmd, capture_output=True, text=True, env=env, cwd=ROOT, timeout=180)
+    # Without a closed stdin, claude -p waits on an open pipe until the timeout.
+    return subprocess.run(cmd, capture_output=True, text=True, env=env, cwd=ROOT, timeout=180,
+                          stdin=subprocess.DEVNULL)
 
 
 def _builtin_plugins_only(plugins):
@@ -188,14 +201,22 @@ def claude_messages(stream):
                          for item in content if isinstance(item, dict))
         if event.get("type") == "result":
             results.append(event.get("result") if event.get("is_error") is False else None)
-    result = results[0] if len(results) == 1 and isinstance(results[0], str) else None
+    result = results[0].strip() if len(results) == 1 and isinstance(results[0], str) else None
     return result, tools, initialized == 1 and isolation
 
 
 def _claude_canary(token):
     positive = _run_claude(token, True)
-    negative = _run_claude(token, False)
     pos, pos_tools, pos_isolated = claude_messages(positive.stdout)
+    if positive.returncode or pos != token:
+        # The verdict is already FAIL, so the second paid model call is skipped. The Codex path
+        # stops early only when a run fails as a process; after a wrong nonce it still runs both.
+        print("Claude SessionStart canary")
+        print("  positive exact nonce: FAIL")
+        print("  dispatcher_fired/effect: not verified")
+        print(positive.stderr[-1000:], file=sys.stderr)
+        return False
+    negative = _run_claude(token, False)
     neg, neg_tools, neg_isolated = claude_messages(negative.stdout)
     ok = (positive.returncode == 0 and negative.returncode == 0
           and pos == token and neg == "ABSENT" and pos_tools == neg_tools == 0
@@ -216,7 +237,8 @@ def _persist_results(rows, path=None):
     path = path or RESULT_PATH
     try:
         payload = json.load(open(path, encoding="utf-8"))
-        if payload.get("schema_version") != 1 or not isinstance(payload.get("runtimes"), dict):
+        if not isinstance(payload, dict) or payload.get("schema_version") != 1 \
+                or not isinstance(payload.get("runtimes"), dict):
             payload = {"schema_version": 1, "runtimes": {}}
     except (FileNotFoundError, OSError, ValueError, TypeError, json.JSONDecodeError):
         payload = {"schema_version": 1, "runtimes": {}}
@@ -231,43 +253,36 @@ def _persist_results(rows, path=None):
             "effect": verdict,
         }
 
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    temporary = f"{path}.tmp-{os.getpid()}"
-    try:
-        with open(temporary, "w", encoding="utf-8") as result_file:
-            json.dump(payload, result_file, ensure_ascii=False, indent=2)
-            result_file.write("\n")
-            result_file.flush()
-            os.fsync(result_file.fileno())
-        os.replace(temporary, path)
-    finally:
-        try:
-            os.unlink(temporary)
-        except FileNotFoundError:
-            pass
+    safeio.atomic_write(path, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
 
 
 def main():
-    runtime = "codex"
-    if "--all" in sys.argv:
-        runtime = "all"
-    elif "--claude" in sys.argv:
-        runtime = "claude"
+    # Reject unknown or abbreviated flags: a typo must not fall back to the paid Codex run.
+    parser = argparse.ArgumentParser(prog="hook_canary.py", allow_abbrev=False,
+                                     description=__doc__.strip().split("\n\n")[0])
+    parser.add_argument("--all", action="store_true", help="check Codex and Claude Code, each that is installed")
+    parser.add_argument("--claude", action="store_true", help="check Claude Code only (without a flag: Codex)")
+    args = parser.parse_args(sys.argv[1:])
+    runtime = "all" if args.all else "claude" if args.claude else "codex"
     token = secrets.token_hex(32)
     results = {}
     for name, function in (("codex", _codex_canary), ("claude", _claude_canary)):
         if runtime not in (name, "all"):
             continue
+        if runtime == "all" and not shutil.which(name):
+            # A runtime the owner does not use is not a failed canary.
+            print(f"{name} canary skipped: the {name} CLI is not installed, nothing saved", file=sys.stderr)
+            continue
         try:
             results[name] = bool(function(token))
         except Exception as e:
             results[name] = False
-            print(i18n.t("hook_canary.runtime_failed", runtime=name,
-                         error_type=type(e).__name__, error=e), file=sys.stderr)
+            print(f"{name} canary failed: {type(e).__name__}: {e}", file=sys.stderr)
     try:
-        _persist_results(results)
+        if results:
+            _persist_results(results)
     except Exception as e:
-        print(i18n.t("hook_canary.persist_failed", error_type=type(e).__name__, error=e),
+        print(f"failed to save canary results: {type(e).__name__}: {e}",
               file=sys.stderr)
         return 1
     return 0 if results and all(results.values()) else 1

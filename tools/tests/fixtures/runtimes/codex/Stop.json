@@ -1,0 +1,55 @@
+{
+ "runtime": "codex",
+ "version": "0.169.1",
+ "event": "Stop",
+ "cases": [
+  {
+   "case": "Stop-before",
+   "note": "first Stop of a turn; the logger blocked it once",
+   "proc_cwd": "/tmp/fixture-codex/sub",
+   "stdin": {
+    "session_id": "c0dec0de-0000-4000-8000-000000000001",
+    "turn_id": "c0dec0de-0000-4000-8000-000000000003",
+    "transcript_path": "/home/user/.codex/sessions/2026/11/20/rollout-2026-11-20T19-54-24-c0dec0de-0000-4000-8000-000000000001.jsonl",
+    "cwd": "/tmp/fixture-codex/sub",
+    "hook_event_name": "Stop",
+    "model": "gpt-6-luna",
+    "permission_mode": "bypassPermissions",
+    "stop_hook_active": false,
+    "last_assistant_message": "I can’t provide hidden context or system/developer messages."
+   }
+  },
+  {
+   "case": "Stop-retry",
+   "note": "the Stop after the block, same turn",
+   "proc_cwd": "/tmp/fixture-codex/sub",
+   "stdin": {
+    "session_id": "c0dec0de-0000-4000-8000-000000000001",
+    "turn_id": "c0dec0de-0000-4000-8000-000000000003",
+    "transcript_path": "/home/user/.codex/sessions/2026/11/20/rollout-2026-11-20T19-54-24-c0dec0de-0000-4000-8000-000000000001.jsonl",
+    "cwd": "/tmp/fixture-codex/sub",
+    "hook_event_name": "Stop",
+    "model": "gpt-6-luna",
+    "permission_mode": "bypassPermissions",
+    "stop_hook_active": true,
+    "last_assistant_message": "I can’t provide hidden context or system/developer messages."
+   }
+  },
+  {
+   "case": "Stop-fresh-turn",
+   "note": "the Stop of the next turn, on resume",
+   "proc_cwd": "/tmp/fixture-codex/sub",
+   "stdin": {
+    "session_id": "c0dec0de-0000-4000-8000-000000000001",
+    "turn_id": "c0dec0de-0000-4000-8000-000000000004",
+    "transcript_path": "/home/user/.codex/sessions/2026/11/20/rollout-2026-11-20T19-54-24-c0dec0de-0000-4000-8000-000000000001.jsonl",
+    "cwd": "/tmp/fixture-codex/sub",
+    "hook_event_name": "Stop",
+    "model": "gpt-6-luna",
+    "permission_mode": "bypassPermissions",
+    "stop_hook_active": false,
+    "last_assistant_message": "I can’t provide hidden context."
+   }
+  }
+ ]
+}

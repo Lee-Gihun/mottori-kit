@@ -38,7 +38,8 @@ Keep exact non-English terms when translation would obscure a parser label, quot
 input, or regression case. Describe their role in English. Do not translate runtime
 prompts, localized output, schema values, or fixture data as part of comment cleanup.
 Human-facing CLI help derived from a docstring may change to English; retain its
-commands, options, and meaning, and record that visible change.
+commands, options, and meaning, and note that visible change in the commit message
+or decision record.
 
 ## Text with a consumer
 
@@ -59,7 +60,8 @@ connection or update the consumer explicitly without weakening the tested behavi
 
 For a broad cleanup, preserve the starting files and record the reviewed scope.
 Keep required facts locally, move history to the appropriate record, and preserve
-frozen evidence. Snapshot storage must be outside exporter and indexer inputs.
+frozen evidence. Keep snapshots out of what the link check and recall read, so
+backup copies are not checked or found as live documents.
 
 Compare executable syntax and runtime literals separately from commentary. Python
 AST equality with docstrings removed does not prove unchanged help or reflection.

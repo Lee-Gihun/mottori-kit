@@ -1,19 +1,21 @@
 name: gates
 
-# Run required checks on Linux and macOS in CI; local hooks can be replaced or bypassed.
+# The checks before publication, on Linux and macOS; local hooks can be bypassed.
 
 on:
   push:
     branches: [main]
   pull_request:
 
+# No step writes to the repository, so the job token needs read access only.
+permissions:
+  contents: read
+
 jobs:
   gates:
-    # Job-level env may reference only github, needs, strategy, matrix, vars, secrets, and inputs.
-    # Use only contexts available at job-level env. runner.temp is available inside steps, not here.
-    env:
-      MOTTORI_TEST_LOG: ${{ github.workspace }}/.git/mottori-test-runs.log
-      MOTTORI_TEST_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.os }}-${{ matrix.python }}
+    # Only the kit's own repository and its forks, which keep its name; a user's workspace pushed
+    # under another name runs nothing here.
+    if: github.event.repository.name == 'mottori-kit'
     strategy:
       fail-fast: false
       matrix:
@@ -33,37 +35,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - name: git identity for fixture clones
-        run: |
-          git config --global user.name ci
-          git config --global user.email ci@example.invalid
+      # The runner is the one list of suites: every test file with an empty HOME and stdin from
+      # /dev/null, then the full mutation run, every engine test inside an installed instance, and
+      # the fresh install.
       - name: regression suites
-        run: |
-          set -o pipefail
-          : > "$MOTTORI_TEST_LOG"
-          for t in tools/test_*.py; do
-            [ "$(basename "$t")" = "test_instance_shape.py" ] && continue
-            echo "== $t"
-            PYTHONDONTWRITEBYTECODE=1 python3 "$t" || exit 1
-          done
-      - name: fresh install (ko, en)
-        run: |
-          MOTTORI_LANG=ko bash tools/test_fresh_install.sh
-          MOTTORI_LANG=en bash tools/test_fresh_install.sh
-      - name: installed instance shape
-        run: python3 tools/test_instance_shape.py
-      - name: static gates
+        # The runner gives each file an empty HOME, so fixture commits take their identity from here.
+        env:
+          GIT_AUTHOR_NAME: ci
+          GIT_AUTHOR_EMAIL: ci@example.invalid
+          GIT_COMMITTER_NAME: ci
+          GIT_COMMITTER_EMAIL: ci@example.invalid
+        run: python3 tools/tests/run.py --full
+      - name: static checks
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           python3 tools/linkcheck.py
-          python3 tools/evidencecheck.py
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            approval_base="${{ github.event.pull_request.base.sha }}"
-          else
-            approval_base="${{ github.event.before }}"
-          fi
-          if ! git cat-file -e "$approval_base^{commit}" 2>/dev/null; then
-            approval_base="$(git hash-object -t tree /dev/null)"
-          fi
-          MOTTORI_APPROVAL_MODE=commit MOTTORI_APPROVAL_BASE="$approval_base" python3 tools/manifest_build.py --check
-          python3 tools/test_language.py
-          git diff --check
+          python3 tools/dev/evidencecheck.py
+          # A clean checkout has no working-copy diff, so check what the event submitted. A push
+          # that creates the branch has no before commit; the empty tree stands in for it.
+          case "$BASE" in ""|0000000000000000000000000000000000000000) BASE=$(git hash-object -t tree /dev/null) ;; esac
+          git diff --check "$BASE" HEAD

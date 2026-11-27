@@ -1,13 +1,11 @@
-Korean: `ko/system/debate/README.md`
-
 # Cross-runtime debate
 
 Use another runtime to challenge a decision's assumptions and evidence. The owner should receive the
 resolved recommendation or the concrete unresolved decision, rather than relay messages between tools.
 A debate can improve a proposal; agreement does not independently validate it.
 
-This README is shared engine policy. Prompts, case records, and run outputs belong to the instance.
-The default ignore rules track this README and its translation, not the surrounding discussion files.
+This README is shared engine policy. Prompts, case records, and run outputs belong to the instance and live
+under `instance/debate/`, which Git ignores.
 Ignoring a file prevents ordinary Git inclusion; it does not authorize sending its contents to a model.
 
 ## Prepare the exchange
@@ -17,12 +15,12 @@ Ignoring a file prevents ordinary Git inclusion; it does not authorize sending i
    answer the question; do not attach an entire session, dossier collection, or personal corpus by default.
 3. Check the instance data boundary before dispatch. A prompt, a path, and a tool read can each disclose
    information. Use only permitted material. Where necessary, pose a generic technical question without
-   private source text, or mark the review unavailable. The runner refuses any prompt whose text names a
-   private path, even to forbid it. Write a prohibition in words ("do not open the private folder"), and carry
-   a previous round's content into the next prompt instead of naming the record's path.
-4. Copy [the round template](../../templates/debate-round.md) to an ignored instance prompt such as
-   `system/debate/_p_review.md`. The tracked template stays blank. Keep the discussion record in a protected
-   instance location such as `_private/debate/` and retain references to the worker run records.
+   private source text, or mark the review unavailable. The runner does not read a prompt for path names: what
+   a worker can open is set by where it runs (`workers` in MANUAL.md section 2), and a worker in the instance
+   can open every file the session can.
+4. Copy [the round template](../../templates/debate-round.md) to a prompt such as `instance/debate/_p_review.md`.
+   The tracked template stays blank. Keep the discussion record beside it, or under `_private/debate/` when it
+   holds private material, and retain references to the worker run records.
 5. Define who owns each write. A review does not authorize editing code, policy, or source evidence.
 
 The reusable template requires a strategic-assumption challenge, an actually worked perspective, evidence
@@ -32,31 +30,38 @@ material. "No material change" and a rejected criticism are legitimate outcomes.
 ## Dispatch and runtime boundaries
 
 The default is a fresh, ephemeral worker. Put the prompt in a file so shell metacharacters remain data.
-From the instance root, choose the intended runtime:
+From the instance root, name one runtime, or two to ask them at once:
 
 ```bash
-python3 tools/fresh_worker.py --runtime claude system/debate/_p_review.md
-python3 tools/fresh_worker.py --runtime codex system/debate/_p_review.md
+bash tools/ask.sh codex instance/debate/_p_review.md
+bash tools/ask.sh claude,gemini instance/debate/_p_review.md
 ```
 
-The example path must be replaced with the prompt file actually prepared. Run the selected command, not
-both merely to increase the number of reviewers. `bash tools/ask_codex.sh PROMPT_FILE` is the compatibility
-entry for a fresh Codex call. An explicitly requested resume (`--resume <SID>`) is a different operation; its
-failure must not silently fall back to a fresh session. It also bypasses the worker contract below: no run
-record, receipt cap, or feature lockdown.
+The example path must be replaced with the prompt file actually prepared. Ask a second runtime when its
+different failure surface matters, not merely to increase the number of reviewers. With two names both run
+ids are printed before the wait, and each guest answers without seeing the other's answer.
+`bash tools/ask_codex.sh PROMPT_FILE` remains the compatibility entry for a fresh Codex call. There is no
+resume option: every call is a fresh worker run under the contract below.
 
-The [worker contract](../PRD-session-memory.md#105-fresh-bounded-worker-kit-dr-007) owns exact capability,
+The [worker contract](../specs/PRD-session-memory.md#105-fresh-bounded-worker-kit-dr-007) owns exact capability,
 receipt, and persistence requirements:
 
 - Claude has read-only `Read`, `Glob`, and `Grep` tools. It can propose edits but cannot apply them or run
   shell checks. Do not assign it a required write or shell command and then infer completion from its answer.
 - Codex has a workspace-write sandbox. Review-only instructions are task scope, not an operating-system
   guarantee of read-only access. Use the available scope checks and inspect actual effects.
+- Gemini runs through the Antigravity CLI in print mode with one-run rules that refuse file writes, so it
+  prints its answer only. A refused action or an empty answer fails the run with the reason. Antigravity
+  keeps every such run in the user's own Antigravity history; its conversation id is in the run record.
 - Workers do not inherit the caller's conversation or rely on hooks for current state. Name `AGENTS.md` and
   the required canonical sources explicitly. If NOW is relevant, specify both public and local surfaces
   subject to the data boundary; an inaccessible local overlay is unavailable, not absent.
-- Both adapters disable connectors, web, command network access, plugins, and fan-out. These restrictions
-  do not make otherwise prohibited model input permissible.
+- The adapters disable connectors, web, command network access, plugins, and fan-out. `--web` gives one call
+  the network and its runtime's web search, and that worker runs in a copy of the tracked and unignored files
+  unless that runtime's config `workers.<runtime>.where` is `instance` and `web_in_instance` is true. Codex's
+  sandbox reads the whole disk, so a copy does not keep the private area from a Codex worker and `codex --web`
+  is refused without those two settings: ask claude or gemini with `--web`. A Gemini worker runs in a copy by
+  default. These restrictions do not make otherwise prohibited model input permissible.
 - The runner retains the prompt, event stream, final result, metadata, and content hashes under
   `_private/work/runs/`. The caller receives a bounded receipt; `python3 tools/receipts.py show <run-id>` prints
   the full result. Read the result and relevant evidence before
@@ -65,6 +70,31 @@ receipt, and persistence requirements:
 Keep the execution handle until completion or a recorded interruption. The worker owns no scheduler and a
 background process is not itself a notification mechanism. Use the calling runtime's supported wait or
 completion mechanism, then inspect the output. Do not promise a later follow-up without a real scheduled path.
+
+### Host procedure per runtime
+
+The host is the session that asks. Its runtime decides only how the command is started and awaited.
+
+Claude Code:
+1. Copy the template to the prompt file and fill it.
+2. Run `bash tools/ask.sh <guests> <prompt-file>` with the Bash tool, in the background when it may take
+   minutes, and wait for its completion notice instead of polling.
+3. Read each receipt, then `python3 tools/receipts.py show <run-id>` for the full answer.
+4. Answer the strongest objection in the next round's prompt, or record why the round closes.
+
+Codex:
+1. Copy the template to the prompt file and fill it.
+2. Run `bash tools/ask.sh <guests> <prompt-file>`. Its sandbox has no network and a guest needs its own
+   provider, so Codex asks to run this one command outside the sandbox; approve that command only.
+3. Read each receipt, then `python3 tools/receipts.py show <run-id>` for the full answer.
+4. Answer the strongest objection in the next round's prompt, or record why the round closes.
+
+Antigravity:
+1. Copy the template to the prompt file and fill it.
+2. Run `bash tools/ask.sh <guests> <prompt-file>`. Its terminal sandbox blocks a guest's provider, so
+   approve running this one command outside the sandbox when Antigravity asks.
+3. Read each receipt, then `python3 tools/receipts.py show <run-id>` for the full answer.
+4. Answer the strongest objection in the next round's prompt, or record why the round closes.
 
 ## Preserve the discussion
 

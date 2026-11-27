@@ -40,10 +40,10 @@
 <circle cx="888.7" cy="132" r="16" fill="#ffffff" stroke="#d1d9e0" stroke-width="1.5"/>
 <text x="888.7" y="139" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" font-weight="600" text-anchor="middle">4</text>
 <text x="888.7" y="176" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#59636e" text-anchor="middle">Stop</text>
-<text x="888.7" y="214" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">Checks links,</text>
-<text x="888.7" y="242" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">stale state,</text>
-<text x="888.7" y="270" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">docs handed</text>
-<text x="888.7" y="298" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">over unread</text>
+<text x="888.7" y="214" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">Checks links</text>
+<text x="888.7" y="242" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">and state.</text>
+<text x="888.7" y="270" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">Stops once,</text>
+<text x="888.7" y="298" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">with the reason</text>
 <text x="888.7" y="350" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" text-anchor="middle">0.4 s if edited</text>
 <rect x="1026.8" y="132" width="221.2" height="240" rx="10" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
 <circle cx="1137.4" cy="132" r="16" fill="#ffffff" stroke="#d1d9e0" stroke-width="1.5"/>
@@ -80,5 +80,5 @@
 <text x="62" y="411" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13">thread</text>
 <text x="62" y="435" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13">dossiers</text>
 <text x="62" y="459" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13">listed</text>
-<text x="32" y="582" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e">Codex runs stations 1 and 5. Claude Code runs all five</text>
+<text x="32" y="582" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e">Claude Code and Codex have all five stations. Antigravity has no station 5</text>
 </svg>

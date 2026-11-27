@@ -1,237 +1,297 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Initialize instance configuration, local documents, and state.
 # Validate existing journals and merged config before writing.
-# Usage: bash setup.sh [--name NAME] [--context work|personal] [--force]
+# Usage: bash setup.sh [--name NAME] [--force]
 # Without a terminal, use defaults; --force preserves instance-owned settings.
+# Starter documents are copied from templates/.
 
 set -euo pipefail
+USAGE="usage: bash setup.sh [--name NAME] [--force]"
+case "${1:-}" in -h|--help)
+  echo "Set up this folder as your instance: configuration, starter documents, state and the Git backstop hooks."
+  echo
+  echo "$USAGE"
+  echo "  --name NAME        the instance's name (default: the folder's name)"
+  echo "  --force            run again on a set-up instance, keeping its settings"
+  exit 0 ;;
+esac
 # Use a physical root so symlink aliases resolve consistently with the Python tools.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 # Bind all child tools to this checkout instead of inheriting another instance root.
 export MOTTORI_INSTANCE="$ROOT"
+# An ASCII locale must not turn a non-ASCII instance name into an empty read or a crash.
+export PYTHONIOENCODING=utf-8
 cd "$ROOT"
-say() { python3 "$ROOT/tools/i18n.py" "$@"; }
-DOC_LANG="$(python3 -c 'import sys; sys.path.insert(0, "tools"); import i18n; print(i18n.language())')"
-# Korean seeds live at the same relative path under ko/ (ko/templates/X.md translates templates/X.md).
-TEMPLATE_DIR="templates"
-[ "$DOC_LANG" = "ko" ] && TEMPLATE_DIR="ko/templates"
+# Prerequisites are checked here, so an agent runs this one command instead of a list of them.
+command -v python3 >/dev/null 2>&1 || {
+  echo "python3 was not found. Install Python 3.9 or later, then run setup again."; exit 1; }
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' || {
+  echo "Python $(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])') is too old: the kit needs 3.9 or later."
+  exit 1; }
+command -v git >/dev/null 2>&1 || {
+  echo "git was not found. Install Git 2.5 or later, then run setup again."; exit 1; }
+git --version | python3 -c 'import re, sys
+found = re.search(r"(\d+)\.(\d+)", sys.stdin.read())
+sys.exit(not (found and (int(found.group(1)), int(found.group(2))) >= (2, 5)))' || {
+  echo "$(git --version) is too old: the kit needs Git 2.5 or later."; exit 1; }
+# Claude Code also reads a rules file in any folder above this one; setup says so in its summary.
+ABOVE=""; DIR="$(dirname "$ROOT")"
+while [ -z "$ABOVE" ] && [ "$DIR" != "/" ] && [ -n "$DIR" ]; do
+  for RULES_ABOVE in "$DIR/CLAUDE.md" "$DIR/CLAUDE.local.md" "$DIR/.claude/CLAUDE.md"; do
+    [ ! -f "$RULES_ABOVE" ] || { ABOVE="$RULES_ABOVE"; break; }
+  done
+  DIR="$(dirname "$DIR")"
+done
+# The backstop hooks, the push check and the link check all read Git, so a ZIP download stops here.
+# A copy inside another repository stops too: the gate state there belongs to that repository.
+TOP="$(git rev-parse --show-toplevel 2>/dev/null)" && TOP="$(cd "$TOP" && pwd -P)" || TOP=""
+[ "$TOP" = "$ROOT" ] || {
+  echo "This folder is not the top of its own Git repository (a ZIP download has none, and a copy inside another repository would use that one). Get the kit with git clone, or run git init here first, then run bash setup.sh again."
+  exit 1
+}
 
-NAME=""; CONTEXT=""; FORCE=0
+NAME=""; FORCE=0; OLD_FLAG=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --name)    [ $# -ge 2 ] || { say setup.name_missing; exit 1; }; NAME="$2"; shift 2 ;;
-    --context) [ $# -ge 2 ] || { say setup.context_missing; exit 1; }; CONTEXT="$2"; shift 2 ;;
+    --name)    [ $# -ge 2 ] || { echo "--name requires a value"; exit 1; }; NAME="$2"; shift 2 ;;
+    # An earlier version asked whether the folder was for work or personal use. Nothing reads the
+    # answer now, so the flag is taken and said to be unused, and setup goes on.
+    --context) [ $# -ge 2 ] || { echo "--context requires a value"; exit 1; }; OLD_FLAG="--context $2"; shift 2 ;;
     --force)   FORCE=1; shift ;;
-    *) say setup.unknown_arg "arg=$1"; exit 1 ;;
+    *) echo "unknown argument: $1"; echo "$USAGE"; exit 1 ;;
   esac
 done
 
-CFG="system/memory-config.json"
-RULES="system/instance-rules.md"
+# Every path setup spells comes from tools/lib/paths.py, where the tools read them too.
+PATHS="$(python3 tools/lib/paths.py config instance rules decisions rituals debate now private_now state private_state gate_baseline gate_baseline_prev)"
+{ read -r CFG; read -r INSTANCE; read -r RULES; read -r DECISIONS; read -r RITUALS; read -r DEBATE
+  read -r NOW_PAGE; read -r PRIVATE_NOW; read -r STATE_DIR; read -r PRIVATE_STATE; read -r GATE_BASELINE
+  read -r GATE_BASELINE_PREV; } <<< "$PATHS"
+
+# An installation from before the instance folder still has its files at their old places. Without
+# --force setup stops with the line every tool says (config.py get prints it); with --force each
+# file moves once, keeping its bytes and mode, unless one is at both places. An installation that
+# already has its configuration in the instance folder has nothing to move: a file at one of the
+# old places is then the owner's own.
+MOVES=""
+[ -f "$CFG" ] || MOVES="$(python3 tools/lib/paths.py legacy)"
+if [ -n "$MOVES" ]; then
+  [ "$FORCE" -eq 1 ] || { python3 tools/lib/config.py get instance.name >/dev/null; exit 1; }
+  BOTH="$(printf '%s\n' "$MOVES" | while IFS="$(printf '\t')" read -r OLD NEW; do
+    [ ! -e "$NEW" ] || echo "  $OLD and $NEW"; done)"
+  if [ -n "$BOTH" ]; then
+    printf 'setup stopped: these files are at both places; keep one of each and run bash setup.sh --force again:\n%s\n' "$BOTH"
+    exit 1
+  fi
+  echo "moved to their new places:"
+  # The configuration moves last: until it has, a rerun still finds an installation to move.
+  { printf '%s\n' "$MOVES" | awk -F'\t' -v c="$CFG" '$2 != c'
+    printf '%s\n' "$MOVES" | awk -F'\t' -v c="$CFG" '$2 == c'; } | while IFS="$(printf '\t')" read -r OLD NEW; do
+    mkdir -p "$(dirname "$NEW")" && mv "$OLD" "$NEW" && echo "  $OLD -> $NEW"
+  done
+fi
+
+# .git/hooks is not cloned, so setup installs the pre-commit and pre-push backstop itself. A current
+# pair is left untouched, and a hook that is not the kit's is never overwritten: the installer
+# installs the free one, and doctor's row names the hook in the way with the two ways forward.
+# The installer prints "status<TAB>path<TAB>text" per hook; only the first two fields are read.
+# Prints one labelled line, and one line per backup of an older kit hook it replaced.
+# The flag an earlier version took changes nothing now; say so once wherever a run ends.
+old_flag_note() {
+  [ -z "$OLD_FLAG" ] || echo "  $OLD_FLAG is no longer used: the kit does not tell work and personal folders apart"
+}
+
+install_backstop() {
+  local out rc=0
+  if out="$(bash tools/install_hooks.sh --check 2>/dev/null)"; then
+    echo "Installed  $(backstop_paths "$out") (already in place; undo: MANUAL.md section 5)"
+    return 0
+  fi
+  out="$(bash tools/install_hooks.sh --repair 2>&1)" || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    echo "Installed  $(backstop_paths "$out") (undo: MANUAL.md section 5)"
+    printf '%s\n' "$out" | sed -n 's/^backup: /Backup     /p'
+  elif [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q "^foreign$(printf '\t')"; then
+    printf '%s\n' "$out" | python3 -c '
+import os, sys
+root = sys.argv[1]
+done, skipped = [], []
+for line in sys.stdin:
+    fields = line.rstrip("\n").split("\t")
+    if len(fields) < 2:
+        continue
+    path = os.path.relpath(fields[1], root) if fields[1].startswith(root + os.sep) else fields[1]
+    (skipped if fields[0] == "foreign" else done).append(path)
+parts = [p + " installed" for p in done] + [p + " skipped (foreign hook left untouched)" for p in skipped]
+print("Backstop   " + "; ".join(parts))' "$ROOT"
+  else
+    echo "Backstop   not installed: $(printf '%s\n' "$out" | tail -n 1). bash tools/install_hooks.sh --check shows the state."
+  fi
+}
+
+# The hooks the installer named, as "<folder>/pre-commit and pre-push", relative to this folder.
+backstop_paths() {
+  printf '%s\n' "$1" | python3 -c '
+import os, sys
+root = sys.argv[1]
+paths = [line.rstrip("\n").split("\t")[1] for line in sys.stdin if line.count("\t") >= 1]
+shown = [os.path.relpath(p, root) if p.startswith(root + os.sep) else p for p in paths]
+folders = {os.path.dirname(p) for p in shown}
+if len(folders) == 1 and shown:
+    print(shown[0] + "".join(" and " + os.path.basename(p) for p in shown[1:]))
+else:
+    print(" and ".join(shown))' "$ROOT"
+}
 
 if [ -f "$CFG" ] && [ "$FORCE" -eq 0 ]; then
-  say setup.already "path=$CFG"
-  say setup.again
+  old_flag_note
+  # The config is written first, so an interrupted first run leaves it without the later outputs.
+  MISSING=""
+  for f in "$RULES" "$NOW_PAGE" "$GATE_BASELINE"; do
+    [ -e "$f" ] || MISSING="${MISSING:+$MISSING, }$f"
+  done
+  if [ -n "$MISSING" ]; then
+    echo "setup is not complete: $MISSING missing, so an earlier run stopped part way. Run bash setup.sh --force to finish it; it keeps your settings."
+    exit 1
+  fi
+  echo "already set up: $CFG"
+  install_backstop
+  echo "Use --force to run again. To inspect status, run python3 tools/doctor.py; optional parts: python3 tools/options.py"
   exit 0
 fi
 
-# Without a terminal, use visible defaults rather than failing on input EOF.
+# Setup asks nothing: an agent runs it. The name is the folder's, or the one the instance already
+# has, unless --name gives another.
 DEFAULT_NAME="$(basename "$ROOT")"
-DEFAULT_CONTEXT="work"
-# On --force, preserve the existing instance identity unless explicitly overridden.
 if [ -f "$CFG" ]; then
-  OLD_NAME="$(python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(c.get("instance",{}).get("name",""))' "$CFG" 2>/dev/null || true)"
-  OLD_CONTEXT="$(python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(c.get("instance",{}).get("context",""))' "$CFG" 2>/dev/null || true)"
+  OLD_NAME="$(python3 tools/lib/config.py get instance.name 2>/dev/null || true)"
   [ -n "$OLD_NAME" ] && DEFAULT_NAME="$OLD_NAME"
-  [ -n "$OLD_CONTEXT" ] && DEFAULT_CONTEXT="$OLD_CONTEXT"
 fi
-if [ -z "$NAME" ]; then
-  if [ -t 0 ]; then
-    read -r -p "$(say setup.name_prompt "name=$DEFAULT_NAME")" NAME || NAME=""
-  else
-    say setup.name_default "name=$DEFAULT_NAME"
-  fi
-  NAME="${NAME:-$DEFAULT_NAME}"
-fi
-if [ -z "$CONTEXT" ]; then
-  if [ -t 0 ]; then
-    echo
-    say setup.context_intro
-    say setup.context_work
-    say setup.context_personal
-    read -r -p "$(say setup.context_prompt "context=$DEFAULT_CONTEXT")" CONTEXT || CONTEXT=""
-  else
-    say setup.context_default "context=$DEFAULT_CONTEXT"
-  fi
-  CONTEXT="${CONTEXT:-$DEFAULT_CONTEXT}"
-fi
-if [ "$CONTEXT" != "work" ] && [ "$CONTEXT" != "personal" ]; then
-  say setup.context_invalid "context=$CONTEXT"; exit 1
-fi
+NAME="${NAME:-$DEFAULT_NAME}"
+old_flag_note
 
-# Allow the cloned origin as the engine-update source. Ignore rules and credential restrictions
-# own data protection.
-ORIGIN="$(git remote get-url origin 2>/dev/null || true)"
+# What this run creates, for the summary: each output that does not exist yet.
+JOURNAL="$(python3 tools/lib/paths.py journal)"
+CREATED=""
+for f in "$CFG" "$RULES" "$DECISIONS" "$RITUALS" "$JOURNAL" "$NOW_PAGE" "$PRIVATE_NOW"; do
+  [ -e "$f" ] || CREATED="${CREATED}${f}"$'\n'
+done
 
-python3 - "$NAME" "$CONTEXT" "$ORIGIN" "$DOC_LANG" <<'PY'
-import datetime, json, os, shutil, sys
-name, context, origin, lang = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
-dst = "system/memory-config.json"
-cfg = json.load(open("templates/memory-config.json", encoding="utf-8"))
-# Validate the final config with the same schema authority before writing.
-sys.path.insert(0, "tools")
-import memlib as config_schema
-from i18n import t
+# Check every journal before anything is written, then merge and migrate the config from the
+# template; tools/lib/config_migrate.py prints what it kept and refuses with one line naming the reason.
+JOURNAL_ROWS="$(python3 tools/lib/journal.py rows)"
+mkdir -p "$INSTANCE"
+MIGRATED="$(printf '%s' "$JOURNAL_ROWS" | python3 tools/lib/config_migrate.py "$NAME")"
 
-def legacy_watermark():
-    """Return the newest event time among journal rows that existed before the migration.
-
-    A wall-clock migration time stored at one-second resolution would pull the setup event
-    logged right after it, within the same second, into the legacy set. The newest timestamp of
-    the existing rows splits old and new rows exactly. A malformed row stops the migration
-    instead of guessing a boundary.
-    """
-    # Read all existing public and private journal rows with the canonical strict parser,
-    # regardless of legacy visibility routing.
-    rows = config_schema.parse_journal(
-        strict=True, physical_visibilities=("public", "private"))
-    latest = None
-    for row in rows:
-        if row["type"] not in cfg["journal_types"]:
-            raise ValueError(
-                t("setup.legacy_type", source=row["source"]))
-        stamp = datetime.datetime.fromisoformat(row["ts"])
-        if stamp.utcoffset() is None:
-            raise ValueError(t("setup.legacy_timezone", source=row["source"]))
-        latest = stamp if latest is None or stamp > latest else latest
-    return latest.isoformat(timespec="seconds") if latest else None
-
-
-def validate_legacy_threads(data, schema):
-    """Refuse to promote v1-v3 threads to public automatically: they carry no visibility provenance."""
-    if schema < 4 and data.get("threads"):
-        raise ValueError(t("setup.legacy_threads"))
-
-# Preflight journal syntax and final newlines before backups or writes, including recovery
-# installs without config.
-import glob as _glob
-for _jp in sorted(_glob.glob("state/journal-*.md") + _glob.glob("_private/state/journal-*.md")):
-    with open(_jp, "rb") as _f:
-        _tail = _f.read()[-1:]
-    if _tail and _tail != b"\n":
-        raise SystemExit(t("setup.journal_newline", path=_jp))
-try:
-    config_schema.parse_journal(strict=True, physical_visibilities=("public", "private"))
-except Exception as _e:
-    raise SystemExit(t("setup.preflight_failed", error=_e))
-
-# Preserve manually configured tracks, threads, and checker inventories on --force.
-old = {}
-had_old = os.path.exists(dst)
-if had_old:
-    shutil.copy2(dst, dst + ".bak")
-    try:
-        old = json.load(open(dst, encoding="utf-8"))
-    except Exception as e:
-        print(t("setup.config_parse_failed", error=e), file=sys.stderr)
-        raise SystemExit(2)
-    # Reject invalid config container shapes before merging or overwriting the original.
-    config_schema._validate_config_shape(old)
-cfg["tracks"]  = old.get("tracks", [])
-cfg["threads"] = old.get("threads", [])
-if old.get("checks"):
-    cfg["checks"] = old["checks"]
-if old.get("personal_pointer"):
-    cfg["personal_pointer"] = old["personal_pointer"]
-if had_old:
-    old_schema = old.get("schema_version", 1)
-    if isinstance(old_schema, bool) or not isinstance(old_schema, int):
-        raise ValueError(t("setup.schema_type"))
-    if old_schema > cfg["schema_version"]:
-        raise ValueError(t("setup.schema_newer", old=old_schema, new=cfg["schema_version"]))
-    validate_legacy_threads(old, old_schema)
-    old_vis = old.get("journal_visibility")
-    watermark = legacy_watermark()
-    if old_schema >= 4:
-        # The shared schema validator guarantees the cutover pair, timezone, and track types.
-        cfg["journal_visibility"]["public_tracks"] = list(dict.fromkeys(
-            old_vis["public_tracks"]))
-        cfg["journal_visibility"]["legacy_cutoff"] = old_vis["legacy_cutoff"]
-        cfg["journal_visibility"]["legacy_public_tracks"] = list(dict.fromkeys(
-            old_vis["legacy_public_tracks"]))
-    elif old_schema == 3:
-        approved = list(dict.fromkeys(old_vis["public_tracks"]))
-        cfg["journal_visibility"]["public_tracks"] = approved
-        cfg["journal_visibility"]["legacy_cutoff"] = watermark
-        cfg["journal_visibility"]["legacy_public_tracks"] = approved if watermark else []
-    else:
-        # Old configs lack visibility provenance. Freeze existing tracked events as private and
-        # use the live allowlist only for new events.
-        cfg["journal_visibility"]["legacy_cutoff"] = watermark
-        cfg["journal_visibility"]["legacy_public_tracks"] = []
-
-cfg["instance"]["name"] = name
-cfg["instance"]["context"] = context
-cfg["instance"]["remote_allowlist"] = [origin] if origin else []
-# Save the install language so tool output does not change with the locale of a later shell.
-cfg["instance"]["lang"] = lang
-# Validate the fully merged config before writing.
-config_schema._validate_config_shape(cfg)
-json.dump(cfg, open(dst, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-print(t("setup.config_written", path=dst, name=name, context=context))
-if had_old:
-    print(t("setup.preserved", tracks=len(cfg["tracks"]), threads=len(cfg["threads"]), path=dst))
-if origin:
-    print(t("setup.origin_registered", origin=origin))
-PY
-
-if [ -n "$ORIGIN" ] && [ "$CONTEXT" = "work" ]; then
-  say setup.work_remote_warning "origin=$ORIGIN"
+# Each instance document starts as the template of the same name; an existing one is kept.
+copy_template() {
+  [ -f "$1" ] || cp "templates/$(basename "$1")" "$1"
+}
+copy_template "$RULES"
+copy_template "$DECISIONS"
+copy_template "$RITUALS"
+mkdir -p "$DEBATE"
+# The owner's projects get one folder with its guide; the kit tracks nothing in it (KIT-DR-093).
+PROJECTS_README="$(python3 tools/lib/paths.py projects_readme)"
+if [ ! -f "$PROJECTS_README" ]; then
+  mkdir -p "$(dirname "$PROJECTS_README")"
+  cp templates/projects-README.md "$PROJECTS_README"
+  CREATED="${CREATED}${PROJECTS_README}"$'\n'
+elif ! grep -q '^<!-- projects:start -->$' "$PROJECTS_README"; then
+  # A guide of the owner's own: it is left as it is, and the map is drawn only where they put the markers.
+  echo "note: $PROJECTS_README is yours and has no map markers; python3 tools/projects.py draw adds them at its end."
 fi
 
-if [ ! -f "$RULES" ]; then
-  cp "$TEMPLATE_DIR/instance-rules.md" "$RULES"
-  say setup.rules_created "path=$RULES"
+mkdir -p "$STATE_DIR" "$PRIVATE_STATE"
+# Log the setup events on the first install only: each rerun would add rows.
+PUBLIC_ROWS="$(python3 tools/lib/journal.py count public)"
+if [ "$PUBLIC_ROWS" -eq 0 ]; then
+  # tools/now.py validates and routes the rows.
+  python3 tools/now.py log "[system/state] instance set up: $NAME, initialized after cloning the kit" >/dev/null
+  # Create an initial local event so the overlay is present from the first render; record only
+  # setup state.
+  python3 tools/now.py log --private "[system/state] local overlay initialized by setup ($NAME)" >/dev/null
 fi
-if [ ! -f system/decisions.md ]; then
-  cp "$TEMPLATE_DIR/decisions.md" system/decisions.md
-  say setup.decisions_created
-fi
-if [ ! -f system/rituals.local.md ]; then
-  cp "$TEMPLATE_DIR/rituals.local.md" system/rituals.local.md
-  say setup.rituals_created
-fi
-
-mkdir -p state _private/state
-# Copy generic vocabulary into an instance-owned private file for local customization.
-if [ ! -f _private/transcribe-prompts.json ] && [ -f templates/transcribe-prompts.json ]; then
-  cp templates/transcribe-prompts.json _private/transcribe-prompts.json
-fi
-# Journal bodies follow the instance language; tools/now.py validates and routes them.
-python3 tools/now.py log "[system/state] $(say setup.journal_initialized "name=$NAME" "context=$CONTEXT")" >/dev/null
-# Create an initial local event so the overlay is present from the first render; record only
-# setup state.
-python3 tools/now.py log --private "[system/state] $(say setup.journal_local_initialized "name=$NAME")" >/dev/null
 python3 tools/now.py render >/dev/null
 # Create the baseline before linkcheck, then record linkcheck success before doctor inspects its
-# evidence.
+# evidence. An existing baseline is left alone: saving again would silently adopt today's issues
+# and clear a block another session is waiting on (python3 tools/gate.py baseline does that on
+# purpose).
 BASELINE_RC=0
-BASELINE_ERR="$(mktemp)"
-trap 'rm -f "$BASELINE_ERR"' EXIT
-python3 tools/gate.py baseline >/dev/null 2>"$BASELINE_ERR" || BASELINE_RC=$?
-[ "$BASELINE_RC" -eq 0 ] || { say setup.baseline_failed "code=$BASELINE_RC"; sed 's/^/     /' "$BASELINE_ERR" | tail -5; }
+BASELINE_LINES=""
+if [ ! -e "$GATE_BASELINE" ]; then
+  # A template keeps the file under TMPDIR; plain mktemp on macOS uses the per-user temporary folder.
+  BASELINE_ERR="$(mktemp "${TMPDIR:-/tmp}/setup-baseline.XXXXXX")"
+  trap 'rm -f "$BASELINE_ERR"' EXIT
+  # The first save creates state/.gate-baseline.json, which SETUP.md links to, so the baseline that
+  # save records would still list those links as broken; record it again with the file in place.
+  python3 tools/gate.py baseline >/dev/null 2>&1 || true
+  python3 tools/gate.py baseline >/dev/null 2>"$BASELINE_ERR" || BASELINE_RC=$?
+  # A fresh install has no earlier baseline to restore, so the copy of the throwaway save goes.
+  rm -f "$GATE_BASELINE_PREV"
+  [ "$BASELINE_RC" -eq 0 ] || BASELINE_LINES="$(printf 'gate baseline failed (exit %s):\n' "$BASELINE_RC"; sed 's/^/  /' "$BASELINE_ERR" | tail -n 5)"
+fi
 python3 tools/linkcheck.py >/dev/null 2>&1 || true
-say setup.state_written "month=$(date +%Y-%m)"
+BACKSTOP="$(install_backstop)"
 
-# Print the remaining guidance, but preserve a failed validation exit status.
-echo
-say setup.verification
+# doctor prints its short form; the number of failures comes from the row it records in the run
+# log (tools/lib/runlog.py), so nothing here reads the sentences it prints.
 DOCTOR_RC=0
-python3 tools/doctor.py || DOCTOR_RC=$?
+DOCTOR_OUT="$(python3 tools/doctor.py)" || DOCTOR_RC=$?
+FAILURES="$(python3 -c 'import sys; sys.path.insert(0, "tools/lib"); import runlog
+rows = [r for r in runlog.rows() if len(r) >= 4 and r[1] == "doctor"]
+fields = dict(f.split("=", 1) for f in (rows[-1][3].split() if rows else []) if "=" in f)
+print(fields.get("fail", "?"))')"
+[ "$FAILURES" = "1" ] && REPORTED="1 failure" || REPORTED="$FAILURES failures"
 
-say setup.remaining
+# The summary: what was set up, what was created and installed, doctor, what is left.
+if [ "$DOCTOR_RC" -ne 0 ]; then
+  echo "Setup incomplete for \"$NAME\" in $ROOT: doctor reported $REPORTED."
+elif [ "$BASELINE_RC" -ne 0 ]; then
+  echo "Setup incomplete for \"$NAME\" in $ROOT: the gate baseline failed."
+else
+  echo "Set up \"$NAME\" in $ROOT."
+fi
+echo
+# Instance files, four to a line, then the state files.
+python3 -c '
+import sys
+created = [f for f in sys.argv[1].split("\n") if f]
+inst = [f for f in created if f.startswith("instance/")]
+groups = [inst[i:i + 4] for i in range(0, len(inst), 4)] + [[f for f in created if f not in inst]]
+lines = [", ".join(g) for g in groups if g]
+for i, line in enumerate(lines):
+    print(("Created    " if i == 0 else "           ") + line)' "$CREATED"
+# config_migrate's first line names the config; the lines after it say what a rerun kept.
+printf '%s\n' "$MIGRATED" | tail -n +2 | sed 's/^ */           /'
+printf '%s\n' "$BACKSTOP"
+[ -z "$ABOVE" ] || echo "Note: Claude Code also reads $ABOVE, in a folder above this one, so its agent would follow both sets of rules. Moving this folder elsewhere avoids that."
+[ -z "$BASELINE_LINES" ] || { echo; printf '%s\n' "$BASELINE_LINES"; }
+echo
+printf '%s\n' "$DOCTOR_OUT"
+echo
 if [ "$DOCTOR_RC" -ne 0 ] || [ "$BASELINE_RC" -ne 0 ]; then
-  echo
-  say setup.failed "doctor=$DOCTOR_RC" "baseline=$BASELINE_RC"
+  if [ "$DOCTOR_RC" -ne 0 ]; then
+    echo "Fix the $REPORTED above and run \`python3 tools/doctor.py\` again (exit 0 required)."
+    echo "Do not trust state automation or hooks until doctor reports 0 failures."
+  else
+    echo "Fix the baseline problem above, run \`python3 tools/gate.py baseline\`, then \`python3 tools/doctor.py\`."
+  fi
+  echo "After doctor passes: complete system/CHECKLIST.md; $RULES can stay as the template until outside material comes in."
   exit 1
 fi
+echo "Next"
+echo "  Tell your agent something you have decided. It is written down and given back at every session start."
+echo "  A folder of notes you already have: move it into projects/ whole, then run python3 tools/adopt.py projects/FOLDER."
+if command -v codex >/dev/null 2>&1 || command -v agy >/dev/null 2>&1; then
+  echo "  Codex or Antigravity: the first time you start one here, approve the kit's hooks (SETUP.md section 3)."
+fi
+echo "  system/CHECKLIST.md lists what only a person can check: a backup of this folder and, on a company machine, your IT policy."
+# What the private folder is for, said once here: the agent suggests it and the owner decides.
+echo "  $(dirname "$PRIVATE_STATE")/ is for what must stay out of Git and out of what the agent writes for other people."
+echo "  Your agent suggests it when something looks like that; you decide."
+
+# Optional parts: one line with how many are off. Nothing is asked; the list by meaning is turned on only
+# when its local server already answers with the model (KIT-DR-094).
+echo
+python3 tools/options.py setup || true

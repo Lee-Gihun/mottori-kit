@@ -1,0 +1,47 @@
+{
+  "_doc": "Canonical wiring data for the memory system (KIT-DR-001). Logic lives in tools/lib/config.py; data lives here. Edit tracks, threads, sources, and check inventories here. setup.sh copies this template to instance/config.json. MANUAL.md section 2 describes every key.",
+  "schema_version": 4,
+  "instance": {
+    "name": "CHANGEME",
+    "agent_openers": []
+  },
+  "egress": {
+    "model_send": {
+      "deny_prefixes": [
+        "_private/"
+      ],
+      "allow_prefixes": []
+    }
+  },
+  "frozen": [],
+  "tracks": [],
+  "personal_pointer": null,
+  "journal_visibility": {
+    "public_tracks": null,
+    "legacy_cutoff": null,
+    "legacy_public_tracks": []
+  },
+  "threads": [],
+  "checks": {
+    "_doc": "Optional inventories for linkcheck and coherence. Each key is left out until it has entries; a missing key means none, and hub_ignore_ext defaults to [\".pyc\"].",
+    "volatile_index_words": []
+  },
+  "journal_types": [
+    "decision",
+    "state",
+    "artifact",
+    "correction",
+    "lesson",
+    "switch",
+    "idea"
+  ],
+  "thresholds": {},
+  "deliver": {
+    "block": ["unopened"],
+    "observe": []
+  },
+  "loop": {
+    "_doc": "The optional improvement loop (system/loop/README.md). It is off: no source may send until python3 tools/options.py on loop, and nothing is scheduled until python3 tools/loop/loops.py start. A change that passes is saved as a patch file; the loop never writes into this folder's files. A key left out takes its engine default; python3 tools/loop/lib/loop_config.py prints every key with the value in use and what it means. loop.token_ceiling (null by default: no ceiling) caps the tokens one cycle's model runs may spend.",
+    "never": []
+  }
+}

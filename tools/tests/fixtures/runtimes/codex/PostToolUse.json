@@ -1,0 +1,107 @@
+{
+ "runtime": "codex",
+ "version": "0.169.1",
+ "event": "PostToolUse",
+ "cases": [
+  {
+   "case": "PostToolUse-apply_patch-add",
+   "note": "apply_patch adding new.txt",
+   "proc_cwd": "/tmp/fixture-codex",
+   "stdin": {
+    "session_id": "c0dec0de-0000-4000-8000-000000000005",
+    "turn_id": "c0dec0de-0000-4000-8000-000000000006",
+    "transcript_path": null,
+    "cwd": "/tmp/fixture-codex",
+    "hook_event_name": "PostToolUse",
+    "model": "gpt-6-luna",
+    "permission_mode": "bypassPermissions",
+    "tool_name": "apply_patch",
+    "tool_input": {
+     "command": "*** Begin Patch\n*** Add File: new.txt\n+alpha\n*** End Patch"
+    },
+    "tool_response": "Exit code: 0\nWall time: 0 seconds\nOutput:\nSuccess. Updated the following files:\nA new.txt\n",
+    "tool_use_id": "exec-c0dec0de-0000-4000-8000-000000000007"
+   }
+  },
+  {
+   "case": "PostToolUse-apply_patch-update",
+   "note": "apply_patch updating upd.txt",
+   "proc_cwd": "/tmp/fixture-codex",
+   "stdin": {
+    "session_id": "c0dec0de-0000-4000-8000-000000000005",
+    "turn_id": "c0dec0de-0000-4000-8000-000000000006",
+    "transcript_path": null,
+    "cwd": "/tmp/fixture-codex",
+    "hook_event_name": "PostToolUse",
+    "model": "gpt-6-luna",
+    "permission_mode": "bypassPermissions",
+    "tool_name": "apply_patch",
+    "tool_input": {
+     "command": "*** Begin Patch\n*** Update File: upd.txt\n@@\n-two\n+TWO\n*** End Patch"
+    },
+    "tool_response": "Exit code: 0\nWall time: 0 seconds\nOutput:\nSuccess. Updated the following files:\nM upd.txt\n",
+    "tool_use_id": "exec-c0dec0de-0000-4000-8000-000000000008"
+   }
+  },
+  {
+   "case": "PostToolUse-apply_patch-move",
+   "note": "apply_patch moving mv-src.txt to moved.txt",
+   "proc_cwd": "/tmp/fixture-codex",
+   "stdin": {
+    "session_id": "c0dec0de-0000-4000-8000-000000000005",
+    "turn_id": "c0dec0de-0000-4000-8000-000000000006",
+    "transcript_path": null,
+    "cwd": "/tmp/fixture-codex",
+    "hook_event_name": "PostToolUse",
+    "model": "gpt-6-luna",
+    "permission_mode": "bypassPermissions",
+    "tool_name": "apply_patch",
+    "tool_input": {
+     "command": "*** Begin Patch\n*** Update File: mv-src.txt\n*** Move to: moved.txt\n@@\n-move me\n+move me\n*** End Patch"
+    },
+    "tool_response": "Exit code: 0\nWall time: 0 seconds\nOutput:\nSuccess. Updated the following files:\nM moved.txt\n",
+    "tool_use_id": "exec-c0dec0de-0000-4000-8000-000000000009"
+   }
+  },
+  {
+   "case": "PostToolUse-apply_patch-delete",
+   "note": "apply_patch deleting del.txt",
+   "proc_cwd": "/tmp/fixture-codex",
+   "stdin": {
+    "session_id": "c0dec0de-0000-4000-8000-000000000005",
+    "turn_id": "c0dec0de-0000-4000-8000-000000000006",
+    "transcript_path": null,
+    "cwd": "/tmp/fixture-codex",
+    "hook_event_name": "PostToolUse",
+    "model": "gpt-6-luna",
+    "permission_mode": "bypassPermissions",
+    "tool_name": "apply_patch",
+    "tool_input": {
+     "command": "*** Begin Patch\n*** Delete File: del.txt\n*** End Patch"
+    },
+    "tool_response": "Exit code: 0\nWall time: 0 seconds\nOutput:\nSuccess. Updated the following files:\nD del.txt\n",
+    "tool_use_id": "exec-c0dec0de-0000-4000-8000-000000000010"
+   }
+  },
+  {
+   "case": "PostToolUse-Bash",
+   "note": "a shell command",
+   "proc_cwd": "/tmp/fixture-codex",
+   "stdin": {
+    "session_id": "c0dec0de-0000-4000-8000-000000000005",
+    "turn_id": "c0dec0de-0000-4000-8000-000000000006",
+    "transcript_path": null,
+    "cwd": "/tmp/fixture-codex",
+    "hook_event_name": "PostToolUse",
+    "model": "gpt-6-luna",
+    "permission_mode": "bypassPermissions",
+    "tool_name": "Bash",
+    "tool_input": {
+     "command": "cat mv-src.txt"
+    },
+    "tool_response": "move me\n",
+    "tool_use_id": "exec-c0dec0de-0000-4000-8000-000000000011"
+   }
+  }
+ ]
+}

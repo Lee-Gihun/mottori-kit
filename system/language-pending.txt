@@ -1,7 +1,0 @@
-system/enforcement-matrix.yaml
-system/reviews/content-audit.tsv
-tools/build_memory_map.py
-tools/diarize.py
-tools/portrait.py
-tools/transcribe.py
-tools/wf_gardener.js
