@@ -1,116 +1,94 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 628" width="1280" height="628" role="img" aria-labelledby="t d">
-<title id="t">mottori-kit: one long conversation for all your work</title>
-<desc id="d">Over 21 days one conversation moves between a checkout bug at work, a novel's fourth chapter and an apartment hunt, and is compacted four times. Under it each topic has its own file on disk, a line no compaction cuts: written down when the topic first comes up, handed back whenever the talk returns to it.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 662" width="1280" height="662" role="img" aria-labelledby="t d">
+<title id="t">mottori-kit: a topic picks up where it left off, weeks later</title>
+<desc id="d">Day 1: 'Let's fix the checkout bug with a lock.' The agent writes it to checkout-bug.md. Then three weeks of other topics in the same conversation: the novel's fourth chapter, apartment viewings, a tax form, an email to the landlord, with six compactions. Day 22: 'Back to the checkout bug.' The agent reads the file and answers: lock chosen on day 1; next, the failing test. The novel and the apartment hunt keep files of their own.</desc>
 <text x="40" y="76" font-size="54" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="700">mottori-kit</text>
 <text x="40" y="120" font-size="26" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">One conversation for all your work: switch topics as you like,</text>
 <text x="40" y="154" font-size="26" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">and each one picks up where it left off, weeks later.</text>
-<rect x="292.3" y="308" width="11" height="10" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="309.3" y="301.5" width="11" height="16.5" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="326.3" y="295" width="11" height="23" rx="2" fill="#6e7681" opacity="0.6"/>
-<rect x="343.2" y="288.5" width="11" height="29.5" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="360.2" y="282" width="11" height="36" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="377.2" y="275.5" width="11" height="42.5" rx="2" fill="#6e7681" opacity="0.8"/>
-<rect x="394.2" y="269" width="11" height="49" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="411.1" y="262.5" width="11" height="55.5" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="428.1" y="256" width="11" height="62" rx="2" fill="#6e7681" opacity="1"/>
-<rect x="467.1" y="308" width="11" height="10" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="484.1" y="304" width="11" height="14" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="501" y="300" width="11" height="18" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="518" y="296" width="11" height="22" rx="2" fill="#6e7681" opacity="0.6"/>
-<rect x="535" y="292" width="11" height="26" rx="2" fill="#6e7681" opacity="0.6"/>
-<rect x="552" y="288" width="11" height="30" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="568.9" y="284" width="11" height="34" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="585.9" y="280" width="11" height="38" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="602.9" y="276" width="11" height="42" rx="2" fill="#6e7681" opacity="0.8"/>
-<rect x="619.9" y="272" width="11" height="46" rx="2" fill="#6e7681" opacity="0.8"/>
-<rect x="636.8" y="268" width="11" height="50" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="653.8" y="264" width="11" height="54" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="670.8" y="260" width="11" height="58" rx="2" fill="#6e7681" opacity="1"/>
-<rect x="687.8" y="256" width="11" height="62" rx="2" fill="#6e7681" opacity="1"/>
-<rect x="726.7" y="308" width="11" height="10" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="743.7" y="302.8" width="11" height="15.2" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="760.7" y="297.6" width="11" height="20.4" rx="2" fill="#6e7681" opacity="0.6"/>
-<rect x="777.6" y="292.4" width="11" height="25.6" rx="2" fill="#6e7681" opacity="0.6"/>
-<rect x="794.6" y="287.2" width="11" height="30.8" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="811.6" y="282" width="11" height="36" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="828.6" y="276.8" width="11" height="41.2" rx="2" fill="#6e7681" opacity="0.8"/>
-<rect x="845.5" y="271.6" width="11" height="46.4" rx="2" fill="#6e7681" opacity="0.8"/>
-<rect x="862.5" y="266.4" width="11" height="51.6" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="879.5" y="261.2" width="11" height="56.8" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="896.5" y="256" width="11" height="62" rx="2" fill="#6e7681" opacity="1"/>
-<rect x="935.4" y="308" width="11" height="10" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="952.4" y="300.6" width="11" height="17.4" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="969.4" y="293.1" width="11" height="24.9" rx="2" fill="#6e7681" opacity="0.6"/>
-<rect x="986.4" y="285.7" width="11" height="32.3" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="1003.3" y="278.3" width="11" height="39.7" rx="2" fill="#6e7681" opacity="0.8"/>
-<rect x="1020.3" y="270.9" width="11" height="47.1" rx="2" fill="#6e7681" opacity="0.8"/>
-<rect x="1037.3" y="263.4" width="11" height="54.6" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="1054.3" y="256" width="11" height="62" rx="2" fill="#6e7681" opacity="1"/>
-<rect x="1093.2" y="308" width="11" height="10" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="1110.2" y="301.5" width="11" height="16.5" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="1127.2" y="295" width="11" height="23" rx="2" fill="#6e7681" opacity="0.6"/>
-<rect x="1144.2" y="288.5" width="11" height="29.5" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="1161.1" y="282" width="11" height="36" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="1178.1" y="275.5" width="11" height="42.5" rx="2" fill="#6e7681" opacity="0.8"/>
-<rect x="1195.1" y="269" width="11" height="49" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="1212.1" y="262.5" width="11" height="55.5" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="1229" y="256" width="11" height="62" rx="2" fill="#6e7681" opacity="1"/>
-<rect x="278.3" y="386" width="961.7" height="144" rx="10" fill="#2a1f10" stroke="#e3a04f" stroke-width="1.5"/>
-<line x1="453.1" y1="216" x2="453.1" y2="324" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="4 4"/>
-<line x1="712.7" y1="216" x2="712.7" y2="324" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="4 4"/>
-<line x1="921.4" y1="216" x2="921.4" y2="324" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="4 4"/>
-<line x1="1079.2" y1="216" x2="1079.2" y2="324" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="4 4"/>
-<text x="712.7" y="206" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">compaction: the chat is summarized</text>
-<line x1="292.3" y1="332" x2="371.2" y2="332" stroke="#3d444d" stroke-width="3"/>
-<line x1="297.8" y1="338" x2="297.8" y2="400.8" stroke="#e3a04f" stroke-width="1.5"/>
-<path d="M297.8 408L293.3 399L302.3 399Z" fill="#e3a04f"/>
-<text x="307.8" y="362" font-size="18" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">written down</text>
-<circle cx="297.8" cy="416" r="5" fill="#e3a04f"/>
-<line x1="377.2" y1="332" x2="439.1" y2="332" stroke="#3d444d" stroke-width="3"/>
-<line x1="382.7" y1="338" x2="382.7" y2="442.8" stroke="#e3a04f" stroke-width="1.5"/>
-<path d="M382.7 450L378.2 441L387.2 441Z" fill="#e3a04f"/>
-<circle cx="382.7" cy="458" r="5" fill="#e3a04f"/>
-<line x1="467.1" y1="332" x2="579.9" y2="332" stroke="#3d444d" stroke-width="3"/>
-<line x1="472.6" y1="408" x2="472.6" y2="345.2" stroke="#e3a04f" stroke-width="1.5"/>
-<path d="M472.6 338L477.1 347L468.1 347Z" fill="#e3a04f"/>
-<text x="482.6" y="362" font-size="18" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">handed back</text>
-<circle cx="472.6" cy="416" r="5" fill="#e3a04f"/>
-<line x1="585.9" y1="332" x2="698.7" y2="332" stroke="#3d444d" stroke-width="3"/>
-<line x1="591.4" y1="338" x2="591.4" y2="484.8" stroke="#e3a04f" stroke-width="1.5"/>
-<path d="M591.4 492L586.9 483L595.9 483Z" fill="#e3a04f"/>
-<circle cx="591.4" cy="500" r="5" fill="#e3a04f"/>
-<line x1="726.7" y1="332" x2="805.6" y2="332" stroke="#3d444d" stroke-width="3"/>
-<line x1="732.2" y1="450" x2="732.2" y2="345.2" stroke="#e3a04f" stroke-width="1.5"/>
-<path d="M732.2 338L736.7 347L727.7 347Z" fill="#e3a04f"/>
-<circle cx="732.2" cy="458" r="5" fill="#e3a04f"/>
-<line x1="811.6" y1="332" x2="907.4" y2="332" stroke="#3d444d" stroke-width="3"/>
-<line x1="817.1" y1="408" x2="817.1" y2="345.2" stroke="#e3a04f" stroke-width="1.5"/>
-<path d="M817.1 338L821.6 347L812.6 347Z" fill="#e3a04f"/>
-<circle cx="817.1" cy="416" r="5" fill="#e3a04f"/>
-<line x1="935.4" y1="332" x2="1065.2" y2="332" stroke="#3d444d" stroke-width="3"/>
-<line x1="940.9" y1="492" x2="940.9" y2="345.2" stroke="#e3a04f" stroke-width="1.5"/>
-<path d="M940.9 338L945.4 347L936.4 347Z" fill="#e3a04f"/>
-<circle cx="940.9" cy="500" r="5" fill="#e3a04f"/>
-<line x1="1093.2" y1="332" x2="1155.1" y2="332" stroke="#3d444d" stroke-width="3"/>
-<line x1="1098.7" y1="450" x2="1098.7" y2="345.2" stroke="#e3a04f" stroke-width="1.5"/>
-<path d="M1098.7 338L1103.2 347L1094.2 347Z" fill="#e3a04f"/>
-<circle cx="1098.7" cy="458" r="5" fill="#e3a04f"/>
-<line x1="1161.1" y1="332" x2="1240" y2="332" stroke="#3d444d" stroke-width="3"/>
-<line x1="1166.6" y1="408" x2="1166.6" y2="345.2" stroke="#e3a04f" stroke-width="1.5"/>
-<path d="M1166.6 338L1171.1 347L1162.1 347Z" fill="#e3a04f"/>
-<circle cx="1166.6" cy="416" r="5" fill="#e3a04f"/>
-<line x1="292.3" y1="416" x2="1240" y2="416" stroke="#e3a04f" stroke-width="3"/>
-<text x="40" y="423" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f">checkout-bug.md</text>
-<line x1="292.3" y1="458" x2="1240" y2="458" stroke="#e3a04f" stroke-width="3"/>
-<text x="40" y="465" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f">novel-ch4.md</text>
-<line x1="292.3" y1="500" x2="1240" y2="500" stroke="#e3a04f" stroke-width="3"/>
-<text x="40" y="507" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f">apartment.md</text>
-<text x="40" y="294" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" font-weight="600" letter-spacing="1.6">CONVERSATION</text>
-<text x="40" y="378" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f" font-weight="600" letter-spacing="1.6">ON DISK</text>
-<text x="292.3" y="566" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">day 1</text>
-<text x="576.6" y="566" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">day 7</text>
-<text x="908.3" y="566" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">day 14</text>
-<text x="1240" y="566" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="end">day 21</text>
-<text x="1240" y="610" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="end">Claude Code, Codex and Antigravity · plain files, hooks and small Python commands</text>
+<rect x="278.3" y="410" width="11.8" height="10" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="296.1" y="403.4" width="11.8" height="16.6" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="313.9" y="396.9" width="11.8" height="23.1" rx="2" fill="#6e7681" opacity="0.6"/>
+<rect x="331.7" y="390.3" width="11.8" height="29.7" rx="2" fill="#6e7681" opacity="0.7"/>
+<rect x="349.4" y="383.7" width="11.8" height="36.3" rx="2" fill="#6e7681" opacity="0.8"/>
+<rect x="367.2" y="377.1" width="11.8" height="42.9" rx="2" fill="#6e7681" opacity="0.8"/>
+<rect x="385" y="370.6" width="11.8" height="49.4" rx="2" fill="#6e7681" opacity="0.9"/>
+<rect x="402.8" y="364" width="11.8" height="56" rx="2" fill="#6e7681" opacity="1"/>
+<rect x="442.6" y="410" width="11.8" height="10" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="460.3" y="400.8" width="11.8" height="19.2" rx="2" fill="#6e7681" opacity="0.6"/>
+<rect x="478.1" y="391.6" width="11.8" height="28.4" rx="2" fill="#6e7681" opacity="0.7"/>
+<rect x="495.9" y="382.4" width="11.8" height="37.6" rx="2" fill="#6e7681" opacity="0.8"/>
+<rect x="513.7" y="373.2" width="11.8" height="46.8" rx="2" fill="#6e7681" opacity="0.9"/>
+<rect x="531.5" y="364" width="11.8" height="56" rx="2" fill="#6e7681" opacity="1"/>
+<rect x="571.2" y="410" width="11.8" height="10" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="589" y="402.3" width="11.8" height="17.7" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="606.8" y="394.7" width="11.8" height="25.3" rx="2" fill="#6e7681" opacity="0.6"/>
+<rect x="624.6" y="387" width="11.8" height="33" rx="2" fill="#6e7681" opacity="0.7"/>
+<rect x="642.4" y="379.3" width="11.8" height="40.7" rx="2" fill="#6e7681" opacity="0.8"/>
+<rect x="660.1" y="371.7" width="11.8" height="48.3" rx="2" fill="#6e7681" opacity="0.9"/>
+<rect x="677.9" y="364" width="11.8" height="56" rx="2" fill="#6e7681" opacity="1"/>
+<rect x="717.7" y="410" width="11.8" height="10" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="735.5" y="398.5" width="11.8" height="21.5" rx="2" fill="#6e7681" opacity="0.6"/>
+<rect x="753.3" y="387" width="11.8" height="33" rx="2" fill="#6e7681" opacity="0.7"/>
+<rect x="771.1" y="375.5" width="11.8" height="44.5" rx="2" fill="#6e7681" opacity="0.9"/>
+<rect x="788.8" y="364" width="11.8" height="56" rx="2" fill="#6e7681" opacity="1"/>
+<rect x="828.6" y="410" width="11.8" height="10" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="846.4" y="402.3" width="11.8" height="17.7" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="864.2" y="394.7" width="11.8" height="25.3" rx="2" fill="#6e7681" opacity="0.6"/>
+<rect x="882" y="387" width="11.8" height="33" rx="2" fill="#6e7681" opacity="0.7"/>
+<rect x="899.7" y="379.3" width="11.8" height="40.7" rx="2" fill="#6e7681" opacity="0.8"/>
+<rect x="917.5" y="371.7" width="11.8" height="48.3" rx="2" fill="#6e7681" opacity="0.9"/>
+<rect x="935.3" y="364" width="11.8" height="56" rx="2" fill="#6e7681" opacity="1"/>
+<rect x="975.1" y="410" width="11.8" height="10" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="992.9" y="400.8" width="11.8" height="19.2" rx="2" fill="#6e7681" opacity="0.6"/>
+<rect x="1010.6" y="391.6" width="11.8" height="28.4" rx="2" fill="#6e7681" opacity="0.7"/>
+<rect x="1028.4" y="382.4" width="11.8" height="37.6" rx="2" fill="#6e7681" opacity="0.8"/>
+<rect x="1046.2" y="373.2" width="11.8" height="46.8" rx="2" fill="#6e7681" opacity="0.9"/>
+<rect x="1064" y="364" width="11.8" height="56" rx="2" fill="#6e7681" opacity="1"/>
+<rect x="1103.8" y="410" width="11.8" height="10" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="1121.5" y="403.4" width="11.8" height="16.6" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="1139.3" y="396.9" width="11.8" height="23.1" rx="2" fill="#6e7681" opacity="0.6"/>
+<rect x="1157.1" y="390.3" width="11.8" height="29.7" rx="2" fill="#6e7681" opacity="0.7"/>
+<rect x="1174.9" y="383.7" width="11.8" height="36.3" rx="2" fill="#6e7681" opacity="0.8"/>
+<rect x="1192.7" y="377.1" width="11.8" height="42.9" rx="2" fill="#6e7681" opacity="0.8"/>
+<rect x="1210.4" y="370.6" width="11.8" height="49.4" rx="2" fill="#6e7681" opacity="0.9"/>
+<rect x="1228.2" y="364" width="11.8" height="56" rx="2" fill="#6e7681" opacity="1"/>
+<line x1="428.6" y1="352" x2="428.6" y2="424" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="4 4"/>
+<line x1="557.2" y1="352" x2="557.2" y2="424" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="4 4"/>
+<line x1="703.7" y1="352" x2="703.7" y2="424" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="4 4"/>
+<line x1="814.6" y1="352" x2="814.6" y2="424" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="4 4"/>
+<line x1="961.1" y1="352" x2="961.1" y2="424" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="4 4"/>
+<line x1="1089.8" y1="352" x2="1089.8" y2="424" stroke="#9198a1" stroke-width="1.5" stroke-dasharray="4 4"/>
+<text x="557.2" y="344" font-size="17" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">compaction</text>
+<text x="492.9" y="450" font-size="17" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">novel ch.4</text>
+<text x="630.5" y="450" font-size="17" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">viewings</text>
+<text x="759.2" y="450" font-size="17" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">tax form</text>
+<text x="887.8" y="450" font-size="17" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">novel ch.5</text>
+<text x="1025.4" y="450" font-size="17" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">landlord</text>
+<text x="278.3" y="222" font-size="17" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" font-weight="600" letter-spacing="1.4">DAY 1</text>
+<text x="278.3" y="258" font-size="24" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3">“Let’s fix the checkout bug</text>
+<text x="278.3" y="290" font-size="24" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3">with a lock.”</text>
+<text x="1240" y="222" font-size="17" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" font-weight="600" text-anchor="end" letter-spacing="1.4">DAY 22</text>
+<text x="1240" y="258" font-size="24" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="end">“Back to the checkout bug.”</text>
+<text x="1240" y="292" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f" font-weight="600" text-anchor="end">Lock chosen on day 1.</text>
+<text x="1240" y="322" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f" font-weight="600" text-anchor="end">Next: the failing test.</text>
+<line x1="278.3" y1="506" x2="1240" y2="506" stroke="#e3a04f" stroke-width="4"/>
+<text x="278.3" y="450" font-size="17" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">checkout bug</text>
+<text x="1240" y="450" font-size="17" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="end">checkout bug</text>
+<line x1="408.7" y1="426" x2="408.7" y2="492.8" stroke="#e3a04f" stroke-width="1.5"/>
+<path d="M408.7 500L404.2 491L413.2 491Z" fill="#e3a04f"/>
+<text x="420.7" y="480" font-size="18" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">the agent writes it down</text>
+<line x1="1109.6" y1="500" x2="1109.6" y2="433.2" stroke="#e3a04f" stroke-width="1.5"/>
+<path d="M1109.6 426L1114.1 435L1105.1 435Z" fill="#e3a04f"/>
+<text x="1097.6" y="480" font-size="18" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f" text-anchor="end">and reads it back</text>
+<circle cx="408.7" cy="506" r="6" fill="#e3a04f"/>
+<circle cx="1109.6" cy="506" r="6" fill="#e3a04f"/>
+<text x="40" y="399" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" font-weight="600" letter-spacing="1.6">CONVERSATION</text>
+<text x="40" y="476" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f" font-weight="600" letter-spacing="1.6">ON DISK</text>
+<text x="40" y="513" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f">checkout-bug.md</text>
+<line x1="278.3" y1="540" x2="1240" y2="540" stroke="#e3a04f" stroke-width="2" opacity="0.35"/>
+<text x="40" y="546" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f" opacity="0.6">novel-ch4.md</text>
+<line x1="278.3" y1="566" x2="1240" y2="566" stroke="#e3a04f" stroke-width="2" opacity="0.35"/>
+<text x="40" y="572" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f" opacity="0.6">apartment.md</text>
+<text x="1240" y="610" font-size="18" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="end">A topic that runs long keeps its own file. A compaction cuts the chat, not the file.</text>
+<text x="1240" y="644" font-size="18" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="end">Claude Code, Codex and Antigravity · plain files, hooks and small Python commands</text>
 </svg>

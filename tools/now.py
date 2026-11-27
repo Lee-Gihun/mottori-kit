@@ -71,7 +71,7 @@ LOG_HELP = (
     "  type    one of: {types}\n"
     "  track   {tracks}\n"
     "  --private keeps the line under _private/, on this machine only.\n"
-    'Example: python3 tools/now.py log "[launch/decision] Beta opens Dec 2 with two pricing tiers."'
+    'Example: python3 tools/now.py log "[checkout/decision] Fix the cart race with a lock, not a queue."'
 )
 LOG_TRACKS_ANY = "any short name, such as the project's; registered here: {names}"
 LOG_TRACKS_LISTED = (

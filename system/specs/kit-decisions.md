@@ -4689,3 +4689,34 @@ root, and renamed files break outside links); grouping `instance/`, `state/` and
 Boundary: an installation's root also holds `instance/`, `state/`, `_private/` and `projects/`.
 
 Reconsider: GitHub or the runtimes start reading these pages from another place.
+
+### DR-097 The README shows each part in one scene, and a tutorial at the root walks the first hour (2026-11-27 · active)
+
+Decision: the README opens with what one person gets: one conversation for all their work, in which a topic
+picks up where it left off weeks later. Its first picture shows that single scene: a decision on day 1, three
+weeks of other topics and compactions, and on day 22 the agent answering from the topic's file. The first screen
+also says that the kit is built to get out of the way of better models, and links the page that lists each part
+covering for a gap in today's models. Every part of the kit then gets a short scene, and every scene comes from
+the same three topics: a race in a shop's checkout, chapter 4 of a novel, and an apartment hunt. `TUTORIAL.md`,
+at the root beside `SETUP.md`, walks the first hour with the same topics: a decision, a second topic in the same
+chat, a file for a long topic, a compaction, a stopped turn, a search of the owner's own words and a lens. The
+examples in `SETUP.md`, `MANUAL.md`, `system/rituals.md` and `now.py log --help` use the same topics. This
+changes `decision:KIT-DR-096`: the root also keeps `TUTORIAL.md`.
+
+Context: the owner found the first picture, three topic lines with twelve arrows, cramped and hard to read, and
+asked for a tutorial, for a README from which every essential part can be understood through vivid examples, and
+for the principle that the harness must not become the limit as models improve to be put forward. The examples
+before were a pricing tier and a hiring plan, which the owner called flat. Two readers with no context, a Claude
+session started outside any workspace and Gemini, read three candidate first pictures blind: the single scene was
+read correctly with high confidence, and the two timelines needed a legend or left the reader decoding arrows.
+
+evidence: test:tools/tests/test_tool_entrypoints.py::test_the_tutorial_and_readme_name_only_commands_that_exist ·
+test:tools/tests/test_projects.py::test_the_root_holds_only_what_a_runtime_github_or_a_first_reader_needs
+
+Rejected alternatives: the tutorial under `system/` (that folder is what the agent reads, and a newcomer looks at
+the root first); a picture for every part in the README (each folder's README already has its picture, and the
+page would become a catalogue); a first picture that sets a chat per task against one conversation (read
+correctly, but the reader had to decode two rows of bars before getting to the result).
+
+Reconsider: someone new to the kit walks the tutorial alone and gets stuck at a step, or a runtime changes how a
+conversation is compacted.

@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/debate-dark.svg">
-    <img src="../../.github/assets/debate-light.svg" width="100%" alt="Claude and Codex take turns: a proposal, an attack on its assumptions, a reply, a convergence. You receive one recommendation or the one decision still open, not the messages.">
+    <img src="../../.github/assets/debate-light.svg" width="100%" alt="Claude proposes a lock on the item row. Codex asks what happens if the payment provider retries. Claude answers with a lock and a retry key; Codex agrees and asks for a test of the retry. You get one recommendation, or the one decision still open, not the messages.">
   </picture>
 </p>
 

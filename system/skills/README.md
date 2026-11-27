@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/skills-dark.svg">
-    <img src="../../.github/assets/skills-light.svg" width="100%" alt="One session drawn as growing context. Along it, skills open at their moments: now at the start, lenses before a decision, deep-pass for a decision that cannot be undone, plain-writing for text another person will read, recall to find what you said, large-jobs before a big job.">
+    <img src="../../.github/assets/skills-light.svg" width="100%" alt="One conversation drawn as growing context. Along it, six skills open at their moments: now when a session starts, lenses at &#x27;lock or queue?&#x27;, recall at &#x27;what did I say about Friday nights?&#x27;, deep-pass before signing the lease, plain-writing for the email to the landlord, large-jobs before reading all 40 payment files.">
   </picture>
 </p>
 

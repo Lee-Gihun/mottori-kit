@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 600" width="1280" height="600" role="img" aria-labelledby="t d">
 <title id="t">How one session runs</title>
-<desc id="d">Five moments in a session where a hook runs a small command, and the files on disk each one reads or writes. After compaction the session starts again from the files.</desc>
+<desc id="d">Five moments in a session, each with the hook or command that runs: when a session starts, where things stand is put in front of the agent; while you work, the agent logs each decision in one line; after an edit, the workspace is marked as changed; when a reply ends, links and state are checked and the turn stops once with the reason; before compaction, it is recorded. After compaction the session starts again from the files. Claude Code and Codex have all five; Antigravity has no fifth.</desc>
 <path d="M1137.4 114 C1137.4 32 142.6 32 142.6 107" fill="none" stroke="#9198a1" stroke-width="1.5"/>
 <path d="M142.6 114L138.1 105L147.1 105Z" fill="#9198a1"/>
 <text x="640" y="38.5" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">after compaction the session starts again from the files</text>
@@ -16,42 +16,45 @@
 <rect x="32" y="132" width="221.2" height="240" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
 <circle cx="142.6" cy="132" r="16" fill="#0d1117" stroke="#3d444d" stroke-width="1.5"/>
 <text x="142.6" y="139" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="600" text-anchor="middle">1</text>
-<text x="142.6" y="176" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9198a1" text-anchor="middle">SessionStart</text>
-<text x="142.6" y="242" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">Current state</text>
-<text x="142.6" y="270" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">is injected</text>
-<text x="142.6" y="350" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">6,000 bytes max</text>
+<text x="142.6" y="176" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">session start</text>
+<text x="142.6" y="214" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">Where things</text>
+<text x="142.6" y="242" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">stand is put</text>
+<text x="142.6" y="270" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">in front of</text>
+<text x="142.6" y="298" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">the agent</text>
+<text x="142.6" y="350" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9198a1" text-anchor="middle">SessionStart</text>
 <rect x="280.7" y="132" width="221.2" height="240" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
 <circle cx="391.3" cy="132" r="16" fill="#0d1117" stroke="#3d444d" stroke-width="1.5"/>
 <text x="391.3" y="139" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="600" text-anchor="middle">2</text>
 <text x="391.3" y="176" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">while you work</text>
-<text x="391.3" y="228" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">Agent logs</text>
+<text x="391.3" y="228" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">The agent logs</text>
 <text x="391.3" y="256" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">each decision</text>
 <text x="391.3" y="284" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">in one line</text>
-<text x="391.3" y="350" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">one command</text>
+<text x="391.3" y="350" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9198a1" text-anchor="middle">now.py log</text>
 <rect x="529.4" y="132" width="221.2" height="240" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
 <circle cx="640" cy="132" r="16" fill="#0d1117" stroke="#3d444d" stroke-width="1.5"/>
 <text x="640" y="139" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="600" text-anchor="middle">3</text>
-<text x="640" y="176" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9198a1" text-anchor="middle">PostToolUse</text>
-<text x="640" y="228" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">An edit marks</text>
-<text x="640" y="256" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">the workspace</text>
+<text x="640" y="176" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">after an edit</text>
+<text x="640" y="228" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">The workspace</text>
+<text x="640" y="256" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">is marked</text>
 <text x="640" y="284" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">as changed</text>
-<text x="640" y="350" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">milliseconds</text>
+<text x="640" y="350" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9198a1" text-anchor="middle">PostToolUse</text>
 <rect x="778.1" y="132" width="221.2" height="240" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
 <circle cx="888.7" cy="132" r="16" fill="#0d1117" stroke="#3d444d" stroke-width="1.5"/>
 <text x="888.7" y="139" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="600" text-anchor="middle">4</text>
-<text x="888.7" y="176" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9198a1" text-anchor="middle">Stop</text>
-<text x="888.7" y="214" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">Checks links</text>
-<text x="888.7" y="242" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">and state.</text>
-<text x="888.7" y="270" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">Stops once,</text>
-<text x="888.7" y="298" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">with the reason</text>
-<text x="888.7" y="350" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">0.4 s if edited</text>
+<text x="888.7" y="176" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">a reply ends</text>
+<text x="888.7" y="214" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">Links, state</text>
+<text x="888.7" y="242" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">are checked;</text>
+<text x="888.7" y="270" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">stops once,</text>
+<text x="888.7" y="298" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">with a reason</text>
+<text x="888.7" y="350" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9198a1" text-anchor="middle">Stop</text>
 <rect x="1026.8" y="132" width="221.2" height="240" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
 <circle cx="1137.4" cy="132" r="16" fill="#0d1117" stroke="#3d444d" stroke-width="1.5"/>
 <text x="1137.4" y="139" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="600" text-anchor="middle">5</text>
-<text x="1137.4" y="176" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9198a1" text-anchor="middle">PreCompact</text>
-<text x="1137.4" y="242" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">Compaction is</text>
-<text x="1137.4" y="270" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">recorded first</text>
-<text x="1137.4" y="350" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">milliseconds</text>
+<text x="1137.4" y="176" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">at compaction</text>
+<text x="1137.4" y="228" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">The compaction</text>
+<text x="1137.4" y="256" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">is recorded</text>
+<text x="1137.4" y="284" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" text-anchor="middle">first</text>
+<text x="1137.4" y="350" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9198a1" text-anchor="middle">PreCompact</text>
 <rect x="32" y="484" width="1216" height="60" rx="10" fill="#2a1f10" stroke="#e3a04f" stroke-width="1.5"/>
 <rect x="40" y="496" width="127.1" height="36" rx="6" fill="#0d1117"/>
 <text x="103.6" y="521" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f" text-anchor="middle">dossiers</text>
@@ -80,5 +83,5 @@
 <text x="62" y="411" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">thread</text>
 <text x="62" y="435" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">dossiers</text>
 <text x="62" y="459" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">listed</text>
-<text x="32" y="582" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">Claude Code and Codex have all five stations. Antigravity has no station 5</text>
+<text x="32" y="582" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">Claude Code and Codex have all five. Antigravity has no fifth.</text>
 </svg>

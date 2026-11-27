@@ -1,43 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 380" width="1280" height="380" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" width="1280" height="420" role="img" aria-labelledby="t d">
 <title id="t">Each decision record names the tests that hold it</title>
-<desc id="d">Decision records are appended one after another. Each one's evidence line names the tests that hold it, and a check fails when a named test is gone. A later record names the one it changes.</desc>
-<text x="40" y="92" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" font-weight="600" letter-spacing="1.6">DECISION RECORDS</text>
-<rect x="313.7" y="68" width="158.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
-<text x="393.1" y="93" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">KIT-DR-090</text>
-<rect x="488.9" y="68" width="158.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
-<text x="568.4" y="93" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">KIT-DR-091</text>
-<line x1="476.6" y1="86" x2="477.7" y2="86" stroke="#d1d9e0" stroke-width="1.5"/>
-<path d="M484.9 86L475.9 90.5L475.9 81.5Z" fill="#d1d9e0"/>
-<rect x="664.1" y="68" width="158.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
-<text x="743.6" y="93" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">KIT-DR-092</text>
-<line x1="651.8" y1="86" x2="652.9" y2="86" stroke="#d1d9e0" stroke-width="1.5"/>
-<path d="M660.1 86L651.1 90.5L651.1 81.5Z" fill="#d1d9e0"/>
-<rect x="839.4" y="68" width="158.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
-<text x="918.8" y="93" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">KIT-DR-093</text>
-<line x1="827" y1="86" x2="828.2" y2="86" stroke="#d1d9e0" stroke-width="1.5"/>
-<path d="M835.4 86L826.4 90.5L826.4 81.5Z" fill="#d1d9e0"/>
-<rect x="1014.6" y="68" width="158.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
-<text x="1094" y="93" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">KIT-DR-094</text>
-<line x1="1002.2" y1="86" x2="1003.4" y2="86" stroke="#d1d9e0" stroke-width="1.5"/>
-<path d="M1010.6 86L1001.6 90.5L1001.6 81.5Z" fill="#d1d9e0"/>
-<rect x="1189.8" y="68" width="33.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
-<text x="1206.7" y="93" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">…</text>
-<line x1="1177.4" y1="86" x2="1178.6" y2="86" stroke="#d1d9e0" stroke-width="1.5"/>
-<path d="M1185.8 86L1176.8 90.5L1176.8 81.5Z" fill="#d1d9e0"/>
-<text x="40" y="237" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13" font-weight="600" letter-spacing="1.6">TESTS</text>
-<rect x="297.4" y="200" width="942.6" height="60" rx="10" fill="#fbf1e3" stroke="#9a5b13" stroke-width="1.5"/>
-<line x1="393.1" y1="106" x2="393.1" y2="196" stroke="#9a5b13" stroke-width="1.5" stroke-dasharray="3 5"/>
-<line x1="568.4" y1="106" x2="568.4" y2="196" stroke="#9a5b13" stroke-width="1.5" stroke-dasharray="3 5"/>
-<line x1="743.6" y1="106" x2="743.6" y2="196" stroke="#9a5b13" stroke-width="1.5" stroke-dasharray="3 5"/>
-<rect x="646.6" y="212" width="242.2" height="36" rx="6" fill="#ffffff"/>
-<text x="767.7" y="237" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9a5b13" text-anchor="middle">test_projects.py</text>
-<line x1="918.8" y1="106" x2="773.8" y2="195.2" stroke="#9a5b13" stroke-width="1.5"/>
-<path d="M767.7 199L773 190.5L777.7 198.1Z" fill="#9a5b13"/>
-<rect x="995.7" y="212" width="228.3" height="36" rx="6" fill="#ffffff"/>
-<text x="1109.8" y="237" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9a5b13" text-anchor="middle">test_options.py</text>
-<line x1="1094" y1="106" x2="1108.6" y2="191.9" stroke="#9a5b13" stroke-width="1.5"/>
-<path d="M1109.8 199L1103.9 190.9L1112.8 189.4Z" fill="#9a5b13"/>
-<text x="932.8" y="146" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13">evidence</text>
-<text x="40" y="312" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e">Each record names the tests that hold it, and a check fails when one is gone. Records are added, never rewritten.</text>
+<desc id="d">A decision record, such as DR-093, 'The owner's work lives in projects/, one folder per project', gives the decision, the context it came from and the evidence: the test that holds it. A check fails when a named test is gone. Records are added one after another and never rewritten.</desc>
+<rect x="40" y="32" width="760" height="290" rx="10" fill="#ffffff" stroke="#d1d9e0" stroke-width="1.5"/>
+<rect x="52" y="44" width="760" height="290" rx="10" fill="#ffffff" stroke="#d1d9e0" stroke-width="1.5"/>
+<rect x="64" y="56" width="760" height="290" rx="10" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="88" y="96" font-size="18" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#59636e">decision record DR-093</text>
+<text x="88" y="132" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" font-weight="700">The owner's work lives in projects/,</text>
+<text x="88" y="162" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" font-weight="700">one folder per project</text>
+<text x="88" y="212" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" font-weight="600">Decision</text>
+<text x="214" y="212" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328">every folder there is a project, described in its README</text>
+<text x="88" y="252" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" font-weight="600">Context</text>
+<text x="214" y="252" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328">thirty folders at the root, one project in three places</text>
+<text x="88" y="292" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" font-weight="600">Evidence</text>
+<text x="214" y="292" font-size="19" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9a5b13">test_projects.py</text>
+<line x1="435.1" y1="286" x2="886.8" y2="286" stroke="#9a5b13" stroke-width="1.5"/>
+<path d="M894 286L885 290.5L885 281.5Z" fill="#9a5b13"/>
+<rect x="900" y="268" width="242.2" height="36" rx="6" fill="#ffffff"/>
+<text x="1021.1" y="293" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9a5b13" text-anchor="middle">test_projects.py</text>
+<rect x="884" y="252" width="274.2" height="68" rx="10" fill="#fbf1e3" stroke="#9a5b13" stroke-width="1.5"/>
+<rect x="900" y="268" width="242.2" height="36" rx="6" fill="#ffffff"/>
+<text x="1021.1" y="293" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#9a5b13" text-anchor="middle">test_projects.py</text>
+<text x="884" y="356" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13">if this test is gone,</text>
+<text x="884" y="382" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13">a check fails</text>
+<text x="40" y="398" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e">Records are added one after another, never rewritten. A later record names the one it changes.</text>
 </svg>

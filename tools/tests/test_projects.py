@@ -241,7 +241,7 @@ def test_the_root_holds_only_what_a_runtime_github_or_a_first_reader_needs():
     listed = open(os.path.join(ROOT, "system", "dev", "kit-files.txt"), encoding="utf-8").read().split()
     top = {p for p in listed if "/" not in p}
     assert top == {".gitignore", "AGENTS.md", "CHANGELOG.md", "CLAUDE.md", "LICENSE", "MANUAL.md", "README.md",
-                   "SETUP.md", "setup.sh"}, sorted(top)
+                   "SETUP.md", "TUTORIAL.md", "setup.sh"}, sorted(top)
     assert "system/CHECKLIST.md" in listed and ".github/CONTRIBUTING.md" in listed
 
 
