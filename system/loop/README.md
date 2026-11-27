@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/loop-dark.svg">
-    <img src="../../.github/assets/loop-light.svg" width="100%" alt="Once a week: new papers and your corrections, a judge picks at most two proposals, a builder writes each in a temporary clone, the tests run in a sandbox, a reviewer reads the patch, and a patch file with a report is saved. The loop never writes into your files; you or your agent apply the patch.">
+    <img src="../../.github/assets/loop-light.svg" width="100%" alt="Once a week: sources, a judge that picks at most two proposals, a build in a temporary copy, tests in a sandbox and a review of the patch. What it keeps is a patch file and a report on disk. It never writes into your folder; you or your agent apply the patch.">
   </picture>
 </p>
 

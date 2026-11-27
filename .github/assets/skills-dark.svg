@@ -2,64 +2,64 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 470" width="1280" height="470" role="img" aria-labelledby="t d">
 <title id="t">Skills open by themselves when their moment comes</title>
 <desc id="d">One session drawn as growing context. Along it, skills open at their moments: now at the start, lenses before a decision, deep-pass for a decision that cannot be undone, plain-writing for text another person will read, recall to find what you said, large-jobs before a big job.</desc>
-<text x="40" y="354" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" font-weight="600" letter-spacing="1.6">A SESSION</text>
-<rect x="197" y="370" width="24.9" height="10" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="227.9" y="367.9" width="24.9" height="12.1" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="258.7" y="365.8" width="24.9" height="14.2" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="289.6" y="363.6" width="24.9" height="16.4" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="320.4" y="361.5" width="24.9" height="18.5" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="351.3" y="359.4" width="24.9" height="20.6" rx="2" fill="#6e7681" opacity="0.5"/>
-<rect x="382.1" y="357.3" width="24.9" height="22.7" rx="2" fill="#6e7681" opacity="0.6"/>
-<rect x="413" y="355.2" width="24.9" height="24.8" rx="2" fill="#6e7681" opacity="0.6"/>
-<rect x="443.8" y="353" width="24.9" height="27" rx="2" fill="#6e7681" opacity="0.6"/>
-<rect x="474.7" y="350.9" width="24.9" height="29.1" rx="2" fill="#6e7681" opacity="0.6"/>
-<rect x="505.5" y="348.8" width="24.9" height="31.2" rx="2" fill="#6e7681" opacity="0.6"/>
-<rect x="536.4" y="346.7" width="24.9" height="33.3" rx="2" fill="#6e7681" opacity="0.6"/>
-<rect x="567.3" y="344.5" width="24.9" height="35.5" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="598.1" y="342.4" width="24.9" height="37.6" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="629" y="340.3" width="24.9" height="39.7" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="659.8" y="338.2" width="24.9" height="41.8" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="690.7" y="336.1" width="24.9" height="43.9" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="721.5" y="333.9" width="24.9" height="46.1" rx="2" fill="#6e7681" opacity="0.7"/>
-<rect x="752.4" y="331.8" width="24.9" height="48.2" rx="2" fill="#6e7681" opacity="0.8"/>
-<rect x="783.2" y="329.7" width="24.9" height="50.3" rx="2" fill="#6e7681" opacity="0.8"/>
-<rect x="814.1" y="327.6" width="24.9" height="52.4" rx="2" fill="#6e7681" opacity="0.8"/>
-<rect x="844.9" y="325.5" width="24.9" height="54.5" rx="2" fill="#6e7681" opacity="0.8"/>
-<rect x="875.8" y="323.3" width="24.9" height="56.7" rx="2" fill="#6e7681" opacity="0.8"/>
-<rect x="906.6" y="321.2" width="24.9" height="58.8" rx="2" fill="#6e7681" opacity="0.8"/>
-<rect x="937.5" y="319.1" width="24.9" height="60.9" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="968.3" y="317" width="24.9" height="63" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="999.2" y="314.8" width="24.9" height="65.2" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="1030" y="312.7" width="24.9" height="67.3" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="1060.9" y="310.6" width="24.9" height="69.4" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="1091.7" y="308.5" width="24.9" height="71.5" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="1122.6" y="306.4" width="24.9" height="73.6" rx="2" fill="#6e7681" opacity="0.9"/>
-<rect x="1153.4" y="304.2" width="24.9" height="75.8" rx="2" fill="#6e7681" opacity="1"/>
-<rect x="1184.3" y="302.1" width="24.9" height="77.9" rx="2" fill="#6e7681" opacity="1"/>
-<rect x="1215.1" y="300" width="24.9" height="80" rx="2" fill="#6e7681" opacity="1"/>
-<line x1="209.5" y1="214" x2="209.5" y2="358" stroke="#3d444d" stroke-width="1.5"/>
-<circle cx="209.5" cy="358" r="5" fill="#e6edf3"/>
-<text x="209.5" y="170" font-size="22" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3">now</text>
-<text x="209.5" y="198" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">session start</text>
-<line x1="394.6" y1="114" x2="394.6" y2="345.3" stroke="#3d444d" stroke-width="1.5"/>
-<circle cx="394.6" cy="345.3" r="5" fill="#e6edf3"/>
-<text x="394.6" y="70" font-size="22" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">lenses</text>
-<text x="394.6" y="98" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">before a decision</text>
-<line x1="579.7" y1="214" x2="579.7" y2="332.5" stroke="#3d444d" stroke-width="1.5"/>
-<circle cx="579.7" cy="332.5" r="5" fill="#e6edf3"/>
-<text x="579.7" y="170" font-size="22" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">recall</text>
-<text x="579.7" y="198" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">what did I say?</text>
-<line x1="764.8" y1="114" x2="764.8" y2="319.8" stroke="#3d444d" stroke-width="1.5"/>
-<circle cx="764.8" cy="319.8" r="5" fill="#e6edf3"/>
-<text x="764.8" y="70" font-size="22" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">deep-pass</text>
-<text x="764.8" y="98" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">can't be undone</text>
-<line x1="980.8" y1="214" x2="980.8" y2="305" stroke="#3d444d" stroke-width="1.5"/>
-<circle cx="980.8" cy="305" r="5" fill="#e6edf3"/>
-<text x="980.8" y="170" font-size="22" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">plain-writing</text>
-<text x="980.8" y="198" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">an email to send</text>
-<line x1="1165.9" y1="114" x2="1165.9" y2="292.2" stroke="#3d444d" stroke-width="1.5"/>
-<circle cx="1165.9" cy="292.2" r="5" fill="#e6edf3"/>
-<text x="1165.9" y="70" font-size="22" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="end">large-jobs</text>
-<text x="1165.9" y="98" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="end">a big job</text>
-<text x="40" y="434" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">Nine skills; each also opens by name, and in Claude Code it is a slash command too.</text>
+<text x="40" y="354" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" font-weight="600" letter-spacing="1.6">THE CONVERSATION</text>
+<rect x="297.4" y="370" width="21.9" height="10" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="325.3" y="367.9" width="21.9" height="12.1" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="353.2" y="365.8" width="21.9" height="14.2" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="381.1" y="363.6" width="21.9" height="16.4" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="409" y="361.5" width="21.9" height="18.5" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="436.9" y="359.4" width="21.9" height="20.6" rx="2" fill="#6e7681" opacity="0.5"/>
+<rect x="464.8" y="357.3" width="21.9" height="22.7" rx="2" fill="#6e7681" opacity="0.6"/>
+<rect x="492.7" y="355.2" width="21.9" height="24.8" rx="2" fill="#6e7681" opacity="0.6"/>
+<rect x="520.6" y="353" width="21.9" height="27" rx="2" fill="#6e7681" opacity="0.6"/>
+<rect x="548.5" y="350.9" width="21.9" height="29.1" rx="2" fill="#6e7681" opacity="0.6"/>
+<rect x="576.4" y="348.8" width="21.9" height="31.2" rx="2" fill="#6e7681" opacity="0.6"/>
+<rect x="604.3" y="346.7" width="21.9" height="33.3" rx="2" fill="#6e7681" opacity="0.6"/>
+<rect x="632.2" y="344.5" width="21.9" height="35.5" rx="2" fill="#6e7681" opacity="0.7"/>
+<rect x="660.1" y="342.4" width="21.9" height="37.6" rx="2" fill="#6e7681" opacity="0.7"/>
+<rect x="688" y="340.3" width="21.9" height="39.7" rx="2" fill="#6e7681" opacity="0.7"/>
+<rect x="715.9" y="338.2" width="21.9" height="41.8" rx="2" fill="#6e7681" opacity="0.7"/>
+<rect x="743.8" y="336.1" width="21.9" height="43.9" rx="2" fill="#6e7681" opacity="0.7"/>
+<rect x="771.7" y="333.9" width="21.9" height="46.1" rx="2" fill="#6e7681" opacity="0.7"/>
+<rect x="799.6" y="331.8" width="21.9" height="48.2" rx="2" fill="#6e7681" opacity="0.8"/>
+<rect x="827.5" y="329.7" width="21.9" height="50.3" rx="2" fill="#6e7681" opacity="0.8"/>
+<rect x="855.4" y="327.6" width="21.9" height="52.4" rx="2" fill="#6e7681" opacity="0.8"/>
+<rect x="883.3" y="325.5" width="21.9" height="54.5" rx="2" fill="#6e7681" opacity="0.8"/>
+<rect x="911.2" y="323.3" width="21.9" height="56.7" rx="2" fill="#6e7681" opacity="0.8"/>
+<rect x="939.1" y="321.2" width="21.9" height="58.8" rx="2" fill="#6e7681" opacity="0.8"/>
+<rect x="967" y="319.1" width="21.9" height="60.9" rx="2" fill="#6e7681" opacity="0.9"/>
+<rect x="994.9" y="317" width="21.9" height="63" rx="2" fill="#6e7681" opacity="0.9"/>
+<rect x="1022.8" y="314.8" width="21.9" height="65.2" rx="2" fill="#6e7681" opacity="0.9"/>
+<rect x="1050.7" y="312.7" width="21.9" height="67.3" rx="2" fill="#6e7681" opacity="0.9"/>
+<rect x="1078.6" y="310.6" width="21.9" height="69.4" rx="2" fill="#6e7681" opacity="0.9"/>
+<rect x="1106.5" y="308.5" width="21.9" height="71.5" rx="2" fill="#6e7681" opacity="0.9"/>
+<rect x="1134.4" y="306.4" width="21.9" height="73.6" rx="2" fill="#6e7681" opacity="0.9"/>
+<rect x="1162.3" y="304.2" width="21.9" height="75.8" rx="2" fill="#6e7681" opacity="1"/>
+<rect x="1190.2" y="302.1" width="21.9" height="77.9" rx="2" fill="#6e7681" opacity="1"/>
+<rect x="1218.1" y="300" width="21.9" height="80" rx="2" fill="#6e7681" opacity="1"/>
+<line x1="308.3" y1="214" x2="308.3" y2="358" stroke="#3d444d" stroke-width="1.5"/>
+<circle cx="308.3" cy="358" r="5" fill="#e6edf3"/>
+<text x="308.3" y="170" font-size="22" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3">now</text>
+<text x="308.3" y="198" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">where things stand</text>
+<line x1="475.7" y1="114" x2="475.7" y2="345.3" stroke="#3d444d" stroke-width="1.5"/>
+<circle cx="475.7" cy="345.3" r="5" fill="#e6edf3"/>
+<text x="475.7" y="70" font-size="22" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">lenses</text>
+<text x="475.7" y="98" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">before a decision</text>
+<line x1="643.1" y1="214" x2="643.1" y2="332.5" stroke="#3d444d" stroke-width="1.5"/>
+<circle cx="643.1" cy="332.5" r="5" fill="#e6edf3"/>
+<text x="643.1" y="170" font-size="22" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">recall</text>
+<text x="643.1" y="198" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">what did I say?</text>
+<line x1="810.5" y1="114" x2="810.5" y2="319.8" stroke="#3d444d" stroke-width="1.5"/>
+<circle cx="810.5" cy="319.8" r="5" fill="#e6edf3"/>
+<text x="810.5" y="70" font-size="22" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">deep-pass</text>
+<text x="810.5" y="98" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">can't be undone</text>
+<line x1="1005.8" y1="214" x2="1005.8" y2="305" stroke="#3d444d" stroke-width="1.5"/>
+<circle cx="1005.8" cy="305" r="5" fill="#e6edf3"/>
+<text x="1005.8" y="170" font-size="22" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">plain-writing</text>
+<text x="1005.8" y="198" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="middle">an email to send</text>
+<line x1="1173.2" y1="114" x2="1173.2" y2="292.2" stroke="#3d444d" stroke-width="1.5"/>
+<circle cx="1173.2" cy="292.2" r="5" fill="#e6edf3"/>
+<text x="1173.2" y="70" font-size="22" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="end">large-jobs</text>
+<text x="1173.2" y="98" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" text-anchor="end">a big job</text>
+<text x="40" y="434" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">Six of the nine skills, each opening by itself at its moment in the conversation. Each also opens when you name it.</text>
 </svg>

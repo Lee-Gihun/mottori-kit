@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../.github/assets/templates-dark.svg">
-    <img src="../.github/assets/templates-light.svg" width="100%" alt="Setup copies each blank form once: config.json, rules.md, rituals.md and decisions.md into instance/, and projects-README.md into projects/README.md. It never overwrites a file, and git pull never touches your copy.">
+    <img src="../.github/assets/templates-light.svg" width="100%" alt="Setup copies each of the kit&#x27;s blank forms once into your files: config, rules, rituals and decisions into instance/, and the projects guide into projects/README.md. It never overwrites a file, and git pull never touches your copy.">
   </picture>
 </p>
 

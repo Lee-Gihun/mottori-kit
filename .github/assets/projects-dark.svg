@@ -10,11 +10,11 @@
 <text x="82" y="208" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">brought in as it is</text>
 <rect x="332" y="136" width="248" height="96" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
 <text x="350" y="176" font-size="21" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" font-weight="600">course/</text>
-<text x="350" y="208" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">status: planned</text>
+<text x="350" y="208" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">README: planned</text>
 <rect x="600" y="136" width="248" height="96" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
 <text x="618" y="176" font-size="21" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" font-weight="600">site/</text>
-<text x="618" y="208" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">status: active</text>
-<text x="64" y="270" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">projects/README.md: the map, drawn from these folders</text>
+<text x="618" y="208" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">README: active</text>
+<text x="64" y="270" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">projects/README.md: the map, redrawn by itself from these folders</text>
 <rect x="64" y="300" width="792" height="64" rx="10" fill="#2a1f10" stroke="#e3a04f" stroke-width="1.5"/>
 <rect x="80" y="314" width="214.4" height="36" rx="6" fill="#0d1117"/>
 <text x="187.2" y="339" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f" text-anchor="middle">_private/site/</text>
@@ -24,7 +24,7 @@
 <text x="958" y="176" font-size="21" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f" font-weight="600">~/code/site</text>
 <text x="958" y="208" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">its own repository</text>
 <line x1="852" y1="184" x2="934" y2="184" stroke="#e3a04f" stroke-width="1.5" stroke-dasharray="5 5"/>
-<text x="940" y="268" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">named under outside in</text>
-<text x="940" y="296" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">site/'s block; the agent</text>
-<text x="940" y="324" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">is told where it is</text>
+<text x="940" y="268" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">named in site/README.md,</text>
+<text x="940" y="296" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">so the agent is told</text>
+<text x="940" y="324" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">where it is</text>
 </svg>

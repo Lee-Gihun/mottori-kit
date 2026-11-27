@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/tests-dark.svg">
-    <img src="../../.github/assets/tests-light.svg" width="100%" alt="run.py runs every test file a few side by side. With --full it adds the full mutation set, the installed-shape run and a fresh install in a temporary clone.">
+    <img src="../../.github/assets/tests-light.svg" width="100%" alt="Every change runs run.py: every test file, a few side by side. A release runs it with --full, which adds the full mutation set, the installed-shape run and a fresh install in a clone.">
   </picture>
 </p>
 
