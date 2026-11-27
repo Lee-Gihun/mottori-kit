@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/specs-dark.svg">
-    <img src="../../.github/assets/specs-light.svg" width="100%" alt="Decision records are appended one after another. Each one&#x27;s evidence line names the tests that hold it, and a check fails when a named test is gone. A later record names the one it changes.">
+    <img src="../../.github/assets/specs-light.svg" width="100%" alt="A decision record, such as DR-093, &#x27;The owner&#x27;s work lives in projects/, one folder per project&#x27;, gives the decision, the context it came from and the evidence: the test that holds it. A check fails when a named test is gone. Records are added one after another and never rewritten.">
   </picture>
 </p>
 

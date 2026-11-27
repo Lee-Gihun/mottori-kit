@@ -90,6 +90,7 @@ LICENSE
 MANUAL.md
 README.md
 SETUP.md
+TUTORIAL.md
 setup.sh
 state/.gitkeep
 system/CHECKLIST.md

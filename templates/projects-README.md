@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../.github/assets/projects-dark.svg">
-    <img src="../.github/assets/projects-light.svg" width="100%" alt="Inside your workspace, projects/ holds one folder per project and a map drawn from them. A project&#x27;s own repository stays outside, named under outside. What Git must never take is in _private/ under the project&#x27;s name.">
+    <img src="../.github/assets/projects-light.svg" width="100%" alt="Inside your workspace, projects/ holds one folder per project, here novel, apartment and shop, and a map drawn from them. The shop&#x27;s code repository stays outside at ~/code/shop, named in shop/README.md. Beside projects/, _private/apartment/ holds the lease, which Git never takes.">
   </picture>
 </p>
 

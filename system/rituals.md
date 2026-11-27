@@ -33,7 +33,7 @@ Conditional loading follows the [memory selection contract](specs/PRD-session-me
   journal line: `python3 tools/recall.py find --before "2026-11-19 22:49"` with the line's time lists what the
   owner typed in the 30 minutes before it. Without a journal line, ask one full question and add any of the
   owner's own words you remember, for example
-  `python3 tools/recall.py find "why did we settle on two pricing tiers" --role user`; never search by a
+  `python3 tools/recall.py find "why did we pick a lock over a queue" --role user`; never search by a
   single word. A hit in the short-reply list is read together with the assistant's text before it before you
   say the owner decided. The last line of the answer says what was searched; nothing found there means only
   that the records it names do not hold it. If the topic has no dossier or its file is missing, work from the

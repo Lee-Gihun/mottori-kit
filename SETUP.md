@@ -170,7 +170,7 @@ None of this is needed on the first day.
    _private/state/threads.json in the same shape.
 
    ```json
-   { "key": "pricing", "name": "Pricing model", "dossier": "projects/pricing/DOSSIER.md" }
+   { "key": "checkout", "name": "Checkout bug", "dossier": "projects/shop/checkout-bug.md" }
    ```
 
 5. **Handoff.** Name [system/CHECKLIST.md](system/CHECKLIST.md) once: it holds the checks only a person can do.

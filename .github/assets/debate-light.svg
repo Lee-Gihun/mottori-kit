@@ -1,27 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 380" width="1280" height="380" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" width="1280" height="400" role="img" aria-labelledby="t d">
 <title id="t">A debate between two runtimes ends in one answer for you</title>
-<desc id="d">Claude and Codex take turns: a proposal, an attack on its assumptions, a reply, a convergence. You receive one recommendation or the one decision still open, not the messages.</desc>
-<text x="40" y="118" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" font-weight="600" letter-spacing="1.6">CLAUDE</text>
-<line x1="154" y1="110" x2="890" y2="110" stroke="#d1d9e0" stroke-width="1.5"/>
-<text x="40" y="248" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" font-weight="600" letter-spacing="1.6">CODEX</text>
-<line x1="154" y1="240" x2="890" y2="240" stroke="#d1d9e0" stroke-width="1.5"/>
-<circle cx="293.2" cy="110" r="9" fill="#a8b1bb"/>
-<text x="293.2" y="88" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" text-anchor="middle">proposal</text>
-<line x1="293.2" y1="110" x2="442.4" y2="240" stroke="#59636e" stroke-width="1.5"/>
-<circle cx="442.4" cy="240" r="9" fill="#a8b1bb"/>
-<text x="442.4" y="278" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" text-anchor="middle">attack its assumptions</text>
-<line x1="442.4" y1="240" x2="591.6" y2="110" stroke="#59636e" stroke-width="1.5"/>
-<circle cx="591.6" cy="110" r="9" fill="#a8b1bb"/>
-<text x="591.6" y="88" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" text-anchor="middle">reply</text>
-<line x1="591.6" y1="110" x2="740.8" y2="240" stroke="#59636e" stroke-width="1.5"/>
-<circle cx="740.8" cy="240" r="9" fill="#a8b1bb"/>
-<text x="740.8" y="278" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" text-anchor="middle">converge</text>
-<line x1="754.8" y1="236" x2="929" y2="196.6" stroke="#9a5b13" stroke-width="1.5"/>
-<path d="M936 195L928.2 201.4L926.2 192.6Z" fill="#9a5b13"/>
-<rect x="940" y="120" width="300" height="130" rx="10" fill="#fbf1e3" stroke="#9a5b13" stroke-width="1.5"/>
-<text x="960" y="160" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13" font-weight="700">for you</text>
-<text x="960" y="194" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13">one recommendation, or</text>
-<text x="960" y="222" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13">the one decision still open</text>
-<text x="40" y="340" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e">Agreement improves a proposal; it does not prove it.</text>
+<desc id="d">Claude proposes a lock on the item row. Codex asks what happens if the payment provider retries. Claude answers with a lock and a retry key; Codex agrees and asks for a test of the retry. You get one recommendation, or the one decision still open, not the messages.</desc>
+<text x="40" y="134" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" font-weight="600" letter-spacing="1.6">CLAUDE</text>
+<line x1="154" y1="126" x2="880" y2="126" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="40" y="258" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" font-weight="600" letter-spacing="1.6">CODEX</text>
+<line x1="154" y1="250" x2="880" y2="250" stroke="#d1d9e0" stroke-width="1.5"/>
+<circle cx="291.2" cy="126" r="9" fill="#a8b1bb"/>
+<text x="291.2" y="74" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">a lock on the</text>
+<text x="291.2" y="100" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">item row</text>
+<line x1="291.2" y1="126" x2="438.4" y2="250" stroke="#59636e" stroke-width="1.5"/>
+<circle cx="438.4" cy="250" r="9" fill="#a8b1bb"/>
+<text x="438.4" y="288" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">and if the payment</text>
+<text x="438.4" y="314" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">provider retries?</text>
+<line x1="438.4" y1="250" x2="585.6" y2="126" stroke="#59636e" stroke-width="1.5"/>
+<circle cx="585.6" cy="126" r="9" fill="#a8b1bb"/>
+<text x="585.6" y="74" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">a lock and a</text>
+<text x="585.6" y="100" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">retry key</text>
+<line x1="585.6" y1="126" x2="732.8" y2="250" stroke="#59636e" stroke-width="1.5"/>
+<circle cx="732.8" cy="250" r="9" fill="#a8b1bb"/>
+<text x="732.8" y="288" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">agreed; test</text>
+<text x="732.8" y="314" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" text-anchor="middle">the retry</text>
+<line x1="746.8" y1="244" x2="919" y2="202.7" stroke="#9a5b13" stroke-width="1.5"/>
+<path d="M926 201L918.3 207.5L916.2 198.7Z" fill="#9a5b13"/>
+<rect x="930" y="128" width="310" height="126" rx="10" fill="#fbf1e3" stroke="#9a5b13" stroke-width="1.5"/>
+<text x="950" y="166" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13" font-weight="700">for you</text>
+<text x="950" y="200" font-size="18" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13">a lock and a retry key,</text>
+<text x="950" y="226" font-size="18" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9a5b13">or the one decision still open</text>
+<text x="40" y="372" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e">Agreement improves a proposal; it does not prove it.</text>
 </svg>

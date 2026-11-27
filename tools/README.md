@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="../.github/assets/tools-dark.svg">
-    <img src="../.github/assets/tools-light.svg" width="100%" alt="Along one conversation: at the start and after each compaction the current state is put in front of the agent; while you work each decision is written down and your own earlier words can be found; at the end of each reply a broken link or forgotten state stops it once; at a commit or push broken links and private files are kept out. Any time, you can check the whole setup.">
+    <img src="../.github/assets/tools-light.svg" width="100%" alt="Along one conversation: when a session starts or after a compaction, where things stand is put in front of the agent; while you work, the agent writes each decision in one line; when a reply ends, a broken link or a document handed over unread stops it once; at a commit or push, private files are kept out. Any time, you can check the setup, find your own words, or hand a task to a worker.">
   </picture>
 </p>
 

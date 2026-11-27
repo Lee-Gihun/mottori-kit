@@ -175,7 +175,7 @@ wrong.
 
 These are not in the options list. They work as soon as you use them; the one that can be turned off says how.
 
-- **Deferred triggers.** `python3 tools/triggers.py add --when date:2026-12-01 --what "review the pricing decision"`
+- **Deferred triggers.** `python3 tools/triggers.py add --when date:2026-12-01 --what "check the lock after the sale"`
   stores a dated trigger; the session-start hook lists the ones that are due, and `python3 tools/triggers.py list`
   shows every open one.
 - **Notes between sessions.** `python3 tools/notes.py add "<at most 240 bytes>" --for <topic>` leaves a note that

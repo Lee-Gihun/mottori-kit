@@ -310,6 +310,20 @@ def test_readme_lists_every_tool():
     assert not stale, f"a README under tools/ names missing files: {stale}"
 
 
+def test_the_tutorial_and_readme_name_only_commands_that_exist():
+    """KIT-DR-097: a command the tutorial or the README tells a newcomer to run is a file in the kit, and the
+    README links the tutorial. A renamed tool that leaves the first hour pointing at nothing fails here."""
+    pages = [p for p in (ROOT / "TUTORIAL.md", ROOT / "README.md") if p.is_file()]
+    if len(pages) < 2:
+        print("- TUTORIAL.md and README.md: not both in this tree")
+        return
+    gone = sorted({f"{page.name}: {cmd}" for page in pages
+                   for cmd in re.findall(r"python3 (tools/[\w/]+\.py)", page.read_text(encoding="utf-8"))
+                   if not (ROOT / cmd).is_file()})
+    assert not gone, f"commands named but missing: {gone}"
+    assert "(TUTORIAL.md)" in (ROOT / "README.md").read_text(encoding="utf-8")
+
+
 def _dev_imports(source, dev_modules):
     """Return the names a source reaches in tools/tests or tools/dev, by import or importlib call."""
     import ast
@@ -479,6 +493,7 @@ TESTS = (
     test_shell_wrappers_reject_missing_required_input,
     test_ask_codex_worktree_switch_and_missing_log_folder,
     test_readme_lists_every_tool,
+    test_the_tutorial_and_readme_name_only_commands_that_exist,
     test_garden_command_carries_the_steps_and_stays_report_only,
     test_tools_import_nothing_from_tests_or_dev,
     test_every_tool_puts_the_kit_folders_on_the_path_the_same_way,

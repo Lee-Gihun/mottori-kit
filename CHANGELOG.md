@@ -173,3 +173,13 @@ Setup is one command that checks its own prerequisites. A new folder no longer s
 cannot have yet, and the turn-end check stays silent until setup has run. The owner's own notes are adopted in
 place, not treated as imports. In Claude Code an edit to the kit's code, rules, configuration or accepted
 findings always asks. The kit allows no command in advance.
+
+### `[Note]` A tutorial, and a README told in scenes
+
+Evidence: `decision:KIT-DR-097`,
+`test:tools/tests/test_tool_entrypoints.py::test_the_tutorial_and_readme_name_only_commands_that_exist`.
+
+`TUTORIAL.md` walks the first hour: a decision, a second topic in the same chat, a file for a long topic, a
+compaction, a stopped turn, a search of your own words and a lens. The README shows each part of the kit in one
+short scene, all from the same three topics, and its first picture is one of them: a topic picked up on day 22
+where it was left on day 1.
