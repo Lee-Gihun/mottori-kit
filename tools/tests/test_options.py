@@ -122,9 +122,10 @@ def test_a_missing_need_prints_the_steps_and_changes_nothing():
         # A proxy from the environment must not answer for a local server that is not there.
         env = dict(env, http_proxy=proxy.rsplit("/v1/", 1)[0])
         cases = [
-            # Without the server program the one command that installs it is named.
+            # Without the server program the one command that installs it is named: Homebrew on
+            # macOS, Ollama's own script elsewhere.
             (["on", "meaning", f"endpoint=http://127.0.0.1:{unserved_port()}/v1/embeddings"],
-             "install ollama"),
+             "install ollama" if sys.platform == "darwin" else "ollama.com/install.sh"),
             # A remote host is refused before any call: the texts would be the owner's own words.
             (["on", "meaning", "endpoint=http://example.invalid/v1/embeddings"], "refused"),
             (["on", "codex"], "codex login"),

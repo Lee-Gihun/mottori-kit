@@ -37,11 +37,11 @@ rules win.
    "[track/type] one line"`, where the track is a short lowercase name and the type is usually `decision`,
    `state`, `correction` or `lesson`. The journal, `state/` and `instance/` never enter Git. `_private/` is the
    owner's place for what must also stay out of anything written for other people; you still read it, as you
-   read everything here. Use
-   `log --private` when the owner has said so or has called the material confidential, and say in one line that
-   you did. When something only looks that way, such as another person's private matter, suggest once that it
-   go there and log it the ordinary way. Do not suggest it for an ordinary work note that names a plan or a
-   colleague. Otherwise the logging is bookkeeping: say nothing about it in your answer unless it failed.
+   read everything here. Use `log --private` when the owner has said so or has called the material
+   confidential, and say in one line that you did. When something only looks that way, such as another
+   person's private matter, suggest once that it go there and log it the ordinary way. Do not suggest it for an
+   ordinary work note that names a plan or a colleague. Otherwise the logging is bookkeeping: say nothing about it
+   in your answer unless it failed.
    *(Why: compaction swallows state kept in conversation. What is under `_private/` is never committed and is
    not quoted in anything written for other people; the owner decides what goes there.)*
 

@@ -70,6 +70,7 @@ def test_a_start_cannot_change_the_rules_of_the_next_start():
         shutil.rmtree(base, ignore_errors=True)
 
 
+@macos_only(SANDBOX)
 def test_the_rules_deny_by_default():
     """Asserted on the text for the ways out no harmless probe can show: Apple events, launch
     services and job creation are never allowed, and nothing allows the network."""
