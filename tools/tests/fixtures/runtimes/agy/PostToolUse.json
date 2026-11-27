@@ -1,0 +1,121 @@
+{
+ "runtime": "agy",
+ "version": "1.5.13",
+ "event": "PostToolUse",
+ "cases": [
+  {
+   "case": "PostToolUse-edit_file",
+   "note": "an in-place edit",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013",
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000013",
+    "cwd": "/home/user/fixture-agy",
+    "error": "",
+    "hookEventName": "PostToolUse",
+    "lastUserInput": "Edit a.txt in place with your file edit tool (do not rewrite the whole file): change the line two to TWO. Then run the shell command `env | grep -i -E 'antigravity|agy|gemini|conversation|session' | cut -d= -f1` and report its output, then say DONE.",
+    "modelName": "gemini-3.8-flash-low",
+    "stepIdx": 5,
+    "toolCall": {
+     "args": {
+      "Path": "/home/user/fixture-agy/a.txt",
+      "Replacement": "TWO",
+      "Target": "two"
+     },
+     "id": "call_0000000000000000014",
+     "name": "edit_file"
+    },
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  },
+  {
+   "case": "PostToolUse-read_file",
+   "note": "a file read",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013",
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000013",
+    "cwd": "/home/user/fixture-agy",
+    "error": "",
+    "hookEventName": "PostToolUse",
+    "lastUserInput": "Edit a.txt in place with your file edit tool (do not rewrite the whole file): change the line two to TWO. Then run the shell command `env | grep -i -E 'antigravity|agy|gemini|conversation|session' | cut -d= -f1` and report its output, then say DONE.",
+    "modelName": "gemini-3.8-flash-low",
+    "stepIdx": 2,
+    "toolCall": {
+     "args": {
+      "Path": "/home/user/fixture-agy/a.txt"
+     },
+     "id": "call_0000000000000000015",
+     "name": "read_file"
+    },
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  },
+  {
+   "case": "PostToolUse-run_command",
+   "note": "a shell command",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013",
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000013",
+    "cwd": "/home/user/fixture-agy",
+    "error": "",
+    "hookEventName": "PostToolUse",
+    "lastUserInput": "Edit a.txt in place with your file edit tool (do not rewrite the whole file): change the line two to TWO. Then run the shell command `env | grep -i -E 'antigravity|agy|gemini|conversation|session' | cut -d= -f1` and report its output, then say DONE.",
+    "modelName": "gemini-3.8-flash-low",
+    "stepIdx": 3,
+    "toolCall": {
+     "args": {
+      "CommandLine": "env | grep -i -E 'antigravity|agy|gemini|conversation|session' | cut -d= -f1",
+      "WaitMsBeforeAsync": 5000,
+      "toolSummary": "Check filtered environment variable names"
+     },
+     "id": "call_0000000000000000016",
+     "name": "run_command"
+    },
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  },
+  {
+   "case": "PostToolUse-write_file",
+   "note": "plan mode writing its plan into the artifact folder",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000017",
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000017",
+    "cwd": "/home/user/fixture-agy",
+    "error": "",
+    "hookEventName": "PostToolUse",
+    "lastUserInput": "/plan What is two plus two? Answer with one word.",
+    "modelName": "gemini-3.8-flash-low",
+    "stepIdx": 2,
+    "toolCall": {
+     "args": {
+      "ArtifactMetadata": {
+       "RequestFeedback": true,
+       "Summary": "Plan to answer the arithmetic question: 'What is two plus two?' in one word.",
+       "UserFacing": true
+      },
+      "Content": "# Implementation Plan - Calculate Two Plus Two\n\nCalculate the arithmetic sum of 2 + 2 and provide the answer in exactly one word.\n\n## Proposed Changes\n\n- Answer the query with the single word: **Four**.\n\n## Verification Plan\n\n### Manual Verification\n- Verify 2 + 2 = 4.\n- Verify the answer is exactly one word.\n",
+      "Path": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000017/plan.md"
+     },
+     "id": "call_0000000000000000018",
+     "name": "write_file"
+    },
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000017/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  }
+ ]
+}

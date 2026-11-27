@@ -1,0 +1,37 @@
+{
+ "runtime": "codex",
+ "version": "0.169.1",
+ "event": "UserPromptSubmit",
+ "cases": [
+  {
+   "case": "UserPromptSubmit-first",
+   "note": "first prompt",
+   "proc_cwd": "/tmp/fixture-codex/sub",
+   "stdin": {
+    "session_id": "c0dec0de-0000-4000-8000-000000000001",
+    "turn_id": "c0dec0de-0000-4000-8000-000000000003",
+    "transcript_path": "/home/user/.codex/sessions/2026/11/20/rollout-2026-11-20T19-54-24-c0dec0de-0000-4000-8000-000000000001.jsonl",
+    "cwd": "/tmp/fixture-codex/sub",
+    "hook_event_name": "UserPromptSubmit",
+    "model": "gpt-6-luna",
+    "permission_mode": "bypassPermissions",
+    "prompt": "List every line of your context that contains the word MARKER, exactly as written, then stop."
+   }
+  },
+  {
+   "case": "UserPromptSubmit-repeat",
+   "note": "the same prompt text again on resume: a new turn_id",
+   "proc_cwd": "/tmp/fixture-codex/sub",
+   "stdin": {
+    "session_id": "c0dec0de-0000-4000-8000-000000000001",
+    "turn_id": "c0dec0de-0000-4000-8000-000000000004",
+    "transcript_path": "/home/user/.codex/sessions/2026/11/20/rollout-2026-11-20T19-54-24-c0dec0de-0000-4000-8000-000000000001.jsonl",
+    "cwd": "/tmp/fixture-codex/sub",
+    "hook_event_name": "UserPromptSubmit",
+    "model": "gpt-6-luna",
+    "permission_mode": "bypassPermissions",
+    "prompt": "List every line of your context that contains the word MARKER, exactly as written, then stop."
+   }
+  }
+ ]
+}

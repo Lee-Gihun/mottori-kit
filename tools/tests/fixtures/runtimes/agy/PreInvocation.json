@@ -1,0 +1,121 @@
+{
+ "runtime": "agy",
+ "version": "1.5.13",
+ "event": "PreInvocation",
+ "cases": [
+  {
+   "case": "PreInvocation-first",
+   "note": "first model call of a prompt",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013",
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000013",
+    "cwd": "/home/user/fixture-agy",
+    "hookEventName": "PreInvocation",
+    "initialNumSteps": 1,
+    "invocationNum": 0,
+    "lastUserInput": "Edit a.txt in place with your file edit tool (do not rewrite the whole file): change the line two to TWO. Then run the shell command `env | grep -i -E 'antigravity|agy|gemini|conversation|session' | cut -d= -f1` and report its output, then say DONE.",
+    "modelName": "gemini-3.8-flash-low",
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  },
+  {
+   "case": "PreInvocation-later",
+   "note": "a later model call of the same prompt",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013",
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000013",
+    "cwd": "/home/user/fixture-agy",
+    "hookEventName": "PreInvocation",
+    "initialNumSteps": 4,
+    "invocationNum": 1,
+    "lastUserInput": "Edit a.txt in place with your file edit tool (do not rewrite the whole file): change the line two to TWO. Then run the shell command `env | grep -i -E 'antigravity|agy|gemini|conversation|session' | cut -d= -f1` and report its output, then say DONE.",
+    "modelName": "gemini-3.8-flash-low",
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  },
+  {
+   "case": "PreInvocation-after-continue",
+   "note": "the model call after a Stop continuation: invocationNum keeps counting",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013",
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000013",
+    "cwd": "/home/user/fixture-agy",
+    "hookEventName": "PreInvocation",
+    "initialNumSteps": 8,
+    "invocationNum": 3,
+    "lastUserInput": "Edit a.txt in place with your file edit tool (do not rewrite the whole file): change the line two to TWO. Then run the shell command `env | grep -i -E 'antigravity|agy|gemini|conversation|session' | cut -d= -f1` and report its output, then say DONE.",
+    "modelName": "gemini-3.8-flash-low",
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  },
+  {
+   "case": "PreInvocation-second-prompt",
+   "note": "first model call of a second prompt in the same conversation",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013",
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000013",
+    "cwd": "/home/user/fixture-agy",
+    "hookEventName": "PreInvocation",
+    "initialNumSteps": 10,
+    "invocationNum": 0,
+    "lastUserInput": "Reply with the single word SECOND.",
+    "modelName": "gemini-3.8-flash-low",
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  },
+  {
+   "case": "PreInvocation-compact",
+   "note": "the /compact prompt in print mode",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013",
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000013",
+    "cwd": "/home/user/fixture-agy",
+    "hookEventName": "PreInvocation",
+    "initialNumSteps": 13,
+    "invocationNum": 0,
+    "lastUserInput": "/compact",
+    "modelName": "gemini-3.8-flash-low",
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  },
+  {
+   "case": "PreInvocation-after-compact",
+   "note": "first model call after the compaction; no SessionStart came before it",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013",
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000013",
+    "cwd": "/home/user/fixture-agy",
+    "hookEventName": "PreInvocation",
+    "initialNumSteps": 16,
+    "invocationNum": 0,
+    "lastUserInput": "Reply with the single word AFTER.",
+    "modelName": "gemini-3.8-flash-low",
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  }
+ ]
+}

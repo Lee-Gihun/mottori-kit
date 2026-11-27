@@ -1,27 +1,23 @@
-<!-- source: ko/system/person-ledger.md sha256:0a5a07919d5481326da9a1c07c3f473bf0160c71a03dcd9049bfd828d82ef50a source-of-truth: ko -->
-Korean: `ko/system/person-ledger.md`
-
 # Person ledger: recording one person in layers
 
 > Question it answers: **What has already been decided, and what do I still need to ask?**
 
-This is a ledger of what has already been decided about the owner and what is still to be asked. A deep pass
-(`deep-pass.md`) also reads it when it checks the owner's decisions. The owner is the one person a model cannot
-know from training, so the owner alone gets a thick file.
+This is a ledger of what has already been decided about the owner and what is still to be asked. The owner is
+the one person a model cannot know from training, so the owner alone gets a thick file.
 
-## This file does not answer "who is he"
+## This file does not answer "who is this person"
 
 It answers two questions only: **what has already been decided** and **what still has to be asked.** A portrait
 of the person is not the goal. It is a by-product that appears when those two are not filled, and the main
 failure of this document is the by-product swallowing the body.
 
-The right size follows from this. With zero lines, everything must be asked every time, and **the cost is his
+The right size follows from this. With zero lines, everything must be asked every time, and **the cost is their
 attention**. With unlimited lines, everything gets guessed by extrapolation, which amounts to acting out a real
 person. So the criterion is not length but one test.
 
 ```
 Admission   1. A model cannot work it out from a short cue          (fence lens)
-      AND   2. He would be annoyed at having to say it twice       (marginal lens)
+      AND   2. They would be annoyed at having to say it twice     (marginal lens)
 ```
 
 Meeting only the first makes it trivia. Meeting only the second means the model knows it anyway. A line gets in
@@ -33,15 +29,15 @@ only when both hold.
 block says what the ledger was built from and **therefore what in principle cannot get in**. If this is pushed
 down into a later correction, conclusions keep coming out biased while the bias is already known.
 
-A typical gap: a ledger built from conversation logs **does not contain what he resolved with other people.** It
+A typical gap: a ledger built from conversation logs **does not contain what they resolved with other people.** It
 is absent from the logs, so it reads as "no such relationship exists", and that misreading is the most painful
 kind of misreading about a person.
 
 ## Four layers
 
 ```
-L1  Statement       What he said. Original text, date, source. The origin: it can be quoted; a summary is derived
-L2  Decision        Decisions he actually made and the reasons he gave then. Observed
+L1  Statement       What they said. Original text, date, source. The origin: it can be quoted; a summary is derived
+L2  Decision        Decisions they actually made and the reasons they gave then. Observed
 L3  Interpretation  My model. Lowest grade. It cannot enter without a date, evidence, and a refutation condition
 L4  Unknown         What still has to be asked. Do not guess the answer; write it as a question to ask
 ```
@@ -66,6 +62,15 @@ So L1 and L2 candidates are **lifted from material that already accumulates**, a
 Automatic adoption is forbidden. If adopted automatically, an interpretation (L3) gets recorded as a statement
 (L1).
 
+`python3 tools/person_ledger.py candidates` lists the decision and correction journal entries dated on or after the
+date on the ledger's own line `last-reviewed: YYYY-MM-DD`, and the doctor warns when 20 or more of them are waiting.
+The ledger it reads is by default self-portrait-mirror.md under `_private/`. With several such lines the
+latest real date that is not after today counts. Without the line, `person_ledger.py stale` and `candidates`
+ask for it and exit 1, and `candidates YYYY-MM-DD` takes a start date by hand. Change the date each time you
+review the candidates. No tool creates this file: you create it by hand when you copy in the first entry.
+Until then the doctor does not list this check, `person_ledger.py stale` only reports that there is no ledger, and
+`candidates` shows no candidates.
+
 ## Cancel instead of deleting
 
 A wrong interpretation is not deleted. It stays with a strikethrough and a link to the correction. **What I
@@ -81,9 +86,9 @@ the section makes the expiry visible.
 
 - **Fluency inflation:** prose grows while the operating layers do not. Detect it with the length ratio by layer.
 - **Failure sample:** if only the correction log grows, it is a **map of my failures**, not a portrait of the
-  person. Things he was consistently right about, so that nothing needed correcting, cannot in principle enter
+  person. Things they were consistently right about, so that nothing needed correcting, cannot in principle enter
   this log. Add counter-samples on purpose: preferences confirmed repeatedly without correction.
-- **Frozen mood reading:** quoting a reading of his state at one point in time as present-tense months later.
+- **Frozen mood reading:** quoting a reading of their state at one point in time as present-tense months later.
   Always put a reference date on a state reading, and update by adding a new item, not by editing the original.
 - **Ledger exemption:** applying evidence rules to other documents while letting this file off.
 
@@ -96,5 +101,4 @@ structure is only cost. Then keep L1 and the correction record and fold the rest
 
 Grade separation, the ban on automatic adoption, and keeping cancelled records prevent an attribution error in
 which a fluent derived interpretation is promoted as if it were the owner's own words. L1 through L4 are schema
-labels based on distance from evidence, not measured quantities. A promotion criterion such as "three times" is
-this document's operating limit, not a claim about a population.
+labels based on distance from evidence, not measured quantities.

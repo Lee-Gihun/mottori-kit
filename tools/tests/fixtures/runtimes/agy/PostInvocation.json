@@ -1,0 +1,26 @@
+{
+ "runtime": "agy",
+ "version": "1.5.13",
+ "event": "PostInvocation",
+ "cases": [
+  {
+   "case": "PostInvocation",
+   "note": "after a model call",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013",
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000013",
+    "cwd": "/home/user/fixture-agy",
+    "hookEventName": "PostInvocation",
+    "initialNumSteps": 1,
+    "invocationNum": 0,
+    "lastUserInput": "Edit a.txt in place with your file edit tool (do not rewrite the whole file): change the line two to TWO. Then run the shell command `env | grep -i -E 'antigravity|agy|gemini|conversation|session' | cut -d= -f1` and report its output, then say DONE.",
+    "modelName": "gemini-3.8-flash-low",
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  }
+ ]
+}

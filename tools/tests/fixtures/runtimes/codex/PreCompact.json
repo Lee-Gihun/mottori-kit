@@ -1,0 +1,21 @@
+{
+ "runtime": "codex",
+ "version": "0.169.1",
+ "event": "PreCompact",
+ "cases": [
+  {
+   "case": "PreCompact-auto",
+   "note": "automatic compaction forced by a low token limit",
+   "proc_cwd": "/tmp/fixture-codex",
+   "stdin": {
+    "session_id": "c0dec0de-0000-4000-8000-000000000002",
+    "turn_id": "c0dec0de-0000-4000-8000-000000000012",
+    "transcript_path": null,
+    "cwd": "/tmp/fixture-codex",
+    "hook_event_name": "PreCompact",
+    "model": "gpt-6-luna",
+    "trigger": "auto"
+   }
+  }
+ ]
+}

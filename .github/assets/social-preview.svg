@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-labelledby="t d">
+<title id="t">mottori-kit: a workspace for weeks of work with one AI agent</title>
+<desc id="d">On Monday you tell the agent the plan and it logs one line. The conversation is compacted twice. On Friday the agent still has the plan, and before it deletes anything it shows you one question from the thinking lenses: what was the old pipeline preventing, and is that still needed?</desc>
+<rect width="1280" height="640" fill="#ffffff"/>
+<text x="48" y="84" font-size="52" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" font-weight="700">mottori-kit</text>
+<text x="48" y="126" font-size="25" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#656d76">A workspace for weeks of work with one AI agent.</text>
+<rect x="48" y="160" width="1184" height="352" rx="14" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="84" y="212" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#656d76">Mon</text>
+<text x="160" y="212" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#0969da" font-weight="700">you</text>
+<text x="250" y="212" font-size="21" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#1f2328">We go with plan B. The old export pipeline goes on Friday.</text>
+<text x="160" y="250" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#1f2328" font-weight="700">agent</text>
+<text x="250" y="250" font-size="21" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#656d76">logs one line: plan B, old pipeline out Friday</text>
+<line x1="84" y1="288" x2="372" y2="288" stroke="#d0d7de" stroke-width="2" stroke-dasharray="7 7"/>
+<text x="640" y="295" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#656d76" text-anchor="middle">compacted twice, and the line is put back each time</text>
+<line x1="908" y1="288" x2="1196" y2="288" stroke="#d0d7de" stroke-width="2" stroke-dasharray="7 7"/>
+<text x="84" y="342" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#656d76">Fri</text>
+<text x="160" y="342" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#0969da" font-weight="700">you</text>
+<text x="250" y="342" font-size="21" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#1f2328">ok, delete it</text>
+<text x="160" y="380" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#1f2328" font-weight="700">agent</text>
+<text x="250" y="380" font-size="21" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#1f2328">Plan B, as you decided on Monday. I checked one thing before deleting:</text>
+<rect x="238" y="400" width="958" height="50" rx="8" fill="#fff8c5" stroke="#d4a72c" stroke-width="1.5"/>
+<text x="256" y="432" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#9a6700" font-weight="700">Lens (fence)</text>
+<text x="420" y="432" font-size="21" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#1f2328">What was the old pipeline preventing? Is that still needed?</text>
+<text x="250" y="488" font-size="21" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" fill="#1f2328">The month-end job still reads it. Off today, deleted after month-end.</text>
+<text x="48" y="566" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#656d76">one thread  ·  Claude Code, Codex, Antigravity  ·  plain files on your machine</text>
+</svg>

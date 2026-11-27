@@ -1,82 +1,82 @@
 #!/usr/bin/env bash
-# Check and repair owned Git hooks.
+# Check and repair the kit's Git hooks, pre-commit and pre-push.
 #
-# Reject foreign hooks. Back up drifted owned hooks and replace them atomically.
+# Leave another tool's hook as it is and name the ways forward; install the free ones. Back up
+# drifted owned hooks and replace them atomically.
 # Usage: bash tools/install_hooks.sh --check|--repair
+#
+# Both modes print one line per hook: a status word, a tab, the hook's path, and optionally a tab
+# and text for a person. Status words: current, chained (another tool's hook that runs the kit's
+# check), foreign, missing, owned-drift. A reader takes the first two fields, never the text.
+# --check exits 0 when both hooks are current or chained, else 1; details of a drifted hook go to
+# stderr. --repair exits 0 when it leaves both hooks current or chained, 2 when a foreign hook
+# is in the way. Exit 3: core.hooksPath points outside this repository, so nothing is written
+# there; other refusals exit 2 with the reason on stderr.
 set -euo pipefail
 
 MODE="${1:-}"
+if [[ "$MODE" == "-h" || "$MODE" == "--help" ]]; then
+  echo "Check and repair the kit's Git hooks, pre-commit and pre-push."
+  echo
+  echo "usage: bash tools/install_hooks.sh --check|--repair"
+  echo "  --check   print each hook's state; exit 0 when both are the kit's or run its check"
+  echo "  --repair  install a missing or older kit hook, keeping a backup; another tool's hook is left as it is"
+  exit 0
+fi
 if [[ "$MODE" != "--check" && "$MODE" != "--repair" ]]; then
   echo "usage: bash tools/install_hooks.sh --check|--repair" >&2
   exit 2
 fi
 
-# Print a catalog message from tools/i18n.py in the instance language: say KEY FALLBACK [name=value]...
-# A fixture may hold only this script and the hook template; then the English FALLBACK, already
-# filled in by the caller, is printed instead.
-say() {
-  local key="$1" fallback="$2"
-  shift 2
-  if [[ -f "$ROOT/tools/i18n.py" ]] && python3 "$ROOT/tools/i18n.py" "$key" "$@" 2>/dev/null; then
-    return 0
-  fi
-  printf '%s\n' "$fallback"
-}
-
-# doctor.py reads the first line of --check and accepts the status word in either language.
 status_line() {
-  local status="$1" target="$2"
+  local status="$1" target="$2" line
+  line="$(chain_line "$(basename "$target")")"
   case "$status" in
-    current) say install_hooks.status_current "current: $target" "target=$target" ;;
-    missing) say install_hooks.status_missing "missing: $target" "target=$target" ;;
-    owned-drift) say install_hooks.status_owned_drift "owned-drift: $target" "target=$target" ;;
-    foreign) say install_hooks.status_foreign "foreign: $target" "target=$target" ;;
+    current|missing) printf '%s\t%s\n' "$status" "$target" ;;
+    chained) printf '%s\t%s\t%s\n' "$status" "$target" "not the kit's hook; it runs the kit's check" ;;
+    owned-drift) printf '%s\t%s\t%s\n' "$status" "$target" "an older kit hook; bash tools/install_hooks.sh --repair replaces it and keeps a backup" ;;
+    foreign) printf '%s\t%s\t%s\n' "$status" "$target" "not the kit's hook, left as it is; either add the line \`$line\` to it right after its first line, or move it out of the hooks folder and run bash tools/install_hooks.sh --repair" ;;
   esac
 }
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TEMPLATE="$ROOT/tools/precommit-hook.sh"
+# Another tool's hook is never rewritten. It counts as installed when it runs the kit's check
+# through this exact line; Git runs both hooks from the top of the work tree, so the paths are relative.
+chain_line() {
+  case "$1" in
+    pre-commit) printf '%s' 'python3 tools/gate.py precommit || exit 1' ;;
+    pre-push) printf '%s' 'python3 tools/enforce.py prepush "$@" || exit 1' ;;
+  esac
+}
+
+# Physical path, so it compares equal to the realpath-resolved hook directory below even through a symlink.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+TEMPLATE="$ROOT/tools/lib/precommit-hook.sh"
 [[ -f "$TEMPLATE" ]] || { echo "template-missing: $TEMPLATE" >&2; exit 2; }
 
-HOOKSPATH="$(git -C "$ROOT" config --get core.hooksPath || true)"
-if [[ -n "$HOOKSPATH" ]]; then
-  if [[ "$HOOKSPATH" = /* ]]; then
-    DIR="$HOOKSPATH"
-  else
-    DIR="$ROOT/$HOOKSPATH"
-  fi
-  RESOLVED="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$DIR")"
-  case "$RESOLVED" in
-    "$ROOT"|"$ROOT"/*) DIR="$RESOLVED" ;;
-    *) echo "outside-repo hooksPath: $RESOLVED" >&2; exit 2 ;;
-  esac
-else
-  # Ask Git for the common hook directory, including linked worktrees; avoid newer-version-only flags.
-  RAW_DIR="$(git -C "$ROOT" rev-parse --git-path hooks)"
-  case "$RAW_DIR" in
-    /*) DIR="$RAW_DIR" ;;
-    *) DIR="$(python3 -c 'import os,sys; print(os.path.realpath(os.path.join(sys.argv[1], sys.argv[2])))' "$ROOT" "$RAW_DIR")" ;;
+# A kit folder inside another project's repository would install hooks that run on that
+# project's commits and look for these tools at its root.
+TOP="$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null)" && TOP="$(cd "$TOP" && pwd -P)" || TOP=""
+if [[ "$TOP" != "$ROOT" ]]; then
+  echo "not-own-repo: $ROOT is not the top of its own git repository; run git init there first" >&2
+  exit 2
+fi
+
+realpath_in_root() { python3 -c 'import os,sys; print(os.path.realpath(os.path.join(sys.argv[1], sys.argv[2])))' "$ROOT" "$1"; }
+# Ask Git for the hook directory so its own rules apply: ~ expansion and relative core.hooksPath,
+# and the common directory of a linked worktree. Avoid newer-version-only flags.
+DIR="$(realpath_in_root "$(git -C "$ROOT" rev-parse --git-path hooks)")"
+# A hooksPath outside this folder is shared with other repositories; writing there would change them
+# too. The repository's own hooks folder is the exception: in a linked worktree it lies outside.
+if [[ -n "$(git -C "$ROOT" config --get core.hooksPath || true)" ]]; then
+  OWN_HOOKS="$(realpath_in_root "$(git -C "$ROOT" rev-parse --git-common-dir)/hooks")"
+  case "$DIR" in
+    "$ROOT"|"$ROOT"/*|"$OWN_HOOKS") ;;
+    *) echo "outside-repo hooksPath: $DIR; to install here, run git config core.hooksPath \"$OWN_HOOKS\", then bash tools/install_hooks.sh --repair" >&2
+       exit 3 ;;
   esac
 fi
 HOOK="$DIR/pre-commit"
 PUSH_HOOK="$DIR/pre-push"
-
-# Recognize legacy ownership by exact bytes, never by a matching phrase.
-LEGACY_HASHES="
-a90b84bf06dbc075c3c269b3e61c61ebdf25ea55f4fb8bd268f24fe1acc41c3e
-c078fa3e14b9a9152bad2ba4540efac5e3ca19e9d8b7467028e07f80dd022141
-28d6734242d51d3b6d63c4b31796864d659c320b85eb48fe803a5d7f807e12ee
-89fe10c571d56547e4235da07a777490f31e32fd2b6169d47bd49f5b4cda261e
-97c1f2144a63fbc3fb120cce56bd32a14b77948872183b73435a2e985fd951f9
-2749f33d184abd3c18069f206e9d3717acc4d56e9f1bee68dce6517298e4e7ee
-"
-# Tests and migrations may add hashes without editing this file; a hook marked owned only gets
-# replaced by our own template, so this cannot make the installer overwrite something with foreign code.
-if [[ -n "${MOTTORI_LEGACY_HOOK_HASHES:-}" ]]; then
-  LEGACY_HASHES="$LEGACY_HASHES
-${MOTTORI_LEGACY_HOOK_HASHES//,/
-}"
-fi
 
 sha256() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -88,24 +88,30 @@ sha256() {
   fi
 }
 
-# A hash stamp preserves ownership across template updates; legacy hashes cover only unstamped versions.
+# The stamp holds the hash of each hook this installer wrote, so an older kit hook is still known
+# as the kit's after the template changes. Ownership is recognized by exact bytes, never by a phrase.
 STAMP="$DIR/mottori-hooks.stamp"
 stamped_hash() {  # stamped_hash <hook-basename>
   [[ -f "$STAMP" ]] && awk -v n="$1" '$1==n {print $2}' "$STAMP" || true
 }
 classify() {
-  local target="$1"
+  local target="$1" hash
   local name; name="$(basename "$target")"
-  if [[ ! -e "$target" ]]; then
+  # A directory or an unreadable file has no hash; an empty one must match nothing.
+  hash="$(sha256 "$target" 2>/dev/null)" || hash=""
+  if [[ -L "$target" && ! -e "$target" ]]; then
+    echo "foreign"  # A dangling link is someone's hook setup, not a free slot.
+  elif [[ ! -e "$target" ]]; then
     echo "missing"
-  elif cmp -s "$TEMPLATE" "$target" && [[ -x "$target" ]]; then
+  elif cmp -s "$TEMPLATE" "$target" 2>/dev/null && [[ -x "$target" ]]; then
     echo "current"
-  elif cmp -s "$TEMPLATE" "$target"; then
+  elif cmp -s "$TEMPLATE" "$target" 2>/dev/null; then
     echo "owned-drift"
-  elif [[ -n "$(stamped_hash "$name")" && "$(stamped_hash "$name")" == "$(sha256 "$target")" ]]; then
+  elif [[ -n "$hash" && "$(stamped_hash "$name")" == "$hash" ]]; then
     echo "owned-drift"
-  elif grep -Fxq "$(sha256 "$target")" <<< "$LEGACY_HASHES"; then
-    echo "owned-drift"
+  elif [[ -f "$target" && -x "$target" ]] \
+       && awk -v l="$(chain_line "$name")" '{ gsub(/^[ \t]+|[ \t]+$/, "") } $0 == l { f = 1 } END { exit !f }' "$target"; then
+    echo "chained"
   else
     echo "foreign"
   fi
@@ -113,105 +119,96 @@ classify() {
 
 STATUS="$(classify "$HOOK")"
 PUSH_STATUS="$(classify "$PUSH_HOOK")"
+ok() { [[ "$1" == "current" || "$1" == "chained" ]]; }
 if [[ "$MODE" == "--check" ]]; then
-  if [[ "$STATUS" == "current" && "$PUSH_STATUS" == "current" ]]; then
-    say install_hooks.current_pair "current: $HOOK + $PUSH_HOOK" "hook=$HOOK" "push_hook=$PUSH_HOOK"
-    exit 0
+  # Setup shows the first line, so a hook that is not in place comes first; else pre-commit does.
+  if ok "$STATUS" && ! ok "$PUSH_STATUS"; then
+    status_line "$PUSH_STATUS" "$PUSH_HOOK"
+    status_line "$STATUS" "$HOOK"
+  else
+    status_line "$STATUS" "$HOOK"
+    status_line "$PUSH_STATUS" "$PUSH_HOOK"
   fi
-  status_line "$STATUS" "$HOOK"
-  status_line "$PUSH_STATUS" "$PUSH_HOOK"
+  ok "$STATUS" && ok "$PUSH_STATUS" && exit 0
   if [[ "$STATUS" == "owned-drift" ]]; then
-    TEMPLATE_SHA="$(sha256 "$TEMPLATE")"
-    INSTALLED_SHA="$(sha256 "$HOOK")"
-    say install_hooks.template_sha "template sha256: $TEMPLATE_SHA" "sha=$TEMPLATE_SHA"
-    say install_hooks.installed_sha "installed sha256: $INSTALLED_SHA" "sha=$INSTALLED_SHA"
-    diff -u "$HOOK" "$TEMPLATE" | sed -n '1,40p' || true
+    {
+      echo "template sha256: $(sha256 "$TEMPLATE")"
+      echo "installed sha256: $(sha256 "$HOOK")"
+      diff -u "$HOOK" "$TEMPLATE" | sed -n '1,40p' || true
+    } >&2
   fi
   exit 1
 fi
 
-if [[ "$STATUS" == "foreign" || "$PUSH_STATUS" == "foreign" ]]; then
-  say install_hooks.foreign_refused \
-    "refusing to overwrite a foreign pre-commit/pre-push: $HOOK ($STATUS), $PUSH_HOOK ($PUSH_STATUS)" \
-    "hook=$HOOK" "status=$STATUS" "push_hook=$PUSH_HOOK" "push_status=$PUSH_STATUS" >&2
-  exit 2
-fi
+# Repair writes every hook that is missing or drifted and leaves a current, chained or foreign
+# one as it is, so one foreign hook does not leave the other unchecked; a foreign hook still
+# makes the repair fail. A drifted hook is first copied to a dated backup, which is also what a
+# failed repair restores.
+install_it() { [[ "$1" == "missing" || "$1" == "owned-drift" ]]; }
+INSTALL_HOOK=0; INSTALL_PUSH=0
+install_it "$STATUS" && INSTALL_HOOK=1
+install_it "$PUSH_STATUS" && INSTALL_PUSH=1
 
 mkdir -p "$DIR"
-BACKUP=""
-PUSH_BACKUP=""
-ROLLBACK_DIR="$(mktemp -d "$DIR/.mottori-hook-rollback.XXXXXX")"
-HOOK_EXISTED=0
-PUSH_HOOK_EXISTED=0
-if [[ -e "$HOOK" || -L "$HOOK" ]]; then
-  cp -p "$HOOK" "$ROLLBACK_DIR/pre-commit"
-  HOOK_EXISTED=1
-fi
-if [[ -e "$PUSH_HOOK" || -L "$PUSH_HOOK" ]]; then
-  cp -p "$PUSH_HOOK" "$ROLLBACK_DIR/pre-push"
-  PUSH_HOOK_EXISTED=1
-fi
-if [[ "$STATUS" == "owned-drift" ]]; then
-  BACKUP="$HOOK.bak.$(date +%Y%m%dT%H%M%S).$$"
-  cp -p "$HOOK" "$BACKUP"
-fi
-if [[ "$PUSH_STATUS" == "owned-drift" ]]; then
-  PUSH_BACKUP="$PUSH_HOOK.bak.$(date +%Y%m%dT%H%M%S).$$"
-  cp -p "$PUSH_HOOK" "$PUSH_BACKUP"
-fi
+backup() {  # backup <hook> <status>: print the backup's path, empty for a hook not backed up
+  [[ "$2" == "owned-drift" ]] || return 0
+  local copy; copy="$1.bak.$(date +%Y%m%dT%H%M%S).$$"
+  cp -p "$1" "$copy" && printf '%s' "$copy"
+}
+BACKUP="$(backup "$HOOK" "$STATUS")"
+PUSH_BACKUP="$(backup "$PUSH_HOOK" "$PUSH_STATUS")"
 TMP="$DIR/.pre-commit.$$.tmp"
 PUSH_TMP="$DIR/.pre-push.$$.tmp"
-cleanup() { rm -f "$TMP" "$PUSH_TMP"; rm -rf "$ROLLBACK_DIR"; }
+cleanup() { rm -f "$TMP" "$PUSH_TMP"; }
 trap cleanup EXIT
-cp "$TEMPLATE" "$TMP"
-cp "$TEMPLATE" "$PUSH_TMP"
-chmod 755 "$TMP"
-chmod 755 "$PUSH_TMP"
-mv -f "$TMP" "$HOOK"
-mv -f "$PUSH_TMP" "$PUSH_HOOK"
-
-rollback() {
-  if [[ "$HOOK_EXISTED" -eq 1 ]]; then
-    cp -p "$ROLLBACK_DIR/pre-commit" "$HOOK"
-  else
-    rm -f "$HOOK"
-  fi
-  if [[ "$PUSH_HOOK_EXISTED" -eq 1 ]]; then
-    cp -p "$ROLLBACK_DIR/pre-push" "$PUSH_HOOK"
-  else
-    rm -f "$PUSH_HOOK"
-  fi
-}
-
-if ! cmp -s "$TEMPLATE" "$HOOK" || [[ ! -x "$HOOK" ]] \
-   || ! cmp -s "$TEMPLATE" "$PUSH_HOOK" || [[ ! -x "$PUSH_HOOK" ]]; then
-  rollback
-  say install_hooks.repair_failed "repair verification failed, restored: $HOOK" "hook=$HOOK" >&2
-  exit 1
+if [[ "$INSTALL_HOOK" -eq 1 ]]; then
+  cp "$TEMPLATE" "$TMP"; chmod 755 "$TMP"; mv -f "$TMP" "$HOOK"
+fi
+if [[ "$INSTALL_PUSH" -eq 1 ]]; then
+  cp "$TEMPLATE" "$PUSH_TMP"; chmod 755 "$PUSH_TMP"; mv -f "$PUSH_TMP" "$PUSH_HOOK"
 fi
 
-# setup measures the baseline before hooks. Repair signs that measured set with keyed hash+HMAC
-# without running the release regression boundary again.
-# Fixtures without a baseline are hook-only tests and intentionally skip this step.
-if [[ -f "$ROOT/state/.gate-baseline.json" ]] && ! python3 "$ROOT/tools/gate.py" seal-baseline >/dev/null; then
+restore() {  # restore <hook> <installed 0|1> <backup>
+  [[ "$2" -eq 1 ]] || return 0
+  if [[ -n "$3" ]]; then cp -p "$3" "$1"; else rm -f "$1"; fi
+}
+rollback() {
+  restore "$HOOK" "$INSTALL_HOOK" "$BACKUP"
+  restore "$PUSH_HOOK" "$INSTALL_PUSH" "$PUSH_BACKUP"
+}
+# A hook left as it is passes verification on its own; only a written one must match the template.
+written_ok() { [[ "$1" -eq 0 ]] || { cmp -s "$TEMPLATE" "$2" && [[ -x "$2" ]]; }; }
+
+if ! written_ok "$INSTALL_HOOK" "$HOOK" || ! written_ok "$INSTALL_PUSH" "$PUSH_HOOK"; then
   rollback
-  say install_hooks.seal_failed "baseline seal failed, hook restored" >&2
+  echo "repair verification failed, restored: $HOOK" >&2
   exit 1
 fi
 
 NONCE="probe-$$-$(date +%s)"
 # Probe the executable directly to support Git versions without git hook run.
-GOT="$("$HOOK" --mottori-probe "$NONCE" 2>&1 || true)"
+PROBE="$HOOK"; [[ "$INSTALL_HOOK" -eq 1 ]] || PROBE="$PUSH_HOOK"
+GOT="$NONCE"
+[[ "$INSTALL_HOOK" -eq 0 && "$INSTALL_PUSH" -eq 0 ]] || GOT="$("$PROBE" --mottori-probe "$NONCE" 2>&1 || true)"
 if [[ "$GOT" != "$NONCE" ]]; then
   rollback
-  say install_hooks.probe_failed "git dispatcher probe failed, restored: $HOOK" "hook=$HOOK" >&2
+  echo "git dispatcher probe failed, restored: $HOOK" >&2
   exit 1
 fi
 
-printf 'pre-commit %s\npre-push %s\n' "$(sha256 "$HOOK")" "$(sha256 "$PUSH_HOOK")" > "$STAMP"
+# The stamp names every hook that is now the template, written here or already current.
+[[ "$INSTALL_HOOK" -eq 1 ]] && STATUS=current
+[[ "$INSTALL_PUSH" -eq 1 ]] && PUSH_STATUS=current
+{
+  [[ "$STATUS" != "current" ]] || printf 'pre-commit %s\n' "$(sha256 "$HOOK")"
+  [[ "$PUSH_STATUS" != "current" ]] || printf 'pre-push %s\n' "$(sha256 "$PUSH_HOOK")"
+} > "$STAMP"
 
-say install_hooks.repaired \
-  "current: $HOOK + $PUSH_HOOK (exact template + executable + direct hook probe + sealed baseline)" \
-  "hook=$HOOK" "push_hook=$PUSH_HOOK"
-[[ -z "$BACKUP" ]] || say install_hooks.backup "backup: $BACKUP" "path=$BACKUP"
-[[ -z "$PUSH_BACKUP" ]] || say install_hooks.backup "backup: $PUSH_BACKUP" "path=$PUSH_BACKUP"
+for pair in "$STATUS $HOOK" "$PUSH_STATUS $PUSH_HOOK"; do
+  [[ "${pair%% *}" == "foreign" ]] || status_line "${pair%% *}" "${pair#* }"
+done
+[[ -z "$BACKUP" ]] || echo "backup: $BACKUP"
+[[ -z "$PUSH_BACKUP" ]] || echo "backup: $PUSH_BACKUP"
+[[ "$STATUS" != "foreign" ]] || status_line foreign "$HOOK" >&2
+[[ "$PUSH_STATUS" != "foreign" ]] || status_line foreign "$PUSH_HOOK" >&2
+[[ "$STATUS" != "foreign" && "$PUSH_STATUS" != "foreign" ]] || exit 2

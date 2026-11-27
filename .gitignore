@@ -7,7 +7,7 @@
 # The design was reversed: ignore everything, then restore only the engine. New files stay outside Git by
 # default; engine changes are tracked deliberately. Mistakes now fail in the safer direction.
 #
-# Conversely, this repository does not back up instance data. Arrange that backup separately (CHECKLIST.md).
+# Conversely, this repository does not back up instance data. Arrange that backup separately (system/CHECKLIST.md).
 #
 # To add an engine file, add one line to the allowlist below. That line is the decision point.
 
@@ -19,7 +19,7 @@
 !/README.md
 !/LICENSE
 !/SETUP.md
-!/CHECKLIST.md
+!/MANUAL.md
 !/CHANGELOG.md
 !/CLAUDE.md
 !/AGENTS.md
@@ -27,42 +27,54 @@
 !/tools/
 !/templates/
 !/system/
-!/.claude/
 !/.codex/
+# Claude Code, Codex and Antigravity: the kit's settings and hook declaration, and the copies of the
+# kit's skills that tools/skills.py writes from system/skills/. A skill folder of the owner's own
+# beside them, and anything else there, belongs to the instance.
+!/.claude/
+/.claude/*
+!/.claude/settings.json
+!/.claude/skills/
+/.claude/skills/*
+!/.claude/skills/lenses/
+!/.claude/skills/deep-pass/
+!/.claude/skills/plain-writing/
+!/.claude/skills/large-jobs/
+!/.claude/skills/now/
+!/.claude/skills/recall/
+!/.claude/skills/dossier/
+!/.claude/skills/garden/
+!/.claude/skills/paper-to-kit/
+!/.agents/
+/.agents/*
+!/.agents/hooks.json
+!/.agents/skills/
+/.agents/skills/*
+!/.agents/skills/lenses/
+!/.agents/skills/deep-pass/
+!/.agents/skills/plain-writing/
+!/.agents/skills/large-jobs/
+!/.agents/skills/now/
+!/.agents/skills/recall/
+!/.agents/skills/dossier/
+!/.agents/skills/garden/
+!/.agents/skills/paper-to-kit/
 !/state/
 !/.github/
-# Korean translations mirror the engine paths above (ko/X.md pairs with X.md).
-!/ko/
 
-# Deny these paths again inside restored directories.
-# Instance configuration. Its template is tracked under templates/.
+# Deny these paths again inside restored directories. What one installation owns is in instance/,
+# which is never restored.
+# An installation from before instance/ keeps its files here until `bash setup.sh --force` moves
+# them, and no Git hook guards them, so these old places stay denied.
 /system/memory-config.json
 /system/memory-config.json.*
 /system/instance-rules.md
-# Instance-owned rules pair with upstream files (KIT-DR-004).
 /system/rituals.local.md
 /system/decisions.md
-# Generated files.
 /system/memory-map.html
 /system/build-log.md
-# Cross-runtime debate: track only the README rules; prompts, logs, and rounds belong to the instance.
 /system/debate/*
 !/system/debate/README.md
-# Inside ko/, track only Korean documents for engine paths; instance-owned and generated paths stay untracked.
-/ko/*
-!/ko/*.md
-!/ko/.claude/
-!/ko/system/
-!/ko/templates/
-/ko/system/memory-config.json
-/ko/system/memory-config.json.*
-/ko/system/instance-rules.md
-/ko/system/rituals.local.md
-/ko/system/decisions.md
-/ko/system/memory-map.html
-/ko/system/build-log.md
-/ko/system/debate/*
-!/ko/system/debate/README.md
 # All state belongs to the instance. Keep only the directory placeholder.
 /state/*
 !/state/.gitkeep
@@ -75,3 +87,8 @@ __pycache__/
 *.pyc
 .mypy_cache/
 .ipynb_checkpoints/
+
+# An installation's own lines go below the marker: a folder of its own that Git should keep, written
+# as `!/notes/`, and further ignore lines. A `git pull` merges the lines above and keeps these, and
+# doctor does not count them as an engine change (KIT-DR-090).
+# --- this installation's own lines ---

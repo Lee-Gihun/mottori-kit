@@ -1,0 +1,49 @@
+{
+ "runtime": "codex",
+ "version": "0.169.1",
+ "event": "SessionStart",
+ "cases": [
+  {
+   "case": "SessionStart-startup",
+   "note": "first start of a saved session, started in the subfolder sub",
+   "proc_cwd": "/tmp/fixture-codex/sub",
+   "stdin": {
+    "session_id": "c0dec0de-0000-4000-8000-000000000001",
+    "transcript_path": "/home/user/.codex/sessions/2026/11/20/rollout-2026-11-20T19-54-24-c0dec0de-0000-4000-8000-000000000001.jsonl",
+    "cwd": "/tmp/fixture-codex/sub",
+    "hook_event_name": "SessionStart",
+    "model": "gpt-6-luna",
+    "permission_mode": "bypassPermissions",
+    "source": "startup"
+   }
+  },
+  {
+   "case": "SessionStart-resume",
+   "note": "exec resume of the same session",
+   "proc_cwd": "/tmp/fixture-codex/sub",
+   "stdin": {
+    "session_id": "c0dec0de-0000-4000-8000-000000000001",
+    "transcript_path": "/home/user/.codex/sessions/2026/11/20/rollout-2026-11-20T19-54-24-c0dec0de-0000-4000-8000-000000000001.jsonl",
+    "cwd": "/tmp/fixture-codex/sub",
+    "hook_event_name": "SessionStart",
+    "model": "gpt-6-luna",
+    "permission_mode": "bypassPermissions",
+    "source": "resume"
+   }
+  },
+  {
+   "case": "SessionStart-compact",
+   "note": "after an automatic compaction inside one turn",
+   "proc_cwd": "/tmp/fixture-codex",
+   "stdin": {
+    "session_id": "c0dec0de-0000-4000-8000-000000000002",
+    "transcript_path": null,
+    "cwd": "/tmp/fixture-codex",
+    "hook_event_name": "SessionStart",
+    "model": "gpt-6-luna",
+    "permission_mode": "bypassPermissions",
+    "source": "compact"
+   }
+  }
+ ]
+}

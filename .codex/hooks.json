@@ -5,15 +5,42 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/tools/now.py\" hook-context 2>/dev/null || printf '%s' '{\"hookSpecificOutput\": {\"hookEventName\": \"SessionStart\", \"additionalContext\": \"[kit] State injection failed (now.py is missing or errored). Run `python3 tools/doctor.py`; until fixed, read state/NOW.md together with _private/state/NOW.md when it exists. A missing local overlay means unavailable, not no state.\"}}'"
+            "command": "sh \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/tools/hook.sh\" event SessionStart codex",
+            "timeout": 30
           }
         ]
-      },
+      }
+    ],
+    "UserPromptSubmit": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/tools/triggers.py\" hook 2>/dev/null || true"
+            "command": "sh \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/tools/hook.sh\" event UserPromptSubmit codex",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^apply_patch$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/tools/hook.sh\" event PostToolUse codex",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/tools/hook.sh\" event Stop codex",
+            "timeout": 190
           }
         ]
       }
@@ -23,7 +50,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/tools/now.py\" precompact --runtime codex 2>/dev/null || date \"+%FT%T codex precompact hook failed\" >> \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/state/.hook-errors.log\""
+            "command": "sh \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/tools/hook.sh\" event PreCompact codex",
+            "timeout": 20
           }
         ]
       }

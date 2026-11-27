@@ -1,0 +1,95 @@
+{
+ "runtime": "agy",
+ "version": "1.5.13",
+ "event": "Stop",
+ "cases": [
+  {
+   "case": "Stop-first",
+   "note": "first Stop of a prompt; the logger continued it once",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013",
+    "continuationActive": false,
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000013",
+    "cwd": "/home/user/fixture-agy",
+    "error": "",
+    "executionNum": 0,
+    "fullyIdle": true,
+    "hookEventName": "Stop",
+    "lastUserInput": "Edit a.txt in place with your file edit tool (do not rewrite the whole file): change the line two to TWO. Then run the shell command `env | grep -i -E 'antigravity|agy|gemini|conversation|session' | cut -d= -f1` and report its output, then say DONE.",
+    "modelName": "gemini-3.8-flash-low",
+    "terminationReason": "NO_TOOL_CALL",
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  },
+  {
+   "case": "Stop-continued",
+   "note": "the Stop after that continuation: continuationActive stays false",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013",
+    "continuationActive": false,
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000013",
+    "cwd": "/home/user/fixture-agy",
+    "error": "",
+    "executionNum": 1,
+    "fullyIdle": true,
+    "hookEventName": "Stop",
+    "lastUserInput": "Edit a.txt in place with your file edit tool (do not rewrite the whole file): change the line two to TWO. Then run the shell command `env | grep -i -E 'antigravity|agy|gemini|conversation|session' | cut -d= -f1` and report its output, then say DONE.",
+    "modelName": "gemini-3.8-flash-low",
+    "terminationReason": "NO_TOOL_CALL",
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  },
+  {
+   "case": "Stop-second-prompt",
+   "note": "Stop of the second prompt: executionNum back to 0",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013",
+    "continuationActive": false,
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000013",
+    "cwd": "/home/user/fixture-agy",
+    "error": "",
+    "executionNum": 0,
+    "fullyIdle": true,
+    "hookEventName": "Stop",
+    "lastUserInput": "Reply with the single word SECOND.",
+    "modelName": "gemini-3.8-flash-low",
+    "terminationReason": "NO_TOOL_CALL",
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  },
+  {
+   "case": "Stop-compact",
+   "note": "Stop of the /compact prompt",
+   "proc_cwd": "/home/user/fixture-agy/.agents",
+   "stdin": {
+    "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013",
+    "continuationActive": false,
+    "conversationId": "a9a9a9a9-0000-4000-8000-000000000013",
+    "cwd": "/home/user/fixture-agy",
+    "error": "",
+    "executionNum": 0,
+    "fullyIdle": true,
+    "hookEventName": "Stop",
+    "lastUserInput": "/compact",
+    "modelName": "gemini-3.8-flash-low",
+    "terminationReason": "TERMINAL_CUSTOM_HOOK",
+    "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/a9a9a9a9-0000-4000-8000-000000000013/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+     "/home/user/fixture-agy"
+    ]
+   }
+  }
+ ]
+}

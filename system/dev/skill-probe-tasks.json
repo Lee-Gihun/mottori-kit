@@ -1,0 +1,111 @@
+{
+  "note": "Tasks for tools/dev/skill_probe.py. 'open' tasks sit at a moment a thinking skill is for (about to commit to a design or decision, a fix that failed twice, stuck, evidence with a hole, an explicit ask). 'closed' tasks share words with them (decision, design, plan, survey, stuck) but are routine.",
+  "thinking_skills": [
+    "lenses",
+    "deep-pass",
+    "plain-writing",
+    "large-jobs"
+  ],
+  "tasks": [
+    {
+      "id": "y01",
+      "expect": "open",
+      "text": "We are deleting the old customer export pipeline this afternoon. The new one has run fine for two days, so I see no reason to wait. Write the removal plan I will follow."
+    },
+    {
+      "id": "y02",
+      "expect": "open",
+      "text": "I need a decision today: should our weekly status report go to all 40 people in the department, or only to the 6 team leads? Pick one and tell me why."
+    },
+    {
+      "id": "y03",
+      "expect": "open",
+      "text": "Design how we store notification preferences for the mobile app: one row per user and channel in a table, or a single JSON column on the user row. Give me the design you would commit to."
+    },
+    {
+      "id": "y04",
+      "expect": "open",
+      "text": "The nightly sync timed out again. We already raised the timeout twice, from 30 seconds to 60 and then to 120, and it still fails about once a week. What should we do now?"
+    },
+    {
+      "id": "y05",
+      "expect": "open",
+      "text": "Our survey says 92 percent of users love the new onboarding. We sent it to 4,000 users and 310 replied. Can I tell leadership that onboarding is solved?"
+    },
+    {
+      "id": "y06",
+      "expect": "open",
+      "text": "I have 10 working hours left this week and three things on my list: fix the flaky test suite, write the launch document, and interview two users. Decide how I should split the hours."
+    },
+    {
+      "id": "y07",
+      "expect": "open",
+      "text": "Nobody on the team remembers why config changes need two approvals. It slows us down, so I am dropping it to one approval starting Monday. Draft the announcement."
+    },
+    {
+      "id": "y08",
+      "expect": "open",
+      "text": "The vendor's solutions engineer told me the only way to fix our latency problem is to move to their enterprise tier. Should we upgrade?"
+    },
+    {
+      "id": "y09",
+      "expect": "open",
+      "text": "Use a lens on this: should we rewrite the billing module from scratch or keep patching it?"
+    },
+    {
+      "id": "y10",
+      "expect": "open",
+      "text": "I have gone back and forth for a week on whether to split our monolith into services and I am stuck. Help me decide, and commit to an answer."
+    },
+    {
+      "id": "n01",
+      "expect": "closed",
+      "text": "In one sentence, what is a decision record?"
+    },
+    {
+      "id": "n02",
+      "expect": "closed",
+      "text": "Rename the heading in this note from 'Design' to 'Architecture' and give it back:\n\n## Design\nWe use one queue per region."
+    },
+    {
+      "id": "n03",
+      "expect": "closed",
+      "text": "Turn this into a two-column table (option, owner): split the monolith, Dana; keep patching billing, Lee; drop second approval, Sam."
+    },
+    {
+      "id": "n04",
+      "expect": "closed",
+      "text": "What is 310 out of 4,000 as a percentage, to one decimal place?"
+    },
+    {
+      "id": "n05",
+      "expect": "closed",
+      "text": "Summarize this in two sentences: Last quarter we decided to keep the JSON column for notification preferences because reads were three times faster in our tests, and we added a nightly job that validates its shape. The decision is closed and nobody has asked to reopen it."
+    },
+    {
+      "id": "n06",
+      "expect": "closed",
+      "text": "Fix the typos and give the sentence back: 'We decied to ship the desing on Firday.'"
+    },
+    {
+      "id": "n07",
+      "expect": "closed",
+      "text": "Which top-level folders does this repository have? Just list them."
+    },
+    {
+      "id": "n08",
+      "expect": "closed",
+      "text": "Translate into Korean: 'The design review is at 3 pm on Thursday.'"
+    },
+    {
+      "id": "n09",
+      "expect": "closed",
+      "text": "I am stuck on the wording of one sentence. Give me three shorter ways to say: 'We will make a decision regarding the plan at a later time.'"
+    },
+    {
+      "id": "n10",
+      "expect": "closed",
+      "text": "Put these in alphabetical order: survey, plan, decision, design, vendor, timeout."
+    }
+  ]
+}

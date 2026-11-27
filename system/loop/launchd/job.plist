@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>__LABEL__</string>
+  <key>ProgramArguments</key>
+  <array>__PROGRAM__</array>
+  <key>WorkingDirectory</key><string>__ROOT__</string>
+  <key>StartCalendarInterval</key>
+  <dict>__WHEN__</dict>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>__HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string><key>HOME</key><string>__HOME__</string><key>LANG</key><string>en_US.UTF-8</string></dict>
+  <key>StandardOutPath</key><string>__LOG__</string>
+  <key>StandardErrorPath</key><string>__LOG__</string>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>

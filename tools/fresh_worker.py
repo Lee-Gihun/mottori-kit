@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
-"""Run one bounded, non-resumable Claude or Codex worker.
+"""Run one bounded, non-resumable Claude, Codex or Gemini (Antigravity) worker and print its receipt.
 
-Return a small receipt to the caller and retain full traces in a private run record. Claude is read-only; Codex may write within its workspace sandbox. Runtime fallback and write-capable Claude execution are not supported.
+The full trace of each run stays in a private run record under _private/work/runs.
+Claude and Gemini workers are read-only.
+A Codex worker may write within the folder it runs in, unless --read-only puts it in its read-only sandbox.
+A run never falls back to another runtime.
+The config key workers sets each runtime's model, effort and folder (instance or copy).
+A worker is offline unless --web is given.
+A --web run works in a copy, except where config puts that runtime in the instance and sets
+web_in_instance. codex --web runs only that way.
+A --worktree run works in a Git worktree, and what it changed is kept as a patch.
+What a prompt says is not judged. Where a worker runs decides what its folder holds: the instance holds
+everything the session can open, and a copy leaves out every path the model-send policy denies. A prompt
+file or read material from such a path is refused for a copy or a worktree.
 
-Usage: python3 tools/fresh_worker.py --runtime claude|codex PROMPT_FILE"""
+Usage: python3 tools/fresh_worker.py --runtime claude|codex|gemini [--web] [--read-only] PROMPT_FILE"""
 import argparse
+import dataclasses
 import datetime
 import hashlib
 import json
@@ -15,52 +27,94 @@ import signal
 import stat
 import subprocess
 import sys
-import tempfile
 import time
-import unicodedata
 import uuid
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import claude_auth as _claude_auth  # noqa: E402
-import memlib as M
-import worker_batch as B
+TOOLS = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [p for p in (TOOLS, os.path.join(TOOLS, "lib")) if p not in sys.path]
+import claude_auth  # noqa: E402
+import config as C  # noqa: E402
+import paths as P  # noqa: E402
+import receipts as R  # noqa: E402
+import worker_sandbox as S  # noqa: E402
+from worker_sandbox import InputError  # noqa: E402
 
+# Messages this module prints in more than one place, or too long to read inline.
+WORKER_CODEX_WEB_REFUSED = (
+    "codex --web is refused: Codex's sandbox reads the whole disk, so a Codex worker with the "
+    "network could read the private area even from a copy. Ask claude or gemini with --web, or "
+    "accept that risk with config workers.codex.where instance and web_in_instance true"
+)
+WORKER_COPY_KEEPS_NO_WRITES = (
+    "this {runtime} worker runs in a copy that is deleted after the run, so --write-prefix, "
+    "--expect and --worktree cannot be kept. Drop them, or drop --web, or set config "
+    "workers.{runtime}.where to instance"
+)
+WORKER_PROMPT_FILE_DENIED = (
+    "the prompt file is under a path the model-send policy denies ({path}), and this worker runs "
+    "in a copy or a worktree, which is given nothing from there. Put the prompt file somewhere "
+    "else in the workspace"
+)
+WORKER_PROMPT_OUTSIDE = (
+    "prompt path is outside the workspace; a worker reads only a prompt file inside it. Copy "
+    "the prompt into the workspace, for example {example}, and pass that path"
+)
+WORKER_STARTED = (
+    "fresh-worker run {run_id} started; python3 tools/receipts.py show {run_id} prints its "
+    "result once it ends"
+)
+WORKER_WORKTREE_NOT_ROOT = (
+    "--worktree needs a Git repository whose top level is the instance root; Git found {top}"
+)
+WORKER_READ_ONLY_WRITES = (
+    "this worker has no right to write (a Claude or Gemini worker, or --read-only), so --write-prefix "
+    "and --expect have nothing to measure; its answer is its output. Drop them, or ask codex"
+)
+CODEX_LOGIN_FIX = "Codex is not logged in: run `codex login` in a terminal, then ask again"
+# What a run records in "unavailable" when its runtime could not be called at all; null otherwise.
+NOT_INSTALLED = "not-installed"
+NOT_SIGNED_IN = "not-signed-in"
+MODEL_NOT_AVAILABLE = "model-not-available"
+# A runtime's answer that the account cannot use the model asked for (Codex: "The '<model>' model
+# is not supported when using Codex with a ChatGPT account"; Claude: "There's an issue with the
+# selected model").
+MODEL_REFUSED = re.compile(r"model is not supported|issue with the selected model|model_not_found|"
+                           r"not_found_error[^\n]{0,80}model", re.I)
+# Bytes of the end of the output stream read for the error rows that say why a run failed.
+ERROR_ROWS_BYTES = 65536
 
-ROOT = M.ROOT
-RUN_ROOT = os.path.join(ROOT, "_private", "work", "runs")
-# Bytes, not characters: a Hangul character and three or four ASCII characters cost about the same
-# tokens, so a byte cap bounds the caller's context cost evenly across languages.
-RECEIPT_MAX_BYTES = 4096
-RECEIPT_LINE_MAX_BYTES = 512
+ROOT = P.instance_root()
+RUN_ROOT = P.runs(ROOT)
+ENGINE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Lines and characters of stderr a failed run's receipt shows.
+STDERR_TAIL_LINES = 3
+STDERR_TAIL_CHARS = 300
+# Exit statuses of the wrapper itself; any other nonzero exit is the runtime's own.
 WRAPPER_RESULT_MISSING = 3
+WRAPPER_MATERIAL_CHANGED = 4
 WRAPPER_CAPTURE_FAILED = 5
 WRAPPER_EXPECT_MISSING = 6
-RESULT_CONTRACT_PREFIX = "RESULT_JSON: "
-RESULT_VERDICTS = {"PASS", "FAIL", "INCONCLUSIVE"}
-ENGINE_DIR = os.path.dirname(os.path.abspath(__file__))
-META_SCHEMA_VERSION = 2  # Run metadata schema version.
-# Sync stamps identify the source kit revision; unstamped kit copies use their own HEAD.
-KIT_REV_EMBEDDED = None
-# Record whether the source engine was dirty and the normalized hash of the copied files.
-KIT_SYNC_DIRTY = None
-KIT_SYNC_ENGINE_SHA256 = None   # destination baseline: normalized engine sha of the copy right after sync
-KIT_SYNC_SOURCE_SHA256 = None   # Manifest hash of the copied source files.
-ENGINE_FILES = ("fresh_worker.py", "memlib.py", "worker_batch.py", "claude_auth.py")
-SYNC_FILES = ("fresh_worker.py", "memlib.py", "testlib.py", "test_fresh_worker.py", "claude_auth.py", "test_claude_auth.py", "worker_batch.py",
-              "test_worker_batch.py", "ask_codex.sh")
-STAMP_PREFIXES = ("KIT_REV_EMBEDDED =", "KIT_SYNC_DIRTY =", "KIT_SYNC_ENGINE_SHA256 =", "KIT_SYNC_SOURCE_SHA256 =")
-WORKTREE_INSTANCE_FILES = (
-    "system/memory-config.json",
-    "system/instance-rules.md",
-    "system/decisions.md",
-    "system/rituals.local.md",
-)
-
-ENV_POLICY_VERSION = "provider-scoped-v1"
+WRAPPER_TIMEOUT = 7
+# Scheduled loops call the worker with no outer limit, so a hung runtime must end here.
+DEFAULT_TIMEOUT_SECONDS = 5400
+# subprocess waits pass the timeout to poll() in int milliseconds, which overflows near 24.8 days.
+MAX_TIMEOUT_SECONDS = 7 * 24 * 3600
+# The run record's schema version.
+META_SCHEMA_VERSION = 3
+# The modules a run imports; engine_sha256 hashes them so a run names the exact code that ran.
+ENGINE_FILES = ("fresh_worker.py", "lib/config.py", "receipts.py", "claude_auth.py",
+                "lib/worker_sandbox.py", "lib/paths.py", "lib/safeio.py")
+# The instance's own policy files a worktree run gets.
+WORKTREE_INSTANCE_FILES = tuple(P.tracked_name(path_of) for path_of in P.POLICY_FILES)
+# Test hook: a stand-in program for a runtime, named by MOTTORI_FRESH_WORKER_<RUNTIME>_BIN.
+TEST_PROGRAM_ENV = "MOTTORI_FRESH_WORKER_{}_BIN"
+# The usage of a run whose runtime reported none.
+NO_USAGE = {"raw": None, "input": None, "output": None, "total": None}
 
 CAPABILITIES = {
     "claude": "read-only",
     "codex": "workspace-write",
+    "gemini": "read-only",
 }
 
 CODEX_DISABLED_FEATURES = (
@@ -84,88 +138,36 @@ CODEX_DISABLED_FEATURES = (
 )
 
 
-class InputError(ValueError):
-    pass
-
-
-def _sha256(path):
-    h = hashlib.sha256()
+def read_workspace_text(path, what="prompt"):
+    """(absolute path, text) of a UTF-8 regular file inside ROOT with no symlink below ROOT. what
+    names the file in a refusal: the prompt, or a read material."""
+    path = os.path.expanduser(path)
+    source = os.path.abspath(path if os.path.isabs(path) else os.path.join(ROOT, path))
+    # The path is judged as written, so a symlink below ROOT stays visible to the walk. A real
+    # root with a lexical path would look outside on macOS, which maps /var to /private/var.
+    rel = S.root_relative(source, ROOT)
+    if rel is None or not S.inside(source, ROOT):
+        raise InputError(WORKER_PROMPT_OUTSIDE.format(
+            example=P.tracked_name(P.debate) + "/_p_review.md"))
     try:
-        with open(path, "rb") as f:
-            for chunk in iter(lambda: f.read(1024 * 1024), b""):
-                h.update(chunk)
+        linked = S.has_symlink_component(os.path.abspath(ROOT), rel)
     except FileNotFoundError:
-        return None
-    return h.hexdigest()
-
-
-def _private_write(path, data):
-    """Write bytes atomically with a private mode."""
-    if isinstance(data, str):
-        data = data.encode("utf-8")
-    tmp = os.path.join(os.path.dirname(path), ".tmp-" + uuid.uuid4().hex)
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-        os.chmod(path, 0o600)
-    except Exception:
-        try:
-            os.unlink(tmp)
-        except FileNotFoundError:
-            pass
-        raise
-
-
-def _inside_root(path):
-    try:
-        return os.path.commonpath((os.path.realpath(path), os.path.realpath(ROOT))) == os.path.realpath(ROOT)
-    except ValueError:
-        return False
-
-
-def _reject_symlink_components(path):
-    """Reject a symlink in any component below ROOT, not only the final file."""
-    # Walk the lexical workspace path so a symlink component remains observable. macOS maps /var to
-    # /private/var; using a real root with a lexical source would falsely look outside the workspace.
-    root = os.path.abspath(ROOT)
-    absolute = os.path.abspath(path)
-    try:
-        rel = os.path.relpath(absolute, root)
-    except ValueError:
-        raise InputError(_text("worker.prompt_outside"))
-    if rel == os.pardir or rel.startswith(os.pardir + os.sep):
-        raise InputError(_text("worker.prompt_outside"))
-    current = root
-    for part in rel.split(os.sep):
-        current = os.path.join(current, part)
-        try:
-            if stat.S_ISLNK(os.lstat(current).st_mode):
-                raise InputError(_text("worker.prompt_symlink"))
-        except FileNotFoundError:
-            raise InputError(_text("worker.prompt_missing"))
-
-
-def read_prompt(path):
-    source = os.path.abspath(os.path.expanduser(path) if os.path.isabs(path)
-                             else os.path.join(ROOT, path))
-    if not _inside_root(source):
-        raise InputError(_text("worker.prompt_outside"))
-    _reject_symlink_components(source)
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        raise InputError(f"{what} file does not exist")
+    if linked:
+        raise InputError(f"{what} path has a symlink component")
+    # O_NONBLOCK: opening a FIFO with no writer would block before the timeout applies; the
+    # regular-file check below then refuses it.
+    flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(source, flags)
     except FileNotFoundError:
-        raise InputError(_text("worker.prompt_missing"))
+        raise InputError(f"{what} file does not exist")
     except OSError as e:
-        raise InputError(_text("worker.prompt_unsafe_open", error_type=type(e).__name__))
+        raise InputError(f"cannot open the {what} file safely: {type(e).__name__}")
     try:
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode):
-            raise InputError(_text("worker.prompt_not_regular"))
+            raise InputError(f"{what} is not a regular file")
         with os.fdopen(fd, "rb") as f:
             raw = f.read()
         fd = None
@@ -173,169 +175,67 @@ def read_prompt(path):
         if fd is not None:
             os.close(fd)
     if not raw:
-        raise InputError(_text("worker.prompt_empty"))
+        raise InputError(f"{what} is empty")
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
-        raise InputError(_text("worker.prompt_not_utf8"))
+        raise InputError(f"{what} is not UTF-8 text")
     return source, text
 
 
-def _under_policy_prefix(path, prefix):
-    return path == prefix.rstrip("/") or path.startswith(prefix)
-
-
-def _private_refs(source, body):
-    """Return unique denied workspace paths named by the prompt or used as its source."""
-    policy = M.EGRESS_MODEL_SEND
-    deny = policy["deny_prefixes"]
-    allow = policy["allow_prefixes"]
-    found = []
-
-    def add(path):
-        path = path.replace(os.sep, "/")
-        if path.startswith("./"):
-            path = path[2:]
-        if (any(_under_policy_prefix(path, prefix) for prefix in deny)
-                and not any(_under_policy_prefix(path, prefix) for prefix in allow)
-                and path not in found):
-            found.append(path)
-
-    source_rel = os.path.relpath(source, ROOT).replace(os.sep, "/")
-    add(source_rel)
-    root_prefix = ROOT.rstrip(os.sep).replace(os.sep, "/") + "/"
-    for prefix in deny:
-        spellings = (prefix, root_prefix + prefix)
-        for spelling in spellings:
-            pattern = (r"(?<![A-Za-z0-9_.-])(" + re.escape(spelling)
-                       + r"[^\s`'\"<>\[\](){};,]*)")
-            for match in re.finditer(pattern, body):
-                raw = match.group(1).rstrip(".!?:")
-                add(raw[len(root_prefix):] if raw.startswith(root_prefix) else raw)
-    return found
-
-
-# English text of the catalog messages below. sync_engine.sh copies this module without
-# tools/i18n.py, and an instance may hold an older catalog without these keys; the English text
-# keeps every refusal intact there. test_enforce.py pins these values to the catalog.
-FALLBACK_TEXT = {
-    "worker.prompt_outside": "prompt path is outside the workspace",
-    "worker.prompt_symlink": "prompt path has a symlink component",
-    "worker.prompt_missing": "prompt file does not exist",
-    "worker.prompt_unsafe_open": "cannot open the prompt file safely: {error_type}",
-    "worker.prompt_not_regular": "prompt is not a regular file",
-    "worker.prompt_empty": "prompt is empty",
-    "worker.prompt_not_utf8": "prompt is not UTF-8 text",
-    "worker.prefix_outside": "write-prefix is outside the workspace",
-    "worker.prefix_outside_or_root": "write-prefix is outside the workspace or the whole root",
-    "worker.prefix_symlink": "write-prefix has a symlink component",
-    "worker.parent_unmeasurable": "cannot measure the workspace parent: {error_type}",
-    "worker.git_failed": "git failed to run: {error_type}",
-    "worker.git_command_failed": "git {command} failed: {detail}",
-    "worker.worktree_cleanup_failed": "worktree cleanup failed: {detail}",
-    "worker.strict_scope_needs_prefix": "--strict-scope needs at least one --write-prefix",
-}
-
-
-def _text(key, **kw):
-    """Return catalog text in the instance language, or English when the catalog lacks it."""
-    try:
-        from i18n import t
-        return t(key, **kw)
-    except (ImportError, KeyError):
-        return FALLBACK_TEXT[key].format(**kw)
-
-
-def _private_ref_refusal(refs):
-    try:
-        from i18n import t
-    except ImportError:
-        # The synced engine cluster ships without i18n.py; keep the refusal itself intact.
-        return "model-send deny ref refused: " + refs
-    return t("worker.private_ref_refused", refs=refs)
-
-
-def _result_contract(result):
-    """Validate the machine-readable final-result line without inferring from prose."""
-    def invalid(error):
-        return {
-            "schema_version": 1,
-            "valid": False,
-            "verdict": "INCONCLUSIVE",
-            "summary": "structured result unavailable",
-            "evidence": [],
-            "unknowns": [error],
-            "error": error,
-        }
-
-    if not isinstance(result, str) or not result.strip():
-        return invalid("result is missing")
-    lines = result.splitlines()
-    candidates = [line for line in lines if line.startswith(RESULT_CONTRACT_PREFIX)]
-    if len(candidates) != 1:
-        return invalid("exactly one RESULT_JSON line is required")
-    if candidates[0] != next(line for line in reversed(lines) if line.strip()):
-        return invalid("RESULT_JSON must be the final non-empty line")
-    try:
-        payload = json.loads(candidates[0][len(RESULT_CONTRACT_PREFIX):])
-    except json.JSONDecodeError:
-        return invalid("RESULT_JSON is not valid JSON")
-    required = {"verdict", "summary", "evidence", "unknowns"}
-    if not isinstance(payload, dict) or set(payload) != required:
-        return invalid("RESULT_JSON fields must be verdict, summary, evidence, unknowns")
-    if payload.get("verdict") not in RESULT_VERDICTS:
-        return invalid("RESULT_JSON verdict is not PASS, FAIL, or INCONCLUSIVE")
-    if not isinstance(payload.get("summary"), str) or not payload["summary"].strip():
-        return invalid("RESULT_JSON summary must be a non-empty string")
-    for field in ("evidence", "unknowns"):
-        values = payload.get(field)
-        if not isinstance(values, list) or not all(isinstance(value, str) and value.strip()
-                                                   for value in values):
-            return invalid(f"RESULT_JSON {field} must be a list of non-empty strings")
-    if not payload["evidence"]:
-        return invalid("RESULT_JSON evidence must contain at least one path or section")
-    return {
-        "schema_version": 1,
-        "valid": True,
-        **payload,
-        "error": None,
-    }
-
-
-def _effective_prompt(runtime, body):
-    capability = CAPABILITIES[runtime]
-    common = (
-        "[fresh bounded worker contract]\n"
-        f"- runtime capability: {capability}\n"
-        "- This is a fresh, non-resumable worker. Read AGENTS.md and the named disk sources.\n"
-        "- Do not commit, push, send, pay, submit, or change state journals/NOW; the dispatcher owns state.\n"
-        "- Put durable work in the exact artifact paths authorized by the request.\n"
-        "- Include READ_SCOPE: with the files actually read, and UNREAD: with requested material not read. "
-        "These optional declarations are self-reports, not proof of access or use.\n"
-        "- End with a concise result that lists evidence, changed artifact paths, tests, and remaining unknowns.\n"
-        "- Every factual claim in the result names the file path (and line or section) it came from; "
-        "a claim without a source goes under remaining unknowns.\n"
-        "- End with exactly one machine-readable final line: RESULT_JSON: "
-        '{"verdict":"PASS|FAIL|INCONCLUSIVE","summary":"...","evidence":["path:line"],'
-        '"unknowns":["..."]}. Use an empty unknowns list when nothing remains.\n\n'
-    )
-    if runtime == "claude":
-        common += (
-            "- You are a read-only reviewer. Write/Edit/Bash and external action tools are unavailable.\n"
-            "- Report executable verification that the dispatcher should run; do not claim you ran it.\n\n"
-        )
-    return common + body
-
-
-def _runtime_env(runtime, workspace):
+def _runtime_env(runtime, workdir):
     """Pass provider settings only to their runtime; never load Claude tokens for Codex."""
-    env = dict(os.environ, MOTTORI_INSTANCE=workspace)
+    if runtime not in claude_auth.VENDOR_ENV:
+        raise InputError("unsupported runtime")
+    others = [name for name in claude_auth.VENDOR_ENV if name != runtime]
     if runtime == "claude":
-        return _claude_auth.env(env)
+        # claude_auth.env below drops the Codex settings, as it does for every headless Claude call.
+        others.remove("codex")
+    # git_env drops the caller's Git pins, so the worker's git commands use its own cwd.
+    env = claude_auth.without_vendors(S.git_env(), others)
+    # MOTTORI_DISABLE_HOOKS: the kit's hooks would give the worker the caller's state and turn-end
+    # checks it does not own.
+    env.update(MOTTORI_INSTANCE=workdir, MOTTORI_DISABLE_HOOKS="1", PWD=os.path.realpath(workdir))
+    # The caller's folders would tell a worker in a copy where the instance is.
+    for key in ("OLDPWD", "CLAUDE_PROJECT_DIR"):
+        env.pop(key, None)
+    return claude_auth.env(env) if runtime == "claude" else env
+
+
+def _program(runtime):
+    """The runtime's program (config.WORKER_PROGRAMS), or the stand-in a test names with TEST_PROGRAM_ENV."""
+    return os.environ.get(TEST_PROGRAM_ENV.format(runtime.upper()), C.WORKER_PROGRAMS[runtime])
+
+
+def _requested(runtime):
+    """(model, effort) asked for, None meaning the runtime's own default.
+
+    MOTTORI_FRESH_WORKER_CLAUDE_MODEL, _CODEX_MODEL and _CODEX_EFFORT win over config.workers.
+    """
+    entry = C.workers().get(runtime, {})
+    model = (os.environ.get(f"MOTTORI_FRESH_WORKER_{runtime.upper()}_MODEL") if runtime != "gemini" else None) \
+        or entry.get("model")
+    # Only lower-case letters pass, so the value cannot close the quotes and inject another key; an
+    # invalid variable falls through to the config value instead of discarding it.
+    efforts = [os.environ.get("MOTTORI_FRESH_WORKER_CODEX_EFFORT") if runtime == "codex" else None,
+               entry.get("effort")]
+    effort = next((e for e in efforts if isinstance(e, str) and re.fullmatch(r"[a-z]+", e)), None)
+    defaults = {"claude": ("opus", "high"), "codex": (None, "high"), "gemini": (None, None)}[runtime]
+    return model or defaults[0], effort or defaults[1]
+
+
+def _placement(runtime, web):
+    """Where the worker runs: instance or copy. A --web worker reads text from outside and has a
+    way out, so it gets a copy without the private area unless the owner set web_in_instance."""
+    entry = C.workers().get(runtime, {})
+    where = entry.get("where", "copy" if runtime == "gemini" else "instance")
+    if not web or (where == "instance" and entry.get("web_in_instance", False)):
+        return where
     if runtime == "codex":
-        return {key: value for key, value in env.items()
-                if not key.upper().startswith(("CLAUDE_", "ANTHROPIC_"))}
-    raise InputError("unsupported runtime")
+        # Codex's workspace-write sandbox reads the whole disk, so from a copy it could still
+        # read the private area while it has the network.
+        raise InputError(WORKER_CODEX_WEB_REFUSED)
+    return "copy"
 
 
 def _new_run(runtime):
@@ -348,8 +248,10 @@ def _new_run(runtime):
     return rid, path, now
 
 
-def _claude_command():
-    binary = os.environ.get("MOTTORI_FRESH_WORKER_CLAUDE_BIN", "claude")
+def _claude_command(web=False):
+    binary = _program("claude")
+    model, effort = _requested("claude")
+    web_tools = ["WebSearch", "WebFetch"] if web else []
     return [
         binary,
         "-p",
@@ -358,10 +260,12 @@ def _claude_command():
         "--strict-mcp-config",
         "--mcp-config", '{"mcpServers":{}}',
         "--disable-slash-commands",
-        "--model", os.environ.get("MOTTORI_FRESH_WORKER_CLAUDE_MODEL", "opus"),
-        "--effort", "high",
+        "--model", model,
+        "--effort", effort,
         "--permission-mode", "dontAsk",
-        "--tools", "Read", "Glob", "Grep",
+        "--tools", "Read", "Glob", "Grep", *web_tools,
+        # dontAsk refuses a tool nobody approved, so the web tools are approved by name.
+        *(["--allowedTools", *web_tools] if web else []),
         "--no-session-persistence",
         "--no-chrome",
         "--output-format", "stream-json",
@@ -369,24 +273,37 @@ def _claude_command():
     ]
 
 
-def _codex_command(result_path):
-    binary = os.environ.get("MOTTORI_FRESH_WORKER_CODEX_BIN", "codex")
+def capability(runtime, read_only=False):
+    """What the run's model program may do: read-only, or its runtime's own capability."""
+    return "read-only" if read_only else CAPABILITIES[runtime]
+
+
+def _codex_command(result_path, web=False, where="instance", read_only=False):
+    binary = _program("codex")
+    model, effort = _requested("codex")
     command = [
         binary, "exec",
-        # Ignore the desktop user's plugins, MCP servers, memories, and connector settings. The
-        # project config currently enables live search, so override that layer too and explicitly
-        # close command-network egress. Authentication still comes from CODEX_HOME.
+        # Ignore the desktop user's plugins, MCP servers, memories, and connector settings. A
+        # project's own config can turn on live search, so the lines below set search and the
+        # command network for this run. Authentication still comes from CODEX_HOME.
         "--ignore-user-config",
-        "--model", os.environ.get("MOTTORI_FRESH_WORKER_CODEX_MODEL", "gpt-5.6-sol"),
-        "--config", 'model_reasoning_effort="high"',
-        "--config", 'web_search="disabled"',
-        "--config", "sandbox_workspace_write.network_access=false",
+        # _requested lets only lower-case letters through, so effort cannot close these quotes.
+        "--config", 'model_reasoning_effort="%s"' % effort,
+        "--config", 'web_search="%s"' % ("live" if web else "disabled"),
+        "--config", "sandbox_workspace_write.network_access=%s" % ("true" if web else "false"),
         "--config", "agents.enabled=false",
     ]
+    # No built-in model name: which models exist depends on the user's Codex account.
+    if model:
+        command.extend(("--model", model))
     for feature in CODEX_DISABLED_FEATURES:
         command.extend(("--disable", feature))
     command.extend([
-        "--sandbox", "workspace-write",
+        # Read-only: the model's commands may read and write nothing; Codex itself still writes the
+        # last message to result_path, outside the model's sandbox.
+        "--sandbox", "read-only" if read_only else "workspace-write",
+        # A copy has no .git, and with the user's config ignored no folder is trusted either.
+        *(["--skip-git-repo-check"] if where == "copy" else []),
         "--ephemeral",
         "--json",
         "--color", "never",
@@ -396,41 +313,154 @@ def _codex_command(result_path):
     return command
 
 
+def _gemini_command(prompt, timeout, web=False):
+    """agy in print mode with JSON output, its sandbox, accept-edits mode and a print timeout.
+
+    accept-edits is used, never the default automatic mode. One-run permission rules deny every
+    write and any command outside the sandbox, and without --web the URL actions too. The prompt
+    goes in argv, because on stdin agy expects its stream format, whose result shape is unknown
+    (system/dev/runtime-capture.md).
+    """
+    binary = _program("gemini")
+    model, effort = _requested("gemini")
+    deny = ["write_file(*)", "unsandboxed(*)"] + ([] if web else ["read_url(*)", "execute_url(*)"])
+    command = [
+        binary, "-p", prompt,
+        "--output-format", "json",
+        "--sandbox",
+        "--mode", "accept-edits",
+        "--disable-slash-commands",
+        "--print-timeout", f"{int(timeout)}s",
+        "--settings", json.dumps({"permissions": {"deny": deny}}, separators=(",", ":")),
+    ]
+    if model:
+        command.extend(("--model", model))
+    if effort:
+        command.extend(("--effort", effort))
+    return command
+
+
+def _gemini_result(stream_path):
+    """(result, error, run-record fields). agy exits 0 on a refused action, so a denial or an empty
+    answer is the failure here, with its reason; _usage reads the usage."""
+    try:
+        envelope = json.loads(open(stream_path, encoding="utf-8", errors="replace").read())
+    except (OSError, json.JSONDecodeError):
+        envelope = None
+    if not isinstance(envelope, dict):
+        return None, "agy output is not one JSON object", {"conversation_id": None}
+    conversation = {"conversation_id": envelope.get("conversation_id")
+                    if isinstance(envelope.get("conversation_id"), str) else None}
+    denied = envelope.get("denied_actions")
+    if denied:
+        names = ", ".join(
+            f"{d.get('action', '?')} ({d.get('display_name', '?')})" if isinstance(d, dict) else str(d)
+            for d in (denied if isinstance(denied, list) else [denied]))
+        return None, f"agy refused actions the worker needed: {names}", conversation
+    response = envelope.get("response")
+    if not isinstance(response, str) or not response.strip():
+        detail = envelope.get("error") or envelope.get("finished_reason") or envelope.get("status")
+        return None, "agy gave an empty response" + (f" ({detail})" if detail else ""), conversation
+    return response, None, conversation
+
+
 def _claude_result(stream_path):
-    result = None
+    """(result text, error text, run-record fields). A login or API failure arrives in the stream,
+    not on stderr."""
+    result = error = None
     with open(stream_path, encoding="utf-8", errors="replace") as f:
         for line in f:
             try:
                 event = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if event.get("type") == "result" and isinstance(event.get("result"), str):
-                result = event["result"]
-    return result
+            if not isinstance(event, dict):
+                continue
+            if event.get("type") == "error" or event.get("is_error") is True:
+                text = event.get("result") if isinstance(event.get("result"), str) else event.get("error")
+                if isinstance(text, dict):
+                    text = text.get("message") or text.get("type")
+                error = str(text or event.get("message") or event.get("subtype") or "error event")
+            elif event.get("type") == "result" and isinstance(event.get("result"), str):
+                # Only an error after the last successful result decides the run.
+                result, error = event["result"], None
+    return result, error, {}
 
 
-# Clear inherited Git control variables so nested Git commands use the repository at their cwd.
-_GIT_PINNING_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
-                    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "GIT_PREFIX")
+def _stream_reader(parse):
+    """A result reader for a runtime whose answer is in its output stream: parse(stream path)
+    gives (result, error, run-record fields); the result counts only after exit 0 and no error."""
+    def read(paths, process_exit):
+        result, error, extra = parse(paths["stream"])
+        if process_exit != 0 or error is not None:
+            result = None
+        if result is not None:
+            S.private_write(paths["result"], result)
+        return result, error, extra
+    return read
 
 
-def _git_env():
-    return {k: v for k, v in os.environ.items() if k not in _GIT_PINNING_ENV}
+def _move_runtime_result(paths):
+    """Move the result file Codex wrote inside a worktree into the run record, when it is there."""
+    if paths["runtime_result"] != paths["result"] and os.path.isfile(paths["runtime_result"]):
+        with open(paths["runtime_result"], "rb") as f:
+            S.private_write(paths["result"], f.read())
+        os.unlink(paths["runtime_result"])
+
+
+def _read_codex(paths, process_exit):
+    """Codex writes its last message to a file; in a worktree that file is moved to the record."""
+    if not os.path.isfile(paths["runtime_result"]):
+        return None, None, {}
+    _move_runtime_result(paths)
+    os.chmod(paths["result"], 0o600)
+    with open(paths["result"], encoding="utf-8", errors="replace") as f:
+        return f.read(), None, {}
+
+
+@dataclasses.dataclass(frozen=True)
+class Runtime:
+    """What a run needs to know about one runtime. command(run, prompt) builds its argv;
+    read(run paths, process exit) returns (result text or None, runtime error or None, extra
+    run-record fields); usage_event is the type of the output event whose usage is the run total,
+    None when the output is one JSON envelope with its own usage."""
+    command: object
+    read: object
+    usage_event: object
+    input_keys: tuple = ("input_tokens",)  # the usage keys that add up to the input tokens
+    # agy takes the prompt in argv and exits 0 on a refused action.
+    prompt_on_stdin: bool = True
+    error_fails_exit_0: bool = False
+
+
+RUNTIMES = {
+    "claude": Runtime(command=lambda run, prompt: _claude_command(run.web),
+                      read=_stream_reader(_claude_result), usage_event="result",
+                      input_keys=("input_tokens", "cache_creation_input_tokens",
+                                  "cache_read_input_tokens")),
+    "codex": Runtime(command=lambda run, prompt: _codex_command(run.paths["runtime_result"], run.web,
+                                                                run.where, run.read_only),
+                     read=_read_codex, usage_event="turn.completed"),
+    "gemini": Runtime(command=lambda run, prompt: _gemini_command(prompt, run.timeout, run.web),
+                      read=_stream_reader(_gemini_result), usage_event=None,
+                      prompt_on_stdin=False, error_fails_exit_0=True),
+}
 
 
 def _git(args, cwd):
     try:
         p = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=10,
-                           env=_git_env())
+                           env=S.git_env())
     except (OSError, subprocess.TimeoutExpired):
         return None
     return p.stdout.strip() if p.returncode == 0 else None
 
 
 def _kit_identity(engine_dir=None):
-    """(repo_rev, engine_dirty) of the git repo that holds this engine file. Both None without git.
+    """(kit_rev, kit_dirty): the HEAD of the git repo that holds the engine, and whether the engine
+    directory differs from it. Both None without git.
 
-    engine_dirty is scoped to the engine directory (tools/), not the whole tree: an instance tree is
+    kit_dirty is scoped to the engine directory (tools/), not the whole tree: an instance tree is
     always dirty with journals, and that would be false precision about the engine. The exact code
     identity is engine_sha256 (see _engine_identity), which does not depend on git at all.
     """
@@ -446,7 +476,7 @@ def _kit_identity(engine_dir=None):
 
 
 def _engine_sha256(engine_dir=None):
-    """Hash engine files after removing sync-stamp lines, so equivalent source and stamped copies share an identity."""
+    """Hash the engine files, so a run names the exact code that ran without depending on git."""
     engine_dir = engine_dir or ENGINE_DIR
     h = hashlib.sha256()
     for name in ENGINE_FILES:
@@ -456,341 +486,64 @@ def _engine_sha256(engine_dir=None):
         except FileNotFoundError:
             h.update(f"{name}:missing\n".encode("utf-8"))
             continue
-        kept = [line for line in raw.split(b"\n")
-                if not any(line.startswith(prefix.encode("utf-8")) for prefix in STAMP_PREFIXES)]
         h.update(f"{name}:".encode("utf-8"))
-        h.update(hashlib.sha256(b"\n".join(kept)).hexdigest().encode("utf-8"))
+        h.update(hashlib.sha256(raw).hexdigest().encode("utf-8"))
         h.update(b"\n")
     return h.hexdigest()
 
 
-def _source_manifest_sha256(engine_dir=None):
-    """sha256 over the files a sync copies (stamp lines excluded), computed on the source side."""
-    engine_dir = engine_dir or ENGINE_DIR
-    h = hashlib.sha256()
-    for name in SYNC_FILES:
-        try:
-            with open(os.path.join(engine_dir, name), "rb") as f:
-                raw = f.read()
-        except FileNotFoundError:
-            h.update(f"{name}:missing\n".encode("utf-8"))
-            continue
-        kept = [line for line in raw.split(b"\n")
-                if not any(line.startswith(prefix.encode("utf-8")) for prefix in STAMP_PREFIXES)]
-        digest = hashlib.sha256(b"\n".join(kept)).hexdigest()
-        h.update(f"{name}:{digest}\n".encode("utf-8"))
-    return h.hexdigest()
-
-
-def _engine_identity(engine_dir=None, root=None):
-    """What actually ran: the kit revision (embedded at sync time, else git HEAD), the repo HEAD of
-    the running copy, the normalized sha256 of the engine files, whether the copy still matches what
-    the sync stamped, and the sha256 of AGENTS.md the worker is told to read (instance content, so it
-    is kept out of harness_sha256)."""
+def _engine_identity(engine_dir=None, root=None, workdir=None):
+    """What actually ran: the git HEAD of the engine's checkout, the sha256 of the engine files, the
+    sha256 of the AGENTS.md the worker reads in its workdir, and that of the root's AGENTS.md, which
+    the engine runs from."""
     engine_dir = engine_dir or ENGINE_DIR
     root = root or ROOT
-    repo_rev, engine_dirty = _kit_identity(engine_dir)
-    engine_sha = _engine_sha256(engine_dir)
-    if KIT_REV_EMBEDDED:
-        kit_rev, source = KIT_REV_EMBEDDED, "embedded"
-    elif repo_rev:
-        kit_rev, source = repo_rev, "git"
-    else:
-        kit_rev, source = None, None
+    kit_rev, engine_dirty = _kit_identity(engine_dir)
     return {
         "kit_rev": kit_rev,
-        "kit_rev_source": source,
+        "kit_rev_source": "git" if kit_rev else None,
         "kit_dirty": engine_dirty,
-        "kit_sync": {"dirty": KIT_SYNC_DIRTY,
-                     "engine_sha256": KIT_SYNC_ENGINE_SHA256,      # destination baseline at sync time
-                     "source_sha256": KIT_SYNC_SOURCE_SHA256,      # what the kit shipped (SYNC_FILES)
-                     "matches_copy": (KIT_SYNC_ENGINE_SHA256 == engine_sha) if KIT_SYNC_ENGINE_SHA256 else None},
-        "repo_rev": repo_rev,
-        "engine_sha256": engine_sha,
-        "agents_sha256": _sha256(os.path.join(root, "AGENTS.md")),
+        "engine_sha256": _engine_sha256(engine_dir),
+        "agents_sha256": S.sha256_file(os.path.join(workdir or root, "AGENTS.md")),
+        "root_agents_sha256": S.sha256_file(os.path.join(root, "AGENTS.md")),
     }
-
-
-def _harness_sha256(runtime, command, run_specific=()):
-    """Identity of the adapter contract, independent of prompt body and run paths.
-
-    Inputs: runtime, capability, the common contract prefix, the command options in order (binary
-    and run-specific paths removed), the environment policy, and disabled features. Canonical JSON, sha256.
-    """
-    opts = [arg for arg in command[1:] if arg not in set(run_specific)]
-    payload = {
-        "runtime": runtime,
-        "env_policy": ENV_POLICY_VERSION,
-        "capability": CAPABILITIES[runtime],
-        "contract_prefix": _effective_prompt(runtime, ""),
-        "command_opts": opts,
-        "disabled_features": sorted(CODEX_DISABLED_FEATURES) if runtime == "codex" else [],
-    }
-    data = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
 
 def _usage(runtime, stream_path):
-    """The runtime's last usage object, normalized. Never summed across events."""
+    """The runtime's last usage object, normalized. Never summed across events.
+
+    Claude's result event carries the CLI's cumulative total for the run; without it there is
+    no run total, so usage stays null rather than showing one API call's numbers.
+    """
+    spec = RUNTIMES[runtime]
     raw = None
-    last_assistant = None
     try:
         f = open(stream_path, encoding="utf-8", errors="replace")
     except OSError:
-        return {"raw": None, "input": None, "output": None, "total": None}
+        return dict(NO_USAGE)
     with f:
-        for line in f:
+        # agy's usage keys were not captured, so only its raw usage object is certain.
+        lines = f if spec.usage_event else [f.read().replace("\n", " ")]
+        for line in lines:
             try:
                 event = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if not isinstance(event, dict):
-                continue
-            kind = event.get("type")
-            if runtime == "codex":
-                if kind == "turn.completed" and isinstance(event.get("usage"), dict):
-                    raw = event["usage"]
-            else:
-                if kind == "result" and isinstance(event.get("usage"), dict):
-                    raw = event["usage"]
-                elif kind == "assistant":
-                    msg = event.get("message")
-                    if isinstance(msg, dict) and isinstance(msg.get("usage"), dict):
-                        last_assistant = msg["usage"]
-    if runtime == "claude" and raw is None:
-        raw = last_assistant
+            if (isinstance(event, dict) and isinstance(event.get("usage"), dict)
+                    and (spec.usage_event is None or event.get("type") == spec.usage_event)):
+                raw = event["usage"]
     if raw is None:
-        return {"raw": None, "input": None, "output": None, "total": None}
+        return dict(NO_USAGE)
 
     def num(key):
         value = raw.get(key)
         return value if isinstance(value, int) and not isinstance(value, bool) else None
 
-    if runtime == "codex":
-        inp = num("input_tokens")
-    else:
-        parts = [num("input_tokens"), num("cache_creation_input_tokens"), num("cache_read_input_tokens")]
-        inp = sum(p for p in parts if p is not None) if any(p is not None for p in parts) else None
+    parts = [num(key) for key in spec.input_keys if num(key) is not None]
+    inp = sum(parts) if parts else None
     out = num("output_tokens")
     total = inp + out if inp is not None and out is not None else None
     return {"raw": raw, "input": inp, "output": out, "total": total}
-
-
-def _read_scope(result):
-    """Keep the first read declaration and last unread marker; accept legacy Korean labels.
-
-    Declarations are optional self-reports and never validate actual reading. The Korean labels
-    are written as escapes: "ilgeum" (read), "ilgi beomwi" (read scope), and
-    "kkeutkkaji mot ilgeun geot:" (not read to the end:).
-    """
-    if not result:
-        return None
-    declared = None
-    unread = None
-    for line in result.splitlines():
-        text = line.strip().lstrip("\ufeff").strip()
-        if declared is None and text.startswith(("READ_SCOPE:", "\uc77d\uc74c", "\uc77d\uae30 \ubc94\uc704")):
-            declared = text
-        if text.startswith(("UNREAD:", "\ub05d\uae4c\uc9c0 \ubabb \uc77d\uc740 \uac83:")):
-            unread = text
-    if declared is None and unread is None:
-        return None
-    return {"declared": declared, "unread": unread}
-
-
-
-WRAPPER_SCOPE_VIOLATION = 4
-SCOPE_LIST_CAP = 500
-
-
-def _normalize_prefix(prefix, root=None):
-    """A write prefix is a ROOT-relative directory path with no symlink component. It may not exist yet."""
-    root = os.path.abspath(root or ROOT)
-    absolute = os.path.abspath(prefix if os.path.isabs(prefix) else os.path.join(root, prefix))
-    try:
-        rel = os.path.relpath(absolute, root)
-    except ValueError:
-        raise InputError(_text("worker.prefix_outside"))
-    if rel in (os.curdir, os.pardir) or rel.startswith(os.pardir + os.sep):
-        raise InputError(_text("worker.prefix_outside_or_root"))
-    current = root
-    canonical = []
-    parts = rel.split(os.sep)
-    for i, part in enumerate(parts):
-        # On a case-insensitive filesystem the on-disk spelling is what os.walk reports; use it,
-        # otherwise a prefix typed as OUT and a directory named out would be a false violation.
-        try:
-            entries = os.listdir(current)
-        except OSError:
-            entries = []
-        if part not in entries:
-            same = [e for e in entries if e.lower() == part.lower()]
-            # Normalize spelling only when the filesystem resolves it to the same entry.
-            if len(same) == 1 and os.path.exists(os.path.join(current, part)) \
-                    and os.path.samefile(os.path.join(current, part), os.path.join(current, same[0])):
-                part = same[0]
-        current = os.path.join(current, part)
-        canonical.append(part)
-        try:
-            if stat.S_ISLNK(os.lstat(current).st_mode):
-                raise InputError(_text("worker.prefix_symlink"))
-        except FileNotFoundError:
-            canonical.extend(parts[i + 1:])
-            break  # the rest may be created by the worker
-    return "/".join(canonical)
-
-
-def _workspace_snapshot(exclude_rel, root=None, include_git=False, include_parent=False):
-    """Return metadata fingerprints for the observable write boundary.
-
-    Report-only runs omit .git and the parent. Strict runs include .git and immediate parent entries; recursively scanning the parent would cross into unrelated workspaces. The runtime sandbox remains the outer boundary.
-
-    Use lstat without following symlinks. ctime_ns detects writes that restore mtime, and mode detects permission changes."""
-    root = os.path.abspath(root or ROOT)
-    runs_rel = os.path.relpath(RUN_ROOT, root).replace(os.sep, "/")
-    if runs_rel == ".." or runs_rel.startswith("../"):
-        runs_rel = None
-    snap = {}
-
-    def fingerprint(st, kind):
-        return (kind, st.st_size, st.st_mtime_ns, st.st_ctime_ns, stat.S_IMODE(st.st_mode),
-                st.st_dev, st.st_ino, st.st_nlink)
-
-    for dirpath, dirnames, filenames in os.walk(root):
-        rel_dir = os.path.relpath(dirpath, root).replace(os.sep, "/")
-        rel_dir = "" if rel_dir == "." else rel_dir
-        keep = []
-        for d in dirnames:
-            rel = f"{rel_dir}/{d}" if rel_dir else d
-            # The run-record tree belongs to the wrapper, not the worker. Strict runs do include
-            # .git because refs, config, index, and hooks are enforcement control surfaces.
-            if (d == ".git" and not include_git) or rel == exclude_rel \
-                    or (runs_rel is not None and rel == runs_rel):
-                continue
-            full = os.path.join(dirpath, d)
-            try:
-                st = os.lstat(full)
-            except OSError:
-                continue
-            if stat.S_ISLNK(st.st_mode):
-                snap[rel] = fingerprint(st, "link")
-                continue
-            snap[rel] = fingerprint(st, "dir")
-            keep.append(d)
-        dirnames[:] = keep
-        for name in filenames:
-            rel = f"{rel_dir}/{name}" if rel_dir else name
-            if rel == ".git" and not include_git:
-                continue
-            try:
-                st = os.lstat(os.path.join(dirpath, name))
-            except OSError:
-                continue
-            kind = "link" if stat.S_ISLNK(st.st_mode) else "file"
-            snap[rel] = fingerprint(st, kind)
-    if include_parent:
-        parent = os.path.dirname(root)
-        # Do not attribute unrelated OS-temp churn to the worker.
-        # Measure the dedicated parent of real workspaces and nested fixtures.
-        if os.path.realpath(parent) == os.path.realpath(tempfile.gettempdir()):
-            return snap
-        try:
-            names = os.listdir(parent)
-        except OSError as error:
-            raise InputError(_text("worker.parent_unmeasurable", error_type=type(error).__name__))
-        own_name = os.path.basename(root)
-        for name in names:
-            if name == own_name:
-                continue
-            path = os.path.join(parent, name)
-            try:
-                st = os.lstat(path)
-            except OSError:
-                continue
-            kind = "link" if stat.S_ISLNK(st.st_mode) else ("dir" if stat.S_ISDIR(st.st_mode) else "file")
-            snap["../" + name] = fingerprint(st, kind)
-    return snap
-
-
-def _under(path, prefix):
-    return path == prefix or path.startswith(prefix + "/")
-
-
-def _scope_report(prefixes, before, after, seconds, root=None):
-    changed = sorted((set(before) | set(after)) - {p for p in before if p in after and before[p] == after[p]})
-    violations = []
-    root = root or ROOT
-    root_real = os.path.realpath(root)
-
-    def link_escapes(path):
-        target_real = os.path.realpath(os.path.join(root, path))
-        if not target_real.startswith(root_real + os.sep):
-            return True
-        target_rel = os.path.relpath(target_real, root_real).replace(os.sep, "/")
-        return not any(_under(target_rel, prefix) for prefix in prefixes)
-
-    for path in changed:
-        inside = any(_under(path, prefix) for prefix in prefixes)
-        if prefixes and not inside:
-            violations.append({"path": path, "why": "outside write-prefix"})
-    if prefixes:
-        # Reject symlink targets outside allowed prefixes, including pre-existing links.
-        # Reject hardlinks whose link count shows aliases outside the workspace snapshot.
-        seen = {}
-        for entry in after.values():
-            if entry[0] == "file":
-                key = (entry[5], entry[6])
-                seen[key] = seen.get(key, 0) + 1
-        for path, entry in after.items():
-            if not any(_under(path, prefix) for prefix in prefixes):
-                continue
-            if entry[0] == "link" and link_escapes(path):
-                violations.append({"path": path, "why": "symlink under write-prefix escapes it"})
-            elif entry[0] == "file" and entry[7] > seen.get((entry[5], entry[6]), 1):
-                violations.append({"path": path, "why": "hardlink under write-prefix has an alias outside the workspace"})
-        violations.sort(key=lambda v: v["path"])
-    if not prefixes:
-        status = "unchecked"
-    elif violations:
-        status = "scope_violation"
-    else:
-        status = "ok"
-    return {
-        "prefixes": list(prefixes),
-        "status": status,
-        "changed_count": len(changed),
-        "changed": changed[:SCOPE_LIST_CAP],
-        "violation_count": len(violations),
-        "violations": violations[:SCOPE_LIST_CAP],
-        "files_scanned": len(after),
-        "seconds": round(seconds, 3),
-    }
-
-
-def _git_process(args, cwd, input_bytes=None, timeout=30):
-    try:
-        return subprocess.run(
-            ["git", *args], cwd=cwd, input=input_bytes, capture_output=True,
-            timeout=timeout, check=False, env=_git_env(),
-        )
-    except (OSError, subprocess.TimeoutExpired) as e:
-        raise InputError(_text("worker.git_failed", error_type=type(e).__name__))
-
-
-def _git_require(args, cwd, input_bytes=None):
-    proc = _git_process(args, cwd, input_bytes=input_bytes)
-    if proc.returncode != 0:
-        detail = proc.stderr.decode("utf-8", errors="replace").strip()
-        raise InputError(_text("worker.git_command_failed", command=" ".join(args[:2]),
-                               detail=detail or "exit " + str(proc.returncode)))
-    return proc.stdout
-
-
-def _remove_worktree(worktree):
-    proc = _git_process(["worktree", "remove", "--force", worktree], ROOT)
-    if proc.returncode != 0:
-        detail = proc.stderr.decode("utf-8", errors="replace").strip()
-        raise RuntimeError(_text("worker.worktree_cleanup_failed", detail=detail or proc.returncode))
 
 
 def _snapshot_read_materials(paths):
@@ -803,9 +556,8 @@ def _snapshot_read_materials(paths):
                 any(part in ("", ".", "..") for part in path.split("/")) or
                 any(ord(c) < 32 for c in path)):
             raise InputError("read material must be a canonical ROOT-relative file")
-        source, body = read_prompt(path)  # UTF-8 regular file, ROOT boundary and symlink checks.
-        denied = _private_refs(source, "")
-        if denied:
+        _source, body = read_workspace_text(path, "read material")
+        if S.policy_denies(path):
             raise InputError("read material denied by model-send policy: " + path)
         if path in WORKTREE_INSTANCE_FILES:
             raise InputError("read material cannot override instance policy: " + path)
@@ -819,377 +571,48 @@ def _snapshot_read_materials(paths):
     return snapshots
 
 
-def _copy_read_materials(worktree, snapshots):
-    hashes = {}
-    for rel, raw in snapshots.items():
-        current = worktree
-        for part in rel.split("/")[:-1]:
-            current = os.path.join(current, part)
-            if os.path.lexists(current):
-                if os.path.islink(current) or not os.path.isdir(current):
-                    raise InputError("read material destination has a non-directory component: " + rel)
-            else:
-                os.mkdir(current, 0o700)
-        target = os.path.join(worktree, rel)
-        if os.path.lexists(target):
-            raise InputError("read material cannot shadow a worktree source file: " + rel)
-        _private_write(target, raw)
-        os.chmod(target, 0o400)
-        hashes[rel] = hashlib.sha256(raw).hexdigest()
-    return hashes
-
-
-def _read_material_violations(workspace, hashes):
-    changed = []
-    for rel, expected in hashes.items():
-        current = workspace
-        linked = False
-        for part in rel.split("/"):
-            current = os.path.join(current, part)
-            if os.path.islink(current):
-                linked = True
-                break
-        path = os.path.join(workspace, rel)
-        if linked or not os.path.isfile(path) or _sha256(path) != expected:
-            changed.append(rel)
-    return changed
-
-
-def _prepare_worktree(run_dir, mode, read_materials=None):
-    base_raw = _git_require(["rev-parse", "HEAD"], ROOT)
-    base_rev = base_raw.decode("ascii", errors="strict").strip()
-    worktree = os.path.join(run_dir, "wt")
-    added = False
-    try:
-        # HEAD can move between rev-parse and worktree creation. Use the revision
-        # recorded in the receipt, rather than resolving HEAD a second time.
-        _git_require(["worktree", "add", "--detach", worktree, base_rev], ROOT)
-        added = True
-        if mode == "dirty":
-            dirty = _git_require(["diff", "HEAD", "--binary"], ROOT)
-            if dirty:
-                _git_require(["apply", "-"], worktree, input_bytes=dirty)
-        copied = []
-        instance_sha256 = {rel: None for rel in WORKTREE_INSTANCE_FILES}
-        for rel in WORKTREE_INSTANCE_FILES:
-            source = os.path.join(ROOT, rel)
-            if not os.path.isfile(source):
-                continue
-            destination = os.path.join(worktree, rel)
-            os.makedirs(os.path.dirname(destination), exist_ok=True)
-            shutil.copy2(source, destination)
-            copied.append(rel)
-            instance_sha256[rel] = _sha256(destination)
-        os.makedirs(os.path.join(worktree, "state"), exist_ok=True)
-        material_sha256 = _copy_read_materials(worktree, read_materials or {})
-        copied.extend(material_sha256)
-        return os.path.realpath(worktree), {
-            "mode": mode,
-            "base_rev": base_rev,
-            "instance_sha256": instance_sha256,
-            "material_sha256": material_sha256,
-            "material_integrity": True,
-            "patch_sha256": None,
-            "files": [],
-            "added": 0,
-            "deleted": 0,
-        }, copied
-    except BaseException:
-        if added:
-            _remove_worktree(worktree)
-        raise
-
-
-def _worktree_pathspec(copied):
-    return [".", *[f":(exclude){rel}" for rel in copied]]
-
-
-def _capture_exclusion(rel, entry):
-    """Conservative artifact export policy; this is not a filesystem sandbox."""
-    parts = rel.split("/")
-    reserved = {"_private", "cache", "caches", "node_modules", "__pycache__", "credentials",
-                "credential", "secrets", "secret", "keys"}
-    if any(p.startswith(".") or p.lower() in reserved for p in parts):
-        return "private, hidden, credential, or cache path"
-    name = parts[-1].lower()
-    if (name.startswith(("credentials.", "credential.", "secrets.", "secret.", "id_rsa", "id_ed25519"))
-            or name.endswith((".pem", ".key", ".p12", ".pfx", ".keychain"))):
-        return "credential-shaped filename"
-    if any(ord(c) < 32 for c in rel):
-        return "filename is not representable in the line-delimited artifact list"
-    if entry[0] != "file" or entry[7] != 1:
-        return "output is not a single-link regular file"
-    return None
-
-
-def _read_capture_output(worktree, rel):
-    current = worktree
-    for part in rel.split("/"):
-        current = os.path.join(current, part)
-        if stat.S_ISLNK(os.lstat(current).st_mode):
-            raise InputError("symlink encountered during output capture")
-    fd = os.open(current, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    with os.fdopen(fd, "rb") as stream:
-        info = os.fstat(stream.fileno())
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-            raise InputError("output capture requires a single-link regular file")
-        return stream.read()
-
-
-def _capture_worktree(worktree, run_dir, copied, prefixes=(), before=None, after=None):
-    """Capture Git changes and explicitly scoped ignored outputs before cleanup."""
-    before, after = before or {}, after or {}
-    candidates = sorted(path for path, entry in after.items()
-                        if entry[0] != "dir" and before.get(path) != entry
-                        and path not in copied and any(_under(path, p) for p in prefixes))
-    ignored = []
-    if candidates:
-        result = _git_process(["check-ignore", "--stdin", "-z"], worktree,
-                              input_bytes=b"\0".join(os.fsencode(p) for p in candidates) + b"\0")
-        if result.returncode not in (0, 1):
-            raise InputError("ignored output discovery failed")
-        if ((result.returncode == 0 and (not result.stdout or not result.stdout.endswith(b"\0")))
-                or (result.returncode == 1 and result.stdout)):
-            raise InputError("ignored output discovery returned an incomplete listing")
-        ignored = sorted(os.fsdecode(p) for p in result.stdout.split(b"\0") if p)
-        if not set(ignored).issubset(candidates):
-            raise InputError("ignored output discovery returned an unexpected path")
-    captured, skipped, output_hashes = [], [], {}
-    for rel in ignored:
-        reason = _capture_exclusion(rel, after[rel])
-        if reason:
-            skipped.append({"path": rel, "why": reason})
-            continue
-        raw = _read_capture_output(worktree, rel)
-        parent = run_dir
-        for part in ("untracked", *rel.split("/")[:-1]):
-            parent = os.path.join(parent, part)
-            try:
-                os.mkdir(parent, 0o700)
-            except FileExistsError:
-                if not stat.S_ISDIR(os.lstat(parent).st_mode):
-                    raise InputError("artifact destination has a non-directory component")
-        destination = os.path.join(parent, rel.split("/")[-1])
-        _private_write(destination, raw)
-        digest = hashlib.sha256(raw).hexdigest()
-        if _sha256(destination) != digest:
-            raise InputError("captured output hash mismatch")
-        captured.append(rel)
-        output_hashes[rel] = digest
-    pathspec = _worktree_pathspec(copied)
-    raw_untracked = _git_require(
-        ["ls-files", "--others", "--exclude-standard", "-z", "--", *pathspec], worktree,
-    )
-    untracked = sorted(
-        p for p in raw_untracked.decode("utf-8", errors="surrogateescape").split("\0") if p
-    )
-    if untracked:
-        _git_require(["add", "-N", "--", *untracked], worktree)
-    if captured:
-        # Intent-to-add affects only the disposable worktree index, not the source repository.
-        _git_require(["add", "-N", "-f", "--", *captured], worktree)
-        untracked = sorted(set(untracked) | set(captured))
-    patch = _git_require(["diff", "HEAD", "--binary", "--", *pathspec], worktree)
-    raw_files = _git_require(["diff", "HEAD", "--name-only", "-z", "--", *pathspec], worktree)
-    files = sorted(
-        p for p in raw_files.decode("utf-8", errors="surrogateescape").split("\0") if p
-    )
-    numstat = _git_require(["diff", "HEAD", "--numstat", "-z", "--", *pathspec], worktree)
-    added = deleted = 0
-    fields = numstat.decode("utf-8", errors="surrogateescape").split("\0")
-    for field in fields:
-        if not field:
-            continue
-        columns = field.split("\t", 2)
-        if len(columns) >= 2:
-            if columns[0].isdigit():
-                added += int(columns[0])
-            if columns[1].isdigit():
-                deleted += int(columns[1])
-    patch_path = os.path.join(run_dir, "patch.diff")
-    untracked_path = os.path.join(run_dir, "untracked.txt")
-    _private_write(patch_path, patch)
-    _private_write(untracked_path, "".join(f"{path}\n" for path in untracked))
-    for rel, digest in output_hashes.items():
-        if hashlib.sha256(_read_capture_output(worktree, rel)).hexdigest() != digest:
-            raise InputError("output changed during capture")
-    return {
-        "capture_status": "incomplete" if skipped else "complete",
-        "ignored_captured": captured,
-        "capture_skipped": skipped,
-        "output_sha256": output_hashes,
-        "patch_sha256": _sha256(patch_path),
-        "files": files,
-        "added": added,
-        "deleted": deleted,
-    }
-
-
 def _write_meta(path, meta):
-    _private_write(path, json.dumps(meta, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+    # backslashreplace writes a lone surrogate from a non-UTF-8 file name as a JSON escape, so the
+    # record stays valid UTF-8 and readable.
+    S.private_write(path, (json.dumps(meta, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+                   .encode("utf-8", "backslashreplace"))
 
 
-def _utf8_prefix(text, max_bytes):
-    """Longest prefix of text within max_bytes that ends on a UTF-8 character boundary."""
-    return text.encode("utf-8")[:max(0, max_bytes)].decode("utf-8", errors="ignore")
-
-
-def _clip_line(text, max_bytes=RECEIPT_LINE_MAX_BYTES):
-    if len(text.encode("utf-8")) <= max_bytes:
-        return text
-    return _utf8_prefix(text, max_bytes - len("…".encode("utf-8"))) + "…"
-
-
-def _header_value(value):
-    """Show line breaks and other control characters in a header value as escapes.
-
-    Receipt readers split the header into "name: value" lines, so a raw line break inside a
-    value written by a worker could add a second verdict or a false full-text command.
-    """
-    out = []
-    for ch in str(value):
-        if ch in _HEADER_ESCAPES:
-            out.append(_HEADER_ESCAPES[ch])
-        elif unicodedata.category(ch) in ("Cc", "Zl", "Zp"):
-            code = ord(ch)
-            out.append(f"\\x{code:02x}" if code < 0x100 else f"\\u{code:04x}")
-        else:
-            out.append(ch)
-    return "".join(out)
-
-
-_HEADER_ESCAPES = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}
-# Bytes kept for the start of a partly shown unknown, so a counted line never ends on a bare "; ".
-_UNKNOWN_MIN_START_BYTES = 24
-
-
-def _unknowns_line(unknowns, max_bytes=RECEIPT_LINE_MAX_BYTES):
-    """Join the worker's unknowns on one header line.
-
-    When they do not all fit, the line starts with the total and the number left out, then as
-    many whole items as fit and the start of the next one; a reader then knows that something
-    is missing even when the cut item was the important one.
-    """
-    items = [_header_value(item) for item in unknowns]
-    plain = "unknowns: " + "; ".join(items)
-    if len(plain.encode("utf-8")) <= max_bytes:
-        return plain
-    total = len(items)
-    for whole in range(total - 1, -1, -1):
-        shown = whole + 1
-        prefix = f"unknowns: {total} total, {total - shown} omitted; "
-        lead = prefix + "".join(item + "; " for item in items[:whole])
-        if whole == 0 or len(lead.encode("utf-8")) + _UNKNOWN_MIN_START_BYTES <= max_bytes:
-            return _clip_line(lead + items[whole], max_bytes)
-    return _clip_line(plain, max_bytes)
-
-
-def _expect_line(expect):
-    total = len(expect["paths"])
-    if not expect["missing"]:
-        return f"expect: {expect['present']}/{total} present"
-    missing = ", ".join(f"{_header_value(item['path'])} ({item['why']})"
-                        for item in expect["missing"])
-    return _clip_line(f"expect: missing {missing}; {expect['present']}/{total} present")
-
-
-def _receipt(meta, result, max_bytes=RECEIPT_MAX_BYTES):
-    """Render the caller-facing receipt; receipts.py show reuses it with max_bytes=None.
-
-    The decision fields come first: verdict, the worker's unknowns, and where the full text lives.
-    A long result keeps its beginning, so a cut can drop the RESULT_JSON tail but never the verdict.
-    """
-    def field(key):
-        value = meta.get(key)
-        return "-" if value is None else _header_value(value)
-
-    scope = meta.get("scope") if isinstance(meta.get("scope"), dict) else {}
-    worktree = meta.get("worktree") if isinstance(meta.get("worktree"), dict) else {}
-    expect = meta.get("expect") if isinstance(meta.get("expect"), dict) else None
-    run_id = _clip_line(_header_value(meta.get("run_id")
-                                      or os.path.basename(str(meta.get("run") or ""))
-                                      or "<run-id>"), 256)
-    show = f"python3 tools/receipts.py show {run_id}"
-    contract = _result_contract(result)
-    if expect is not None and expect["missing"]:
-        verdict = "INCONCLUSIVE (expected output missing)"
-    elif contract["valid"]:
-        verdict = contract["verdict"]
-    else:
-        verdict = f"INCONCLUSIVE ({_header_value(contract['error'])})"
-    head = ["FRESH_WORKER v1", f"verdict: {verdict}"]
-    if contract["valid"] and contract["unknowns"]:
-        head.append(_unknowns_line(contract["unknowns"]))
-    head.append(f"full: {show}")
-    if expect is not None:
-        head.append(_expect_line(expect))
-    head += [
-        f"run: {_clip_line(field('run'), 256)}",
-        f"runtime: {field('runtime')}",
-        f"capability: {field('capability')}",
-        f"status: {field('status')}",
-        f"process_exit: {field('process_exit')}",
-        f"wrapper_exit: {field('wrapper_exit')}",
-        f"prompt_sha256: {field('prompt_sha256')}",
-        f"stream_sha256: {field('stream_sha256')}",
-        f"result_sha256: {field('result_sha256')}",
-        f"result_bytes: {field('result_bytes')}",
-        f"scope: {_header_value(scope.get('status', '-'))} "
-        f"(changed {_header_value(scope.get('changed_count', '-'))}, "
-        f"violations {_header_value(scope.get('violation_count', '-'))})",
-    ]
-    if worktree.get("mode") is not None:
-        head.append(f"patch: {len(worktree['files'])} files "
-                    f"(+{worktree['added']}/-{worktree['deleted']})")
-    fixed = "\n".join(head) + "\nresult:\n"
-    body = result if result else "[final result unavailable; inspect the private run record]"
-    fixed_bytes = len(fixed.encode("utf-8"))
-    body_bytes = len(body.encode("utf-8"))
-    if max_bytes is None or fixed_bytes + body_bytes <= max_bytes:
-        return fixed + body
-
-    def marker(kept):
-        return (f"\n[truncated: kept the first {kept} of {body_bytes} bytes; "
-                f"full result: {show}]\n")
-
-    # The kept count is part of the marker, so size the marker for the widest count first.
-    room = max_bytes - fixed_bytes - len(marker(body_bytes).encode("utf-8"))
-    if room < 128:
-        raise AssertionError("receipt fixed fields exceed the byte budget")
-    kept = _utf8_prefix(body, room)
-    receipt = fixed + kept + marker(len(kept.encode("utf-8")))
-    if len(receipt.encode("utf-8")) > max_bytes:
-        raise AssertionError("receipt byte budget calculation failed")
-    return receipt
+def _stderr_tail(path):
+    """The last few stderr lines, so a failed run's cause (for example a 401) reaches the caller."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(max(0, os.fstat(f.fileno()).st_size - 8192))
+            text = f.read().decode("utf-8", errors="replace")
+    except OSError:
+        return []
+    # A whole colour sequence goes, not just its ESC, and a tab still separates the words around it.
+    text = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text).replace("\t", " ")
+    lines = ["".join(ch for ch in line if ch.isprintable()).strip() for line in text.splitlines()]
+    tail = "\n".join([line for line in lines if line][-STDERR_TAIL_LINES:])[-STDERR_TAIL_CHARS:]
+    return [line.strip() for line in tail.splitlines()]
 
 
 def _expect_paths(paths):
     """Validate --expect paths before any run: inside ROOT, also after resolving symlinks."""
-    root_real = os.path.realpath(ROOT)
     checked = []
     for path in paths:
         if not path or "\0" in path:
             raise InputError("--expect path is empty")
-        absolute = os.path.abspath(path if os.path.isabs(path) else os.path.join(ROOT, path))
-        rel = os.path.relpath(absolute, os.path.abspath(ROOT))
-        real = os.path.realpath(absolute)
-        if (rel in (os.curdir, os.pardir) or rel.startswith(os.pardir + os.sep)
-                or os.path.commonpath((real, root_real)) != root_real):
+        rel = S.root_relative(path, ROOT)
+        if rel in (None, ".") or not S.inside(os.path.join(ROOT, rel), ROOT):
             raise InputError("--expect path is outside the workspace: " + path)
-        rel = rel.replace(os.sep, "/")
         if rel not in checked:
             checked.append(rel)
     return checked
 
 
-def _check_expect(workspace, paths):
-    """Each expected output must be a non-empty regular file that stays inside the workspace."""
-    workspace_real = os.path.realpath(workspace)
+def _check_expect(workdir, paths):
+    """Each expected output must be a non-empty regular file that stays inside workdir."""
     missing = []
     for rel in paths:
-        full = os.path.join(workspace, *rel.split("/"))
-        real = os.path.realpath(full)
-        if os.path.commonpath((real, workspace_real)) != workspace_real:
+        full = os.path.join(workdir, *rel.split("/"))
+        if not S.inside(full, workdir):
             why = "outside workspace"
         elif not os.path.lexists(full):
             why = "absent"
@@ -1203,53 +626,90 @@ def _check_expect(workspace, paths):
     return {"paths": list(paths), "present": len(paths) - len(missing), "missing": missing}
 
 
-def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
-                   worktree_meta, copied, write_prefixes=(), strict_scope=False, batch=None,
-                   expect=()):
-    prefixes = [_normalize_prefix(p, root=workspace) for p in write_prefixes]
-    rel_run = os.path.relpath(run_dir, ROOT).replace(os.sep, "/")
-    for prefix in prefixes:
-        # Create the write prefix before the baseline so dispatcher setup is not counted as worker output.
-        os.makedirs(os.path.join(workspace, prefix), exist_ok=True)
-    t_scope = time.monotonic()
-    exclude_rel = rel_run if os.path.realpath(workspace) == os.path.realpath(ROOT) else "__outside__"
-    strict_root = os.path.realpath(workspace) == os.path.realpath(ROOT)
-    before = _workspace_snapshot(
-        exclude_rel, root=workspace, include_git=strict_scope,
-        include_parent=(strict_scope and strict_root),
-    )
-    scope_seconds = time.monotonic() - t_scope
-    prompt_path = os.path.join(run_dir, "prompt.md")
-    stream_path = os.path.join(run_dir, "stream.jsonl")
-    stderr_path = os.path.join(run_dir, "stderr.log")
-    result_path = os.path.join(run_dir, "result.txt")
-    result_contract_path = os.path.join(run_dir, "result-contract.json")
-    runtime_result_path = (os.path.join(workspace, f".mottori-worker-result-{run_id}")
-                           if worktree_meta["mode"] is not None else result_path)
-    meta_path = os.path.join(run_dir, "meta.json")
-    effective = _effective_prompt(runtime, body)
-    _private_write(prompt_path, effective)
+def _timeout_seconds(value):
+    """Seconds the runtime may run: the option, else MOTTORI_FRESH_WORKER_TIMEOUT, else the default."""
+    if value is None:
+        value = os.environ.get("MOTTORI_FRESH_WORKER_TIMEOUT") or DEFAULT_TIMEOUT_SECONDS
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        seconds = None
+    if seconds is None or not 0 < seconds <= MAX_TIMEOUT_SECONDS:
+        raise InputError(f"--timeout must be a positive number of seconds, at most {MAX_TIMEOUT_SECONDS}")
+    return seconds
 
-    capability = CAPABILITIES[runtime]
-    command = _claude_command() if runtime == "claude" else _codex_command(runtime_result_path)
-    identity = _engine_identity()
-    # The engine runs from ROOT, while the worker reads AGENTS.md in its actual cwd.
-    identity["root_agents_sha256"] = identity["agents_sha256"]
-    identity["agents_sha256"] = _sha256(os.path.join(workspace, "AGENTS.md"))
-    meta = {
+
+@dataclasses.dataclass
+class Run:
+    """What one run settled before its runtime starts; each phase below reads it.
+
+    worktree_meta is the record's worktree entry, filled in as the run goes. before is the
+    worktree's snapshot at the start ({} outside a worktree) and scope_seconds the time it took.
+    """
+    runtime: str
+    run_id: str
+    run_dir: str
+    workdir: str
+    where: str
+    web: bool
+    timeout: float
+    worktree_meta: dict
+    placed: list
+    prefixes: list
+    expect: list
+    before: dict
+    scope_seconds: float
+    paths: dict
+    read_only: bool = False
+
+    @property
+    def in_worktree(self):
+        return self.worktree_meta["mode"] is not None
+
+
+def _run_paths(run_dir, workdir, run_id, in_worktree):
+    """The files of one run record. In a worktree Codex writes its result inside the worktree,
+    and the result is moved into the record afterwards."""
+    paths = {name: os.path.join(run_dir, file) for name, file in (
+        ("prompt", "prompt.md"), ("stream", "stream.jsonl"), ("stderr", "stderr.log"),
+        ("result", "result.txt"), ("contract", "result-contract.json"), ("meta", "meta.json"))}
+    paths["runtime_result"] = (os.path.join(workdir, f".mottori-worker-result-{run_id}")
+                               if in_worktree else paths["result"])
+    return paths
+
+
+def _start_scope(workdir, write_prefixes, in_worktree):
+    """(write prefixes as root-relative paths, the snapshot before the run, seconds it took).
+
+    The prefixes are created before the snapshot, so the dispatcher's setup is not counted as
+    worker output. Only a worktree has the worker as its sole writer, so only there is the
+    write-set measured.
+    """
+    prefixes = [S.normalize_prefix(p, workdir) for p in write_prefixes]
+    for prefix in prefixes:
+        os.makedirs(os.path.join(workdir, prefix), exist_ok=True)
+    t_scope = time.monotonic()
+    before = S.snapshot(workdir) if in_worktree else {}
+    return prefixes, before, time.monotonic() - t_scope
+
+
+def _run_meta(run, source, started, command, effective):
+    """The run record as it stands before the runtime starts."""
+    model, effort = _requested(run.runtime)
+    return {
         "schema_version": META_SCHEMA_VERSION,
-        "run": rel_run,
-        "run_id": run_id,
-        "runtime": runtime,
-        "capability": capability,
-        **identity,
-        "harness_sha256": _harness_sha256(runtime, command, run_specific=(runtime_result_path,)),
-        "usage": {"raw": None, "input": None, "output": None, "total": None},
-        "read_scope": None,
-        "worktree": worktree_meta,
-        "scope": {"prefixes": prefixes, "status": "running", "changed_count": 0, "changed": [],
-                  "violation_count": 0, "violations": [], "files_scanned": len(before),
-                  "seconds": round(scope_seconds, 3)},
+        "run": os.path.relpath(run.run_dir, ROOT).replace(os.sep, "/"),
+        "run_id": run.run_id,
+        "runtime": run.runtime,
+        "capability": capability(run.runtime, run.read_only),
+        "where": run.where,
+        "network": run.web,
+        "model": model,
+        "effort": effort,
+        **_engine_identity(workdir=run.workdir),
+        "usage": dict(NO_USAGE),
+        "worktree": run.worktree_meta,
+        "scope": S.pending_scope(run.prefixes, len(run.before), run.scope_seconds),
         "source_prompt": os.path.relpath(source, ROOT),
         "started_at": started.isoformat(timespec="seconds"),
         "finished_at": None,
@@ -1257,166 +717,248 @@ def _run_workspace(runtime, source, body, run_id, run_dir, started, workspace,
         "process_exit": None,
         "wrapper_exit": None,
         "status": "running",
-        "command": command,
-        "prompt_sha256": _sha256(prompt_path),
+        "unavailable": None,
+        # The prompt is in prompt.md; agy's copy of it in argv is not repeated here.
+        "command": [("<prompt.md>" if arg == effective else arg) for arg in command],
+        "prompt_sha256": S.sha256_file(run.paths["prompt"]),
         "stream_sha256": None,
         "stderr_sha256": None,
         "result_sha256": None,
         "result_bytes": 0,
     }
-    if batch is not None:
-        meta["batch"] = batch
-    _write_meta(meta_path, meta)
 
-    t0 = time.monotonic()
-    process_exit = None
-    launch_error = None
-    stream_fd = os.open(stream_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    stderr_fd = os.open(stderr_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    try:
-        with os.fdopen(stream_fd, "wb") as stream, os.fdopen(stderr_fd, "wb") as err:
+
+def _launch(run, command, effective, stream_fd, stderr_fd):
+    """Run the runtime in its own process group with its output on the two open files, which this
+    closes. Returns (process exit, launch error, timed out)."""
+    process_exit = launch_error = None
+    timed_out = False
+    with os.fdopen(stream_fd, "wb") as stream, os.fdopen(stderr_fd, "wb") as err:
+        try:
+            proc = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=stream,
+                stderr=err,
+                cwd=run.workdir,
+                env=_runtime_env(run.runtime, run.workdir),
+                start_new_session=True,
+            )
             try:
-                proc = subprocess.Popen(
-                    command,
-                    stdin=subprocess.PIPE,
-                    stdout=stream,
-                    stderr=err,
-                    cwd=workspace,
-                    env=_runtime_env(runtime, workspace),
-                    start_new_session=True,
-                )
-                try:
-                    proc.communicate(effective.encode("utf-8"))
-                    process_exit = proc.returncode
-                finally:
-                    _stop_runtime_group(proc)
-            except FileNotFoundError as e:
-                launch_error = f"runtime binary not found: {e.filename}"
-                err.write((launch_error + "\n").encode("utf-8"))
-                process_exit = 127
-    except BaseException:
-        # A killed dispatcher still leaves a truthful running/partial record for later inspection.
-        meta["status"] = B.INTERRUPTED_STATUS
-        meta["duration_seconds"] = round(time.monotonic() - t0, 3)
-        meta["stream_sha256"] = _sha256(stream_path)
-        meta["stderr_sha256"] = _sha256(stderr_path)
-        _write_meta(meta_path, meta)
-        raise
+                stdin = effective if RUNTIMES[run.runtime].prompt_on_stdin else ""
+                proc.communicate(stdin.encode("utf-8"), timeout=run.timeout)
+                process_exit = proc.returncode
+            except subprocess.TimeoutExpired:
+                # The finally below reaps the whole group; the run is recorded, not raised.
+                timed_out = True
+            finally:
+                _stop_runtime_group(proc)
+        except OSError as e:
+            missing = isinstance(e, FileNotFoundError)
+            launch_error = (f"runtime binary not found: {e.filename}" if missing
+                            else f"runtime could not start: {type(e).__name__}: {e.strerror}")
+            err.write((launch_error + "\n").encode("utf-8"))
+            process_exit = 127 if missing else 126
+    return process_exit, launch_error, timed_out
 
-    result = None
-    if runtime == "claude" and process_exit == 0:
-        result = _claude_result(stream_path)
-        if result is not None:
-            _private_write(result_path, result)
-    elif runtime == "codex" and os.path.isfile(runtime_result_path):
-        result = open(runtime_result_path, encoding="utf-8", errors="replace").read()
-        if runtime_result_path != result_path:
-            _private_write(result_path, result)
-            os.unlink(runtime_result_path)
-        else:
-            os.chmod(result_path, 0o600)
 
-    _private_write(
-        result_contract_path,
-        json.dumps(_result_contract(result), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-    )
+def _capture(run, after):
+    """Capture the worktree into the record; after None takes the snapshot now. A failure is
+    recorded in the worktree entry, and the worktree stays until a capture completes."""
+    worktree_meta = run.worktree_meta
+    try:
+        if after is None:
+            after = S.snapshot(run.workdir)
+        worktree_meta.update(S.capture_worktree(run.workdir, run.run_dir, run.placed, run.prefixes,
+                                                run.before, after, worktree_meta.get("base_tree")))
+    except Exception as error:
+        worktree_meta.update(capture_status="failed", capture_error=f"{type(error).__name__}: {error}")
+    if worktree_meta.get("capture_status") == "complete":
+        worktree_meta.pop("preserved_path", None)
 
+
+def _status(runtime, process_exit, timed_out, runtime_error, result, worktree_meta, expect_report):
+    """(run status, wrapper exit) from what the run left. The first failure in this order wins:
+    capture, read materials, timeout, an agy refusal, a missing result, the runtime's exit; a
+    missing expected output only turns a success into expected-output-missing."""
+    if worktree_meta.get("capture_status") in ("failed", "incomplete"):
+        status, wrapper_exit = "artifact-capture-" + worktree_meta["capture_status"], WRAPPER_CAPTURE_FAILED
+    elif worktree_meta.get("material_integrity") is False:
+        status, wrapper_exit = "read-material-changed", WRAPPER_MATERIAL_CHANGED
+    elif timed_out:
+        status, wrapper_exit = "timeout", WRAPPER_TIMEOUT
+    elif runtime_error is not None and RUNTIMES[runtime].error_fails_exit_0 and process_exit == 0:
+        status, wrapper_exit = "failed", 1
+    elif process_exit == 0 and (result is None or not result.strip()):
+        status, wrapper_exit = "failed-missing-result", WRAPPER_RESULT_MISSING
+    else:
+        status, wrapper_exit = ("success" if process_exit == 0 else "failed"), process_exit
+    if expect_report is not None and expect_report["missing"] and status == "success":
+        # The run did not deliver what the dispatcher asked for; earlier failures keep their own.
+        status, wrapper_exit = "expected-output-missing", WRAPPER_EXPECT_MISSING
+    if status not in R.FINISHED_STATUSES:
+        # The receipt ledger classifies runs by this shared list.
+        raise AssertionError(f"unregistered worker status: {status}")
+    return status, wrapper_exit
+
+
+def _login_lost(runtime, errors, stderr_tail):
+    """Whether the runtime's error or stderr says its login is missing or expired."""
+    if runtime == "claude":
+        return claude_auth.is_auth_error("\n".join(errors + (stderr_tail or [])))
+    # Codex prints its 401 when the login expired; a stray "401" (a line number) is not that.
+    return runtime == "codex" and bool(re.search(r"401 Unauthorized|status(?: code)?:? 401\b",
+                                                 "\n".join(stderr_tail or [])))
+
+
+def _runtime_errors(runtime, runtime_error, stderr_tail):
+    """The error lines for the receipt, with the one step that fixes a lost login."""
+    errors = [runtime_error] if runtime_error else []
+    if _login_lost(runtime, errors, stderr_tail):
+        errors.append(claude_auth.AUTH_FIX if runtime == "claude" else CODEX_LOGIN_FIX)
+    return errors or None
+
+
+def _error_rows(stream_path):
+    """The error rows at the end of the output stream, as text (Codex reports a refused model
+    only there, with nothing on stderr)."""
+    try:
+        with open(stream_path, "rb") as f:
+            f.seek(max(0, os.fstat(f.fileno()).st_size - ERROR_ROWS_BYTES))
+            lines = f.read().decode("utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    rows = []
+    for line in lines:
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict) and (row.get("type") in ("error", "turn.failed") or row.get("is_error") is True):
+            rows.append(line)
+    return rows
+
+
+def _unavailable(runtime, meta, launch_error, stream_path):
+    """Why the runtime could not be called (its program is missing, its login is lost, or the
+    account cannot use the model), or None, also for a runtime that ran and answered badly."""
+    if meta["status"] == "success":
+        return None
+    if launch_error and meta["process_exit"] == 127:
+        return NOT_INSTALLED
+    errors = meta.get("runtime_error") or []
+    if _login_lost(runtime, errors, meta.get("stderr_tail")):
+        return NOT_SIGNED_IN
+    if MODEL_REFUSED.search("\n".join(errors + (meta.get("stderr_tail") or []) + _error_rows(stream_path))):
+        return MODEL_NOT_AVAILABLE
+    return None
+
+
+def _finish(run, meta, process_exit, timed_out):
+    """Read the result, measure and capture the worktree, choose the status and write the final
+    record. Returns (result text or None, wrapper exit)."""
+    runtime, paths, worktree_meta = run.runtime, run.paths, run.worktree_meta
+    if run.in_worktree:
+        # The worktree now holds the worker's output: _run keeps it until capture completes,
+        # also when the result handling below fails.
+        worktree_meta.update(capture_status="in_progress", preserved_path=run.workdir)
+    result, runtime_error, extra = RUNTIMES[runtime].read(paths, process_exit)
+    meta.update(extra)
+    S.private_write(paths["contract"], json.dumps(R.result_contract(result), ensure_ascii=False,
+                                                  indent=2, sort_keys=True) + "\n")
     t_scope = time.monotonic()
-    after = _workspace_snapshot(
-        exclude_rel, root=workspace, include_git=strict_scope,
-        include_parent=(strict_scope and strict_root),
-    )
-    scope = _scope_report(prefixes, before, after, scope_seconds + (time.monotonic() - t_scope),
-                          root=workspace)
-    if worktree_meta["mode"] is not None:
-        material_changes = _read_material_violations(workspace, worktree_meta.get("material_sha256", {}))
+    after = S.snapshot(run.workdir) if run.in_worktree else {}
+    scope = (S.scope_report(run.prefixes, run.before, after,
+                            run.scope_seconds + (time.monotonic() - t_scope), run.workdir)
+             if run.in_worktree else S.unmeasured_scope(run.prefixes, run.where))
+    if run.in_worktree:
+        material_changes = S.read_material_violations(run.workdir, worktree_meta.get("material_sha256", {}))
         worktree_meta["material_integrity"] = not material_changes
         worktree_meta["material_changes"] = material_changes
-        # Persist recovery ownership before capture; TERM can interrupt any artifact write.
-        worktree_meta.update(capture_status="in_progress", preserved_path=workspace)
-        _write_meta(meta_path, meta)
-        try:
-            worktree_meta.update(_capture_worktree(workspace, run_dir, copied, prefixes, before, after))
-        except Exception as error:
-            worktree_meta.update(capture_status="failed", capture_error=f"{type(error).__name__}: {error}")
-        if worktree_meta.get("capture_status") == "complete":
-            worktree_meta.pop("preserved_path", None)
-
-    expect_report = _check_expect(workspace, expect) if expect else None
-
-    if worktree_meta.get("capture_status") in ("failed", "incomplete"):
-        wrapper_exit = WRAPPER_CAPTURE_FAILED
-        status_name = "artifact-capture-" + worktree_meta["capture_status"]
-    elif worktree_meta.get("material_integrity") is False:
-        wrapper_exit = WRAPPER_SCOPE_VIOLATION
-        status_name = "read-material-changed"
-    elif strict_scope and scope["status"] == "scope_violation":
-        # Record post-run violations without rollback. Strict violations override the reported runtime status; retain the original process exit separately.
-        wrapper_exit = WRAPPER_SCOPE_VIOLATION
-        status_name = "scope_violation"
-        if process_exit == 0 and (result is None or not result.strip()):
-            result = None
-    elif process_exit == 0 and (result is None or not result.strip()):
+        # Write the record that names the kept worktree before capture: a TERM can interrupt any
+        # write that follows.
+        _write_meta(paths["meta"], meta)
+        _capture(run, after)
+    expect_report = _check_expect(run.workdir, run.expect) if run.expect else None
+    if expect_report is not None and run.in_worktree:
+        S.mark_uncaptured(expect_report, run.workdir, worktree_meta)
+    status, wrapper_exit = _status(runtime, process_exit, timed_out, runtime_error, result,
+                                   worktree_meta, expect_report)
+    if status == "failed-missing-result":
         result = None
-        wrapper_exit = WRAPPER_RESULT_MISSING
-        status_name = "failed-missing-result"
-    else:
-        wrapper_exit = process_exit
-        status_name = "success" if process_exit == 0 else "failed"
     if expect_report is not None:
         meta["expect"] = expect_report
-        # A run that otherwise succeeded did not deliver what the dispatcher asked for; earlier
-        # failures keep their own status and nonzero exit.
-        if expect_report["missing"] and status_name == "success":
-            wrapper_exit = WRAPPER_EXPECT_MISSING
-            status_name = "expected-output-missing"
-    if status_name not in B.FINISHED_STATUSES:
-        # Batch coverage and the receipt ledger classify runs by this shared list.
-        raise AssertionError(f"unregistered worker status: {status_name}")
-
-    finished = datetime.datetime.now().astimezone()
+    stderr_tail = _stderr_tail(paths["stderr"]) if status != "success" else None
     meta.update({
-        "finished_at": finished.isoformat(timespec="seconds"),
-        "duration_seconds": round(time.monotonic() - t0, 3),
+        "finished_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
         "process_exit": process_exit,
         "wrapper_exit": wrapper_exit,
-        "status": status_name,
-        "launch_error": launch_error,
-        "stream_sha256": _sha256(stream_path),
-        "stderr_sha256": _sha256(stderr_path),
-        "result_sha256": _sha256(result_path),
-        "result_bytes": os.path.getsize(result_path) if os.path.isfile(result_path) else 0,
-        "usage": _usage(runtime, stream_path),
-        "read_scope": _read_scope(result),
+        "status": status,
+        "stderr_tail": stderr_tail,
+        "runtime_error": _runtime_errors(runtime, runtime_error, stderr_tail),
+        "usage": _usage(runtime, paths["stream"]),
         "scope": scope,
     })
-    _write_meta(meta_path, meta)
-    return _receipt(meta, result), wrapper_exit
+    return result, wrapper_exit
 
 
-def _batch_identity(batch_manifest, slot, source, body):
-    if batch_manifest is None and slot is None:
-        return None
-    if batch_manifest is None or slot is None:
-        raise InputError("--batch-manifest and --slot must be used together")
+def _record_files(meta, paths):
+    """Hash the run's stream, stderr and result into the record."""
+    meta["stream_sha256"] = S.sha256_file(paths["stream"])
+    meta["stderr_sha256"] = S.sha256_file(paths["stderr"])
+    # A result the runtime wrote before an interruption is recorded with its hash too, so show can
+    # still tell later edits from the bytes the run left.
+    meta["result_sha256"] = S.sha256_file(paths["result"])
+    meta["result_bytes"] = os.path.getsize(paths["result"]) if os.path.isfile(paths["result"]) else 0
+
+
+def _record_interrupted(run, meta, t0):
+    """Leave a truthful partial record, never "running", when the run was killed or crashed.
+
+    Interrupted while the runtime ran, the worktree's contents are captured before _run removes
+    it, and the worktree is kept when that capture cannot finish.
+    """
+    paths, worktree_meta = run.paths, run.worktree_meta
+    if run.in_worktree and "capture_status" not in worktree_meta:
+        worktree_meta.update(capture_status="in_progress", preserved_path=run.workdir)
+        try:
+            _write_meta(paths["meta"], meta)
+            _move_runtime_result(paths)
+        except Exception as error:
+            worktree_meta.update(capture_status="failed", capture_error=f"{type(error).__name__}: {error}")
+        else:
+            _capture(run, None)
+    meta["status"] = R.INTERRUPTED_STATUS
+    meta["duration_seconds"] = round(time.monotonic() - t0, 3)
+    meta["stderr_tail"] = _stderr_tail(paths["stderr"])
+    _record_files(meta, paths)
+    _write_meta(paths["meta"], meta)
+
+
+def _run_once(run, source, body, started):
+    """Run the runtime once in the run's workdir (the instance, a copy or a worktree) and record
+    the run. Returns (receipt text, wrapper exit)."""
+    paths = run.paths
+    effective = R.worker_prompt(capability(run.runtime, run.read_only), body)
+    S.private_write(paths["prompt"], effective)
+    command = RUNTIMES[run.runtime].command(run, effective)
+    meta = _run_meta(run, source, started, command, effective)
+    _write_meta(paths["meta"], meta)
+    t0 = time.monotonic()
+    stream_fd = os.open(paths["stream"], os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    stderr_fd = os.open(paths["stderr"], os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
-        manifest, manifest_sha = B.load_manifest(batch_manifest)
-    except B.BatchError as e:
-        raise InputError(f"batch manifest rejected: {e}")
-    row = next((item for item in manifest["slots"] if item["name"] == slot), None)
-    if row is None:
-        raise InputError("slot is not present in the batch manifest")
-    source_rel = os.path.relpath(source, ROOT).replace(os.sep, "/")
-    if source_rel != row["prompt"]:
-        raise InputError("prompt path does not match the batch slot")
-    prompt_sha = hashlib.sha256(body.encode("utf-8")).hexdigest()
-    if prompt_sha != row["prompt_sha256"]:
-        raise InputError("prompt SHA does not match the batch slot")
-    return {
-        "manifest_sha256": manifest_sha,
-        "slot": slot,
-        "prompt_sha256": prompt_sha,
-    }
+        process_exit, launch_error, timed_out = _launch(run, command, effective, stream_fd, stderr_fd)
+        result, wrapper_exit = _finish(run, meta, process_exit, timed_out)
+        meta["duration_seconds"] = round(time.monotonic() - t0, 3)
+        meta["launch_error"] = launch_error
+        meta["unavailable"] = _unavailable(run.runtime, meta, launch_error, paths["stream"])
+        _record_files(meta, paths)
+        _write_meta(paths["meta"], meta)
+    except BaseException:
+        _record_interrupted(run, meta, t0)
+        raise
+    return R.render_receipt(meta, result), wrapper_exit
 
 
 def _stop_runtime_group(proc):
@@ -1424,7 +966,8 @@ def _stop_runtime_group(proc):
     for sig in (signal.SIGTERM, signal.SIGKILL):
         try:
             os.killpg(proc.pid, sig)
-        except ProcessLookupError:
+        # macOS answers EPERM when every member left in the group is a zombie; nothing is left to kill.
+        except (ProcessLookupError, PermissionError):
             break
         if sig == signal.SIGTERM:
             try:
@@ -1456,44 +999,124 @@ def run(*args, **kwargs):
             signal.signal(sig, handler)
 
 
-def _run(runtime, prompt_file, write_prefixes=(), strict_scope=False, worktree_mode=None,
-         expect=(), batch_manifest=None, slot=None, read_materials=()):
-    if M.CONFIG_ERROR == "invalid":
-        raise InputError("memory config validation failed: " + (M.CONFIG_ERROR_DETAIL or "unknown"))
-    if strict_scope and not write_prefixes:
-        raise InputError(_text("worker.strict_scope_needs_prefix"))
+def _record_cleanup_error(run_dir, error):
+    print(f"fresh-worker warning: {error}", file=sys.stderr)
+    meta_path = os.path.join(run_dir, "meta.json")
+    try:
+        with open(meta_path, encoding="utf-8") as f:
+            meta = json.load(f)
+        meta["worktree"]["cleanup_error"] = str(error)
+        _write_meta(meta_path, meta)
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+
+
+def _finish_note(run_id, runtime, run_dir):
+    # The receipt is already out, so a note that cannot be saved only warns.
+    try:
+        with open(os.path.join(run_dir, "meta.json"), encoding="utf-8") as f:
+            status = json.load(f).get("status") or "-"
+        import notes
+        notes.finish(run_id, runtime, status)
+    except Exception as error:  # noqa: BLE001 - the run's outcome must not change
+        print(f"fresh-worker warning: finish note not saved ({type(error).__name__}: {error})",
+              file=sys.stderr)
+
+
+def _write_run_file(path, run_id, run_dir):
+    """Tell a caller where the run is, as JSON, once its folder exists; meta.json there says how it ended."""
+    S.private_write(path, json.dumps({"run_id": run_id, "run_dir": run_dir}) + "\n")
+
+
+def _refuse_options(write_prefixes, worktree_mode, expect, read_materials, read_only, runtime=None):
+    """Refuse a configuration or a combination of options that cannot work, before anything is prepared."""
+    if C.error() == "invalid":
+        raise InputError("memory config validation failed: " + (C.error_detail() or "unknown"))
     if read_materials and worktree_mode is None:
         raise InputError("--read-material requires an isolated --worktree")
-    source, body = read_prompt(prompt_file)
-    denied_refs = _private_refs(source, body)
-    if denied_refs:
-        raise InputError(_private_ref_refusal(", ".join(denied_refs)))
-    batch = _batch_identity(batch_manifest, slot, source, body)
+    # A Claude or Gemini worker is read-only whatever the flags say, so it cannot meet a write scope.
+    if (read_only or CAPABILITIES.get(runtime) == "read-only") and (write_prefixes or expect):
+        raise InputError(WORKER_READ_ONLY_WRITES)
+
+
+def _run(runtime, prompt_file, write_prefixes=(), worktree_mode=None,
+         expect=(), read_materials=(), timeout=None, web=False, finish_note=False, run_file=None,
+         read_only=False):
+    _refuse_options(write_prefixes, worktree_mode, expect, read_materials, read_only, runtime)
+    where = _placement(runtime, web)
+    if where == "copy" and (write_prefixes or expect or worktree_mode is not None):
+        # A copy is deleted after the run, so nothing written there could be delivered.
+        raise InputError(WORKER_COPY_KEEPS_NO_WRITES.format(runtime=runtime))
+    source, body = read_workspace_text(prompt_file)
+    if where == "copy" or worktree_mode is not None:
+        # The prompt's words are not read for paths. Its file is judged like a read material: a
+        # copy or a worktree is given nothing from a path the model-send policy denies.
+        source_rel = os.path.relpath(source, ROOT).replace(os.sep, "/")
+        if S.policy_denies(source_rel):
+            raise InputError(WORKER_PROMPT_FILE_DENIED.format(path=source_rel))
     expect = _expect_paths(expect)
+    for prefix in write_prefixes:
+        S.normalize_prefix(prefix, ROOT)  # refuse before a run directory exists
     material_snapshots = _snapshot_read_materials(read_materials)
-    run_id, run_dir, started = _new_run(runtime)
-    workspace = ROOT
-    copied = []
-    worktree_meta = {
-        "mode": None,
-        "base_rev": None,
-        "patch_sha256": None,
-        "files": [],
-        "added": 0,
-        "deleted": 0,
-    }
+    timeout = _timeout_seconds(timeout)
     if worktree_mode is not None:
-        workspace, worktree_meta, copied = _prepare_worktree(run_dir, worktree_mode, material_snapshots)
+        # In a nested instance without its own .git, Git finds the enclosing project and the
+        # worktree would check that out instead.
+        top = S.git_require(["rev-parse", "--show-toplevel"], ROOT).decode("utf-8", "replace").strip()
+        if os.path.realpath(top) != os.path.realpath(ROOT):
+            raise InputError(WORKER_WORKTREE_NOT_ROOT.format(top=top))
+    copy = S.prepare_copy(ROOT) if where == "copy" else None
     try:
-        receipt, wrapper_exit = _run_workspace(
-            runtime, source, body, run_id, run_dir, started, workspace, worktree_meta, copied,
-            write_prefixes=write_prefixes, strict_scope=strict_scope, batch=batch, expect=expect,
-        )
+        run_id, run_dir, started = _new_run(runtime)
+    except BaseException:
+        if copy:
+            shutil.rmtree(copy, ignore_errors=True)
+        raise
+    # A caller that runs two workers at once learns each run id before either ends.
+    print(WORKER_STARTED.format(run_id=run_id), file=sys.stderr, flush=True)
+    if run_file:
+        try:
+            _write_run_file(run_file, run_id, run_dir)
+        except OSError as error:
+            os.rmdir(run_dir)   # still empty: a run nobody can find leaves nothing behind
+            if copy:
+                shutil.rmtree(copy, ignore_errors=True)
+            raise InputError(f"--run-file cannot be written: {error}") from error
+    workdir = copy or ROOT
+    placed = []
+    worktree_meta = {"mode": None, "base_rev": None, "patch_sha256": None, "files": [], "added": 0,
+                     "deleted": 0}
+    if worktree_mode is not None:
+        try:
+            workdir, worktree_meta, placed = S.prepare_worktree(
+                ROOT, run_dir, worktree_mode, WORKTREE_INSTANCE_FILES, material_snapshots)
+        except BaseException:
+            try:
+                os.rmdir(run_dir)  # only when empty: a failed preparation leaves no run behind
+            except OSError:
+                pass
+            raise
+    try:
+        in_worktree = worktree_mode is not None
+        prefixes, before, scope_seconds = _start_scope(workdir, write_prefixes, in_worktree)
+        run_state = Run(runtime=runtime, run_id=run_id, run_dir=run_dir, workdir=workdir, where=where,
+                        web=web, timeout=timeout, worktree_meta=worktree_meta, placed=placed,
+                        prefixes=prefixes, expect=expect, before=before, scope_seconds=scope_seconds,
+                        paths=_run_paths(run_dir, workdir, run_id, in_worktree), read_only=read_only)
+        receipt, wrapper_exit = _run_once(run_state, source, body, started)
     finally:
+        if copy:
+            shutil.rmtree(copy, ignore_errors=True)
         if worktree_mode is not None and worktree_meta.get("capture_status") not in (
                 "in_progress", "failed", "incomplete"):
-            _remove_worktree(workspace)
+            try:
+                S.remove_worktree(ROOT, workdir)
+            except RuntimeError as error:
+                # A leftover worktree must not hide the run's outcome or its receipt.
+                _record_cleanup_error(run_dir, error)
     sys.stdout.write(receipt)
+    if finish_note:
+        _finish_note(run_id, runtime, run_dir)
     return wrapper_exit
 
 
@@ -1501,13 +1124,10 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--runtime", required=True, choices=sorted(CAPABILITIES))
     ap.add_argument("--write-prefix", action="append", default=[], metavar="DIR",
-                    help="ROOT-relative directory the worker may write under (repeatable). Changes "
-                         "outside every prefix are reported after the run. With --strict-scope they "
-                         "normally fail with exit 4; artifact capture failure takes precedence with exit 5. Without a prefix the write-set is unchecked.")
-    ap.add_argument("--strict-scope", action="store_true",
-                    help="Require at least one --write-prefix and fail on prefix violations. In "
-                         "worktree mode scope is measured inside the isolate and the original tree "
-                         "is not writable by the worker.")
+                    help="ROOT-relative directory the worker may write under (repeatable). With "
+                         "--worktree, changes outside every prefix are reported after the run (report "
+                         "only) and ignored outputs under a prefix are captured. In the shared "
+                         "workspace the write-set is not measured.")
     ap.add_argument("--worktree", nargs="?", const="dirty", choices=("head", "dirty"),
                     help="Run in <run>/wt and extract patch.diff plus untracked.txt. 'head' starts "
                          "from HEAD; 'dirty' first applies the original tree's tracked git diff. "
@@ -1516,22 +1136,38 @@ def main(argv=None):
                     help="Snapshot one policy-approved UTF-8 file into the worktree at the same "
                          "ROOT-relative path. Repeat per file; no directories or symlinks. "
                          "Hashes and post-run integrity are recorded in worktree metadata.")
-    ap.add_argument("--batch-manifest",
-                    help="Manifest created by worker_batch.py. Must be paired with --slot; the "
-                         "manifest and source prompt hashes are recorded in meta.json v2.")
-    ap.add_argument("--slot",
-                    help="Expected slot name in --batch-manifest. Does not launch or schedule peers.")
     ap.add_argument("--expect", action="append", default=[], metavar="PATH",
                     help="ROOT-relative output the worker must leave as a non-empty file (repeatable). "
                          "Checked after the run; a missing or empty one turns a success into "
                          "expected-output-missing with exit 6 and an INCONCLUSIVE receipt verdict. "
                          "Paths outside the workspace are rejected before the run.")
+    ap.add_argument("--timeout", metavar="SECONDS",
+                    help="Stop the runtime and its process group after this many seconds and record "
+                         "status timeout with exit 7. Default: MOTTORI_FRESH_WORKER_TIMEOUT, else "
+                         f"{DEFAULT_TIMEOUT_SECONDS}.")
+    ap.add_argument("--web", action="store_true",
+                    help="Give this one worker the network and its runtime's web search. It runs in "
+                         "a copy without the private area unless config workers.<runtime>.where is "
+                         "instance and web_in_instance is true; codex --web runs only that way. "
+                         "Without it every worker is offline.")
+    ap.add_argument("--run-file", metavar="FILE",
+                    help="Write {\"run_id\", \"run_dir\"} as JSON to FILE as soon as the run's folder "
+                         "exists, so a program learns where the run is without reading the receipt; "
+                         "meta.json in run_dir says how it ended. No file is written when the input "
+                         "is rejected before a run starts.")
+    ap.add_argument("--read-only", action="store_true",
+                    help="Give the model program no right to write anywhere, for every runtime: Codex "
+                         "runs in its read-only sandbox (Claude and Gemini are read-only already). "
+                         "Its final answer is its output. Refused with --write-prefix and --expect.")
+    # tools/ask.sh passes it, so a session that did not wait for the receipt learns the run ended.
+    ap.add_argument("--finish-note", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("prompt_file")
     args = ap.parse_args(argv)
     try:
         return run(args.runtime, args.prompt_file, write_prefixes=args.write_prefix,
-                   strict_scope=args.strict_scope, worktree_mode=args.worktree, expect=args.expect,
-                   batch_manifest=args.batch_manifest, slot=args.slot, read_materials=args.read_material)
+                   worktree_mode=args.worktree, expect=args.expect,
+                   read_materials=args.read_material, timeout=args.timeout, web=args.web,
+                   finish_note=args.finish_note, run_file=args.run_file, read_only=args.read_only)
     except InputError as e:
         print(f"fresh-worker input rejected: {e}", file=sys.stderr)
         return 2

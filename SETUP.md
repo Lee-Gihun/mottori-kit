@@ -1,307 +1,178 @@
-Korean: `ko/SETUP.md`
+# Setup (day-one playbook for your agent)
 
-# SETUP: How to configure this directory
+This document is for an agent setting up a freshly cloned workspace (or a person installing by hand without an
+agent). For day-30 tasks (updating the kit, turning options on, fixing a silent hook, editing
+`instance/config.json`, or undoing setup), open [MANUAL.md](MANUAL.md) instead.
 
-**This document is an instruction sheet for an agent.** Clone the repository on a new machine, open Claude Code
-or Codex in this directory, and say:
+On a company machine, the owner completes [system/CHECKLIST.md](system/CHECKLIST.md) section A before the clone.
 
-> Read SETUP.md and configure this directory. Show me the doctor result when you finish.
+## The short path
 
-If you are doing it yourself, follow the steps below in order. It takes five minutes.
-If this shell was opened from another mottori workspace, first run `unset MOTTORI_INSTANCE` or set it to the
-absolute path of the new clone. Otherwise doctor will inspect the previous instance.
+1. Run one command. It asks nothing, checks the prerequisites itself, creates the instance files and runs
+   doctor.
 
----
+   ```bash
+   bash setup.sh
+   ```
 
-## 0. Understand what this is first (agents must read this)
+2. Show the owner what it printed, as it is. If it stopped, it says why and what to do.
+3. Tell the owner the one approval their runtime needs from them (section 3), then stop. Existing material,
+   tracks and dossiers wait until the owner asks for them (section 4).
 
-This repository contains **only the engine**. It includes tools, rules, and hook wiring. It contains no data.
-Setup gives this engine an **instance identity for this machine**.
+Do not run the prerequisite commands yourself, and do not start a first-day item the owner did not ask for. The
+sections below are the reference for each step.
 
-After setup, this directory is the workspace. You do not need a separate project folder. Keep documents, notes,
-and tracks here.
+## 0. Rules the setup agent must follow
 
-**Never do these two things.**
-
-- Do not leave `instance.context` in `system/memory-config.json` set to `personal` and then add company material.
-  This value is the basis for the valve check in `tools/doctor.py`.
-- Do not add instance output under `state/` or `_private/` to Git. `.gitignore` already blocks it. Do not use
-  `git add -f` to bypass that protection.
+- This repository holds only the kit: tools, rules and hook wiring, no data. Setup writes this machine's own
+  config and state files next to it. The folder map is [MANUAL.md#where-things-are](MANUAL.md#where-things-are).
+- Never add files under `instance/`, `state/` or `_private/` to Git. `.gitignore` already keeps them out, and the
+  commit check refuses them; do not use `git add -f` to get around it.
+- The kit does not decide which remote this folder may push to, or whether it may commit. On a company machine
+  that is the company's policy and Git's own permissions.
 
 ## 1. Check prerequisites
 
 ```bash
-python3 --version     # 3.8 or later
+python3 --version     # 3.9 or later
 git --version         # 2.5 or later
 bash --version        # 3.2 or later
-which claude codex    # Installation still works without them. Fresh workers and hook injection will not
-node --version        # Used by the gardener, /garden. Everything else works without it
+which claude codex agy  # optional: without a runtime, setup still works, but no hook runs and no worker starts
+zstd --version        # optional: lets recall read compressed Codex sessions
 ```
 
-The core installation targets macOS and Linux. Hook installation chooses GNU `sha256sum`, BSD `shasum`, or
-Python, in that order, for SHA-256. Temporary files use the operating system's default temporary directory.
-Native Windows lacks the required `fcntl` locking and is unsupported. WSL has not yet been tested on hardware.
+`setup.sh` checks Python and Git itself and stops with the reason, so run these by hand only when it stops. It
+also prints a note when a folder above this one holds a `CLAUDE.md`: Claude Code reads those too, and the agent
+would then follow two sets of rules. Pass the note to the owner and suggest another place for the folder.
 
-### Support matrix
+The kit runs on macOS and Linux. Native Windows lacks the `fcntl` locking the kit needs and is not supported; WSL
+has not been tested. Hook installation uses GNU `sha256sum`, BSD `shasum` or Python, in that order, and temporary
+files go to the operating system's default temporary folder.
 
 | Target | Status | Evidence and scope |
 |---|---|---|
 | macOS, Darwin 25.3, Apple Silicon | Tested on hardware | The full regression suite and fresh install passed with Bash 3.2.57, Python 3.9.6, and Apple Git 2.50.1. |
-| Bash 3.2 | Tested on hardware | The default Bash 3.2 on this machine checks normal and POSIX syntax for six shell entry points and passes fresh install. |
-| A PATH without `shasum` | Fixture-tested | `tools/test_portability.py` provides only `sha256sum` and executes the hook-checksum branch. |
+| Bash 3.2 | Tested on hardware | The default Bash 3.2 of macOS checks normal and POSIX syntax for six shell entry points and passes fresh install. |
+| A PATH without `shasum` | Fixture-tested | The portability test provides only `sha256sum` and executes the hook-checksum branch. |
 | Git 2.5 or later but earlier than 2.36 | Fixture-tested | The same test installs hooks through a Git wrapper that rejects `git hook run` and `--path-format`. No old Git binary was tested directly. |
-| Default Ubuntu and Debian images | Expected to work | Static checks reject GNU/BSD-specific `sed -i`, `stat`, and `date` forms and fixed `/tmp`. This environment could not run a Linux container, so this is not hardware-tested. |
-| Native Windows | Unsupported | The kit requires `fcntl` and the Unix hook execution model. WSL is also currently untested. |
+| Default Ubuntu and Debian images | Expected to work | Static checks reject GNU/BSD-specific `sed -i`, `stat`, and `date` forms and fixed `/tmp`. No Linux container was run, so this is not hardware-tested. |
+| Native Windows | Not supported | The kit requires `fcntl` and the Unix hook execution model. WSL is also untested. |
 
-Optional features that use `claude`, `codex`, `node`, `ffmpeg`, or `mlx_whisper` are outside the core
-installation scope in each row. Section 3 and `tools/test_portability.py` are the authority for the verification
-commands in this table.
+Optional features that use `claude` or `codex` are outside the scope of each row. How the table is tested
+is in [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
-## 2. Create the instance configuration
-
-If you already completed `setup.sh` and hook `--repair` from README's quick start, do not repeat them here.
-Continue with `--check` in section 2b and then section 3.
+## 2. Run setup
 
 ```bash
-bash setup.sh
+bash setup.sh [--name <name>]
 ```
 
-The interactive flow asks for an instance name and a context, either `personal` or `work`. It then creates
-`system/memory-config.json`. A noninteractive form is also available:
+Setup asks nothing: an agent runs it. The instance's name is the folder's name unless `--name` gives another.
+When the config is missing but instance files remain, setup writes a new config from the template and keeps the
+files. Setup takes about fifteen seconds, about half of it in its doctor run, which asks each installed runtime
+for its hook list.
 
-```bash
-bash setup.sh --name team-work --context work
-```
+Setup stops before writing anything when the folder is not the top of its own Git repository, for example a ZIP
+download without `.git` or a kit folder inside another project's repository. Use `git clone`, or run `git init` in
+the folder, then run setup again.
 
-Without a tty, such as under an agent, CI, or a pipe, the script does not prompt. It uses the directory name as
-the instance name and `work` as the context, then prints that choice. On a personal machine, specify
-`--context personal`.
+What setup creates:
 
-`setup.sh` creates all of the following. Delete this list to undo a new installation.
+1. `instance/config.json` from the template, with the name ([MANUAL.md section 2](MANUAL.md#config)).
+2. `instance/rules.md`, `instance/rituals.md` and `instance/decisions.md` from the templates, and an empty
+   `instance/debate/`. It copies only files that do not exist yet.
+3. The first event in `state/journal-<month>.md` and `state/NOW.md`, and the first private event in
+   `_private/state/journal-<month>.md` and `_private/state/NOW.md`. The events are written only while the public
+   journal has no rows, so a rerun adds none.
+4. A record of `python3 tools/linkcheck.py` in `state/.tool-runs.log`, and the gate baseline
+   `state/.gate-baseline.json`. A `--force` run keeps a baseline that exists.
+5. The pre-commit and pre-push hooks under `.git/hooks/`. Every run writes them when they are missing or from an
+   older kit version. When another tool's hook is in the way or `core.hooksPath` points outside this folder, setup
+   leaves it and says so: [MANUAL.md section 4](MANUAL.md#hooks) has the two ways forward.
+6. The list of optional parts ([MANUAL.md section 1](MANUAL.md#optional)). The delivery check is on as the
+   template config has it. Setup itself turns on one part, search by meaning, and only when an embedding server
+   on this machine (by default `http://127.0.0.1:11434`) already answers with its model and the owner has not
+   declined it. With `MOTTORI_NO_LOCAL_PROBE=1` in the environment, setup does not ask that server.
+7. One run of `python3 tools/doctor.py`. That run and the baseline decide setup's exit status. When Codex is
+   installed, doctor's first look at recall's sources writes a cache file under `_private/state/`: the working
+   folder and id of each Codex session on this machine, other projects' included, so recall can keep to this
+   folder's. It stays on this machine and is rebuilt when deleted.
 
-1. `system/memory-config.json`. It copies the template, replaces the name and context, and adds the clone origin
-   to the allowlist.
-2. `system/instance-rules.md`, `system/decisions.md`, and `system/rituals.local.md`. It copies only files that do
-   not already exist.
-3. The first event in `state/journal-<month>.md`, `state/NOW.md`, the first local event in
-   `_private/state/journal-<month>.md`, and `_private/state/NOW.md`.
-4. A record of running `python3 tools/linkcheck.py` in `state/.tool-runs.log`, plus the gate baseline at
-   `state/.gate-baseline.json`.
-5. One final run of `python3 tools/doctor.py`, with its result displayed.
+On a complete install a rerun without `--force` changes one thing: it writes the Git hooks that are missing or
+older. It prints the commands to use next (`--force`, doctor, `python3 tools/options.py`) and exits 0 without running
+doctor. When the rules file, `state/NOW.md` or the gate baseline is missing, as after an interrupted first
+setup, a rerun exits 1, names the missing files and points to `bash setup.sh --force`, which creates them. Undoing
+setup: [MANUAL.md section 5](MANUAL.md#undo).
 
-Before setup, a tree with neither config nor state input reports the NOW check as explicitly not applicable.
-If `state/NOW.md` or a journal remains while `system/memory-config.json` is absent, the tree is instead a partial
-installation and the gate fails closed with `config-absent`. In that state, `now.py render` freezes public
-publishing and leaves an old NOW file unchanged, including one without a `state-content-sha256` marker. Restore
-or create the config, then run `python3 tools/now.py render`; do not add a marker by hand. Evidence:
-`test:tools/test_devtree_gate.py::test_partial_install_without_config_fails_closed`.
-
-To upgrade an existing schema v1, v2, or v3 instance to v4, or to reapply setup while preserving a v4
-configuration, run `bash setup.sh --force`. The existing config values become the defaults for name and context.
-The context does not change to `work` when no tty is present. The existing config is saved as `.bak`. Tracks,
-checks, and public lists are preserved.
-
-The script stops if a v1 to v3 configuration contains nonempty `threads[]`. Those entries have no public-decision
-provenance and cannot be promoted automatically. A person must first separate confirmed public entries from
-local entries, then rerun setup. Only verified v4 `threads[]` are preserved as-is. For v3, existing public lists
-are anchored to provenance in historical journal rows. For v1 and v2, that decision does not exist, so all
-existing journal entries remain fail-closed as legacy-private. The boundary is the timestamp of the final journal
-entry before migration. The script does not guess when a journal or config is malformed. Run
-`python3 tools/doctor.py` again when migration finishes.
-
-To undo a new installation, delete the files listed above: the four generated files under `system/`, `state/`,
-`_private/state/`, and `.git/hooks/pre-commit` if section 2b installed it. To undo a migration, inspect the backup
-and restore `system/memory-config.json.bak`. Setup performs no irreversible action.
-
-## 2b. Install the verification backstop
-
-```bash
-bash tools/install_hooks.sh --repair
-bash tools/install_hooks.sh --check
-```
-
-`.git/hooks/` does not come with a clone. Run this once to install the pre-commit backstop.
-
-**Why it is needed.** The Stop gate sees only `Write`, `Edit`, and `NotebookEdit`. It cannot see Bash edits,
-external writers, Codex edits, or user interrupts. Pre-commit checks the actual index being committed and closes
-that gap. `--no-verify` can still bypass it. This is a backstop, not a contract.
-
-If another pre-commit hook already exists, the installer stops without overwriting it. Inspect the existing hook
-and merge them manually.
-
-## 3. Verify the installation
+## 3. Run doctor and arm your runtime
 
 ```bash
 python3 tools/doctor.py
 ```
 
-During first initialization, `setup.sh` creates the linkcheck record and gate baseline. Run
-`python3 tools/linkcheck.py && python3 tools/gate.py baseline` yourself only during a manual installation or
-recovery. Without a baseline, the gate cannot distinguish deletion from a first installation, so it fails closed.
+**Setup is done when doctor reports 0 failures.** `FAIL` is something to fix, and doctor then exits 1: do not trust
+state automation or hooks until it is fixed. `warn` can be normal for this machine, for example no tracks yet, and
+does not change the exit status. Run `python3 tools/doctor.py --all` only when troubleshooting.
 
-**Setup is complete only when FAIL is 0.** The three result markers mean:
+Then arm each runtime the owner uses. These are one-time approvals that only a person can give:
 
-- `FAIL`: the machine can or must fix this. Exit code 1. If any appear, do not trust state automation.
-- `warn`: this can be normal depending on the environment. Examples include missing Codex or Claude, no
-  transcript directory before the first session, no registered tracks, or Codex not yet trusting this
-  directory's hooks. Warnings do not affect the exit code.
-- `--`: this check does not apply to the instance. For example, remote checks do not apply to a personal context.
+- **Codex.** Launch `codex` once in this folder and choose "Trust all" on the hooks review, once per checkout path.
+  Until then Codex skips the kit's hooks without saying so. Doctor's `hooks · codex armed` row does not apply
+  until Codex has had a session in this folder, and after that it warns and names this step until it is done.
+- **Antigravity.** Start `agy` once in this folder and answer "Yes, I trust this folder"; doctor's
+  `hooks · agy armed` row warns until then once Antigravity has had a session here.
+- **Claude Code.** Trust the folder on the first interactive launch.
+  No command is allowed in advance, so for the first days Claude Code asks once for each kit command the agent
+  runs, such as logging a decision or searching what was said. Choosing "don't ask again" for that command ends
+  it; doctor and the turn-end hooks run without asking.
 
-The same finding can be a FAIL in a work instance and a warning in a personal instance. One example is a tracked
-symbolic link that points into `_private/`. The difference is whether company structure could reach a remote.
+Doctor tests the hook commands outside a session and never replaces
+[system/CHECKLIST.md](system/CHECKLIST.md) section C. Pass what it says it did not check to the owner as
+printed, and never claim it was checked.
 
-If you use Codex, launch `codex` once in this directory and approve hook trust. Until approval, `doctor` reports
-`hook · codex armed` as a warning. See CHECKLIST.md section C.
+## 4. When the owner asks for more
 
-`bash tools/test_fresh_install.sh` verifies that the full process works on an unfamiliar machine. It reproduces a
-noninteractive setup in a temporary clone: setup, hooks, linkcheck, doctor, regressions, and setup rerun. Run it
-after changing the engine.
+None of this is needed on the first day.
 
-If you manually test a temporary clone from inside an active mottori instance, run
-`unset MOTTORI_INSTANCE CLAUDE_PROJECT_DIR` after entering the clone. Otherwise the nested test can point tools
-back to the parent instance. The official test script performs this isolation automatically.
+1. **Rules.** When material comes in that belongs to someone else, such as company material, ask the owner to
+   open `instance/rules.md` and say what is brought in, where it lands, and what must never leave. Until then the
+   file can stay as the template. The "Data boundary" section of [system/rituals.md](system/rituals.md#boundary)
+   has the three principles.
+2. **Material the owner already has (optional).** Setup made `projects/` with its guide, `projects/README.md`.
+   Bring a folder of notes in whole as one project and leave it as it is. Do not reorganize it, rename anything
+   in it or fix its links on the first day.
 
-At the end, doctor prints four items under **"Cannot check automatically"**. A machine cannot verify them. Pass
-the list to a person exactly as shown. Do not claim that they were checked.
+   ```bash
+   mv ~/old-notes projects/            # the owner runs this, or approves it once
+   python3 tools/adopt.py projects/old-notes
+   ```
 
-## 4. Complete the instance rules
+   The folder is now a project named after it, with no block, and doctor stays at 0 failures. `adopt.py` records
+   the links that are already broken in it, so they stop no later turn. It names the instruction files inside it,
+   such as an old `CLAUDE.md`, for the owner to fold into `instance/rules.md`. And it writes one inventory page:
+   read that page, not the folder, before proposing what to put on the status board.
 
-Open `system/instance-rules.md` and declare the boundaries of this workspace. At minimum, state what is imported,
-where it lands, and what must never go to any remote.
+   A code repository, or any folder a program or a scheduled job writes to, is not moved in. It stays where it is
+   and is named under `outside` in its project's block; the owner adds it to a session with the runtime's
+   `--add-dir` option ([MANUAL.md section 1](MANUAL.md#optional), "A repository beside the workspace").
+3. **First project (optional).** Give each line of work a folder under `projects/`. The block at the top of its
+   `README.md`, shown in `projects/README.md`, can give it a name, a status and folders outside this one. To
+   also show it on the status board, add it to `tracks` in `instance/config.json` and run
+   `python3 tools/now.py render` ([MANUAL.md section 2](MANUAL.md#config)). The board shows the date of the
+   track's file from a line in it such as `Last updated: 2026-12-01`.
 
-The "Data boundary" section of `system/rituals.md` explains why each instance needs its own declaration. Copying
-the wrong direction makes the rule operate backward.
+   ```json
+   { "key": "onboarding", "name": "Onboarding", "canonical": "projects/onboarding/tracker.md" }
+   ```
 
-## 5. Register the first track
+4. **First dossier (optional).** A deep thread with a dossier goes into `threads` in the same file;
+   `python3 tools/now.py threads` lists them. List only threads that may be shared; private ones go into
+   _private/state/threads.json in the same shape.
 
-Add each active line of work to `tracks` in `system/memory-config.json`. One track has one canonical document. You
-may leave the array empty and add tracks later.
+   ```json
+   { "key": "pricing", "name": "Pricing model", "dossier": "projects/pricing/DOSSIER.md" }
+   ```
 
-```json
-{ "key": "onboarding", "name": "Onboarding", "canonical": "onboarding/tracker.md" }
-```
+5. **Handoff.** Name [system/CHECKLIST.md](system/CHECKLIST.md) once: it holds the checks only a person can do.
 
-After registering a track, run `python3 tools/now.py render`. The temperature board in `state/NOW.md` will show
-the track's freshness. Editing the config makes NOW stale until it is rendered again. `now.py check` reports that
-condition.
-
-## 5a. Update the engine after `git pull`
-
-```bash
-git pull
-bash tools/install_hooks.sh --check      # Use --repair if the hook template changed
-python3 tools/linkcheck.py && python3 tools/gate.py baseline   # Refresh if a checker changed
-python3 tools/doctor.py                  # [Action required] items in CHANGELOG appear here as FAIL
-```
-
-`CHANGELOG.md` is the source of truth for actions required by existing instances. A new installation already uses
-the latest templates, so it does not need to repeat `[Action required]` items from older versions.
-
-## 5b. Self-check: Does the documentation close over itself?
-
-```bash
-python3 tools/linkcheck.py
-```
-
-The goal is **`broken: 0`**. A broken reference means that this repository points to a file it does not contain.
-An agent following that document will see an unusable path.
-
-Immediately after setup, one generated ledger file is still absent: the hotset produced by `rec.py hot`. It
-appears after you record the first fact. To create it now, run:
-
-```bash
-python3 tools/rec.py new <id> --claim="..." --status="$(python3 -c 'print("\uD655\uC815")')" --origin="..." --domain=...
-python3 tools/rec.py hot
-```
-
-Only `rec.py new` works before the ledger exists. `hot`, `find`, and `check` require a ledger. Querying an empty
-ledger would make "there are no facts" indistinguishable from "the ledger was never created." The escaped status
-value in the command means "confirmed" and is one of the values accepted by the tool.
-
-## 6. Global configuration (optional, once)
-
-This repository's `.claude/settings.json` already injects the current time on every prompt. To use the same hook
-in other directories, add it to `~/.claude/settings.json`.
-
-```json
-{ "hooks": { "UserPromptSubmit": [ { "hooks": [
-  { "type": "command", "command": "date '+[now: %Y-%m-%d %H:%M %Z (%a)]'" } ] } ] } }
-```
-
-Why: the model does not know the current time by itself. Without this hook, date calculations can silently be
-wrong.
-
-## 7. Connect Codex (optional)
-
-`AGENTS.md` is the single source of truth for shared rules. `CLAUDE.md` is an exact `@AGENTS.md` import. Codex
-reads `AGENTS.md` automatically, so both runtimes operate under the same rules. `ko/AGENTS.md` is the Korean
-translation; `ko/INDEX.md` lists every English and Korean pair.
-
-Isolate broad reading, audits, and runtime debates in a fresh worker instead of adding the full trace to the
-master session:
-
-```bash
-python3 tools/fresh_worker.py --runtime claude <prompt-file>
-python3 tools/fresh_worker.py --runtime codex  <prompt-file>
-bash tools/ask_codex.sh <prompt-file>   # Compatibility entry point for a fresh Codex worker
-```
-
-The prompt must be a regular UTF-8 file inside this workspace. Symlinks are rejected. If you put prompt content
-directly on the command line, backticks can execute as shell commands. The default run is synchronous. Full
-traces stay in `_private/work/runs/`, and the caller receives only a bounded receipt. The exact byte and
-capability contract is defined in `system/PRD-session-memory.md` section 10.5.
-
-## 7a. Connect a third harness (optional)
-
-`tools/harness.py` is the registry for harness wiring. A harness is one row in its `RUNTIMES` table:
-the binary, the wiring paths, whether the wiring is checked in or generated, the roles it can take, and a
-note naming the roles it cannot. Runtime vocabulary elsewhere (for example `CONSUMERS` in
-`tools/test_manifests.py`) is derived from that table, so the runtime vocabulary is added in one place. A new
-harness still needs its own adapter code, tests, and release metadata: the review manifest, the test matrix, and
-the translation list. The harness CLI prints Korean for now; `tools/harness.py` is on the translation list.
-
-```bash
-python3 tools/harness.py status                   # installed, wired, role coverage, declared gaps
-python3 tools/harness.py install opencode         # generate the wiring for this instance
-python3 tools/harness.py check                    # generated slash commands still match their source? (no model call)
-python3 tools/harness.py refresh                  # rebuild only the injected state file
-python3 tools/harness.py open opencode            # rebuild the state file, then launch
-python3 tools/harness.py verify opencode          # canary round trip: did injection reach the model?
-python3 tools/harness.py verify opencode --sweep  # same canary for every model this install can call
-```
-
-`status` calls opencode wired only when the state file and `.opencode/command/` both exist and every generated
-command matches its source in `.claude/commands/`. `check` runs that same parity test and exits 1 on drift, so CI
-or a person can run it without calling a model; an instance that never installed opencode passes. `refresh`
-rebuilds only the state file and leaves the command files alone; `open` runs it before every launch.
-
-A harness is also a lane for a model vendor, so the canary is per model, not per runtime. `--sweep` measures
-every callable model and writes verdicts to state/harness-canary.json, an optional file that exists only after
-`verify` has run. The ledger never keeps the nonce. During a run the nonce sits in the injected state file,
-because that file is the channel being measured; when the run ends, including on timeout or error, the file is
-rewritten without it. `opencode run` has no switch that turns tools off, so a model that calls a tool is recorded
-as inconclusive rather than counted as proof, even when its answer is right. The ledger is a measurement that
-routing can use; nothing reads it automatically yet.
-
-`opencode` has no hook surface. Measured on v2.0.11, 2026-09-21: `AGENTS.md` is read at every session start, so
-the shared rules travel for free, but entries listed under the `instructions` config key are never loaded, which
-the documentation and the published schema both contradict. The injector therefore runs through the launcher:
-`harness.py open opencode` rebuilds the state file and seeds it as the first prompt. A session started by typing
-`opencode` carries no state, and `status` prints that as a gap rather than hiding it.
-
-The generated state file can contain the local private overlay, so it must sit outside Git. `install` adds an
-ignore line unless the path is already ignored; when it cannot prove the path is ignored, it writes public state
-only (`now.py context --public-only`). Verification is a canary round trip, not a file check: only the model's
-answer shows that injection arrived, and the prompt never carries the nonce.
-
-## 8. Final handoff to a person
-
-Open `CHECKLIST.md` and report the remaining items to a person. That document is the source of truth for
-checks a person must perform after installation.
-
-## Procedural evidence
-
-`tools/test_fresh_install.sh` reproduces this command order in a temporary clone. `CHECKLIST.md` and KIT-DR-011
-define the handoff boundary for human checks. Avoiding irreversible recovery steps prevents an installation
-failure from becoming user-data loss. Time and version numbers are measurements from the specified test
-environment, not guarantees for every machine.
+Do not turn on other optional parts unless the owner asks ([MANUAL.md section 1](MANUAL.md#optional)).
