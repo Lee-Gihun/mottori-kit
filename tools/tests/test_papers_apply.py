@@ -450,7 +450,10 @@ def _reports(root, st):
     """The applier's report and the cycle's report, as far as they were written, for a failure message."""
     out = []
     for p in (root / CYCLE / "REPORT.md", root / st.get("last_dir", "-") / "REPORT.md"):
-        out.append(f"{p.name} in {p.parent.name}: " + (p.read_text()[-1500:] if p.is_file() else "(not written)"))
+        out.append(f"{p.name} in {p.parent.name}: " + (p.read_text()[-600:] if p.is_file() else "(not written)"))
+    # The sandbox's own test run before any change: why a file failed there, by its output.
+    for p in sorted((root / CYCLE / "apply").glob("tests-baseline-*.json")):
+        out.append(f"{p.name}: " + p.read_text()[-2500:])
     return "\n".join(out)
 
 
