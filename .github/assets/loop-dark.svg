@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 440" width="1280" height="440" role="img" aria-labelledby="t d">
+<title id="t">The improvement loop ends at a saved patch</title>
+<desc id="d">Once a week: sources, a judge that picks at most two proposals, a build in a temporary copy, tests in a sandbox and a review of the patch. What it keeps is a patch file and a report on disk. It never writes into your folder; you or your agent apply the patch.</desc>
+<text x="40" y="119" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" font-weight="600" letter-spacing="1.6">ONCE A WEEK</text>
+<rect x="225.7" y="60" width="185.3" height="104" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="243.7" y="102" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="600">source</text>
+<text x="243.7" y="134" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">new papers</text>
+<rect x="433" y="60" width="185.3" height="104" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="451" y="102" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="600">judge</text>
+<text x="451" y="134" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">at most two</text>
+<line x1="413" y1="112" x2="423.8" y2="112" stroke="#9198a1" stroke-width="1.5"/>
+<path d="M431 112L422 116.5L422 107.5Z" fill="#9198a1"/>
+<rect x="640.2" y="60" width="185.3" height="104" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="658.2" y="102" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="600">build</text>
+<text x="658.2" y="134" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">in a copy</text>
+<line x1="620.2" y1="112" x2="631" y2="112" stroke="#9198a1" stroke-width="1.5"/>
+<path d="M638.2 112L629.2 116.5L629.2 107.5Z" fill="#9198a1"/>
+<rect x="847.5" y="60" width="185.3" height="104" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="865.5" y="102" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="600">tests</text>
+<text x="865.5" y="134" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">in a sandbox</text>
+<line x1="827.5" y1="112" x2="838.3" y2="112" stroke="#9198a1" stroke-width="1.5"/>
+<path d="M845.5 112L836.5 116.5L836.5 107.5Z" fill="#9198a1"/>
+<rect x="1054.7" y="60" width="185.3" height="104" rx="10" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="1072.7" y="102" font-size="22" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e6edf3" font-weight="600">review</text>
+<text x="1072.7" y="134" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">of the patch</text>
+<line x1="1034.7" y1="112" x2="1045.5" y2="112" stroke="#9198a1" stroke-width="1.5"/>
+<path d="M1052.7 112L1043.7 116.5L1043.7 107.5Z" fill="#9198a1"/>
+<text x="40" y="291" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f" font-weight="600" letter-spacing="1.6">ON DISK</text>
+<rect x="225.7" y="254" width="1014.3" height="60" rx="10" fill="#2a1f10" stroke="#e3a04f" stroke-width="1.5"/>
+<rect x="1120.7" y="266" width="103.3" height="36" rx="6" fill="#0d1117"/>
+<text x="1172.3" y="291" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f" text-anchor="middle">report</text>
+<rect x="949.8" y="266" width="158.9" height="36" rx="6" fill="#0d1117"/>
+<text x="1029.2" y="291" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f" text-anchor="middle">patch file</text>
+<line x1="1147.4" y1="166" x2="1147.4" y2="245.8" stroke="#e3a04f" stroke-width="1.5"/>
+<path d="M1147.4 253L1142.9 244L1151.9 244Z" fill="#e3a04f"/>
+<text x="1135.4" y="216" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f" text-anchor="end">kept</text>
+<text x="40" y="366" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">It never writes into your folder. You or your agent read the patch and apply it in a session.</text>
+</svg>

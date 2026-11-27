@@ -1,5 +1,12 @@
 # Projects
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../.github/assets/projects-dark.svg">
+    <img src="../.github/assets/projects-light.svg" width="100%" alt="Inside the workspace, projects/ holds one folder per project and a map drawn from them. A project&#x27;s code repository stays outside, named under outside. What Git must never take is in _private/ under the project&#x27;s name.">
+  </picture>
+</p>
+
 One folder per project: a piece of work with its own purpose, such as a paper, a product launch, a course you
 teach or a side project. Its documents go in its folder, and so do scripts and small code. A repository of its
 own, or a folder another program writes to, stays where it is: name it under `outside` and the agent is told

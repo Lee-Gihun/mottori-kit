@@ -1,5 +1,12 @@
 # tools/loop/sources/
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../../../.github/assets/sources-dark.svg">
+    <img src="../../../.github/assets/sources-light.svg" width="100%" alt="A file in tools/loop/sources/ named after the source defines what it sends, its settings, its steps and its watch. The loop finds it by its name and runs it like the papers source.">
+  </picture>
+</p>
+
 A source of the improvement loop that this installation adds. The kit ships none here: its one source, papers,
 lives in `tools/loop/lib/loop_papers.py`. Each Python file here is one source, read by
 [`tools/loop/lib/loop_sources.py`](../lib/loop_sources.py); the file's name is the source's name. A broken file

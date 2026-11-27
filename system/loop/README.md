@@ -1,5 +1,12 @@
 # The improvement loop
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/loop-dark.svg">
+    <img src="../../.github/assets/loop-light.svg" width="100%" alt="Once a week: new papers and your corrections, a judge picks at most two proposals, a builder writes each in a temporary clone, the tests run in a sandbox, a reviewer reads the patch, and a patch file with a report is saved. The loop never writes into your files; you or your agent apply the patch.">
+  </picture>
+</p>
+
 The improvement loop is an optional weekly loop that proposes small changes to this kit's own files. It ships off,
 runs on macOS only, and sends nothing until you say yes for a source. Each week a judge picks at most two proposals;
 for each one a builder writes the change in a temporary clone, the tests run in a sandbox, and a reviewer that did

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 440" width="1280" height="440" role="img" aria-labelledby="t d">
+<title id="t">What the agent reads, and how often</title>
+<desc id="d">Four rows over five sessions. AGENTS.md is read at every session start, rituals.md at fixed moments, a skill when its situation comes up, and the design records only when you ask why. What is read most often is kept shortest.</desc>
+<line x1="496.3" y1="56" x2="496.3" y2="360" stroke="#3d444d" stroke-width="1.5" stroke-dasharray="4 4"/>
+<text x="504.3" y="48" font-size="18" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">session 1</text>
+<line x1="645" y1="56" x2="645" y2="360" stroke="#3d444d" stroke-width="1.5" stroke-dasharray="4 4"/>
+<text x="653" y="48" font-size="18" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">session 2</text>
+<line x1="793.8" y1="56" x2="793.8" y2="360" stroke="#3d444d" stroke-width="1.5" stroke-dasharray="4 4"/>
+<text x="801.8" y="48" font-size="18" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">session 3</text>
+<line x1="942.5" y1="56" x2="942.5" y2="360" stroke="#3d444d" stroke-width="1.5" stroke-dasharray="4 4"/>
+<text x="950.5" y="48" font-size="18" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">session 4</text>
+<line x1="1091.3" y1="56" x2="1091.3" y2="360" stroke="#3d444d" stroke-width="1.5" stroke-dasharray="4 4"/>
+<text x="1099.3" y="48" font-size="18" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">session 5</text>
+<text x="40" y="102" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" font-weight="600" letter-spacing="1.6">EVERY SESSION</text>
+<rect x="297.4" y="78" width="145" height="36" rx="6" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="369.9" y="103" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">AGENTS.md</text>
+<rect x="511.1" y="80" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="659.9" y="80" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="808.6" y="80" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="957.4" y="80" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="1106.1" y="80" width="12" height="34" rx="3" fill="#6e7681"/>
+<text x="40" y="180" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" font-weight="600" letter-spacing="1.6">AT FIXED MOMENTS</text>
+<rect x="297.4" y="156" width="158.9" height="36" rx="6" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="376.8" y="181" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">rituals.md</text>
+<rect x="533.4" y="158" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="592.9" y="158" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="697.1" y="158" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="756.6" y="158" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="845.8" y="158" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="905.3" y="158" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="1002" y="158" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="1046.6" y="158" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="1150.8" y="158" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="1202.8" y="158" width="12" height="34" rx="3" fill="#6e7681"/>
+<text x="40" y="258" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" font-weight="600" letter-spacing="1.6">WHEN IT FITS</text>
+<rect x="297.4" y="234" width="117.2" height="36" rx="6" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="356" y="259" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">skills/</text>
+<rect x="615.3" y="236" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="875.6" y="236" width="12" height="34" rx="3" fill="#6e7681"/>
+<rect x="1083.8" y="236" width="12" height="34" rx="3" fill="#6e7681"/>
+<text x="40" y="336" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" font-weight="600" letter-spacing="1.6">WHEN YOU ASK WHY</text>
+<rect x="297.4" y="312" width="103.3" height="36" rx="6" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="349" y="337" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">specs/</text>
+<rect x="987.1" y="314" width="12" height="34" rx="3" fill="#6e7681"/>
+<text x="40" y="410" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1">Read most often, kept shortest: AGENTS.md is under 100 lines.</text>
+</svg>

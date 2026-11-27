@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360" width="1280" height="360" role="img" aria-labelledby="t d">
+<title id="t">A loop source is one Python file</title>
+<desc id="d">The loop's steps run along the top. A source is one file on disk, tools/loop/sources/&lt;name&gt;.py, which says what it sends, its settings, its steps and what is watched. The loop reads it by name.</desc>
+<text x="40" y="82" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#9198a1" font-weight="600" letter-spacing="1.6">THE LOOP</text>
+<rect x="233.3" y="58" width="131.1" height="36" rx="6" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="298.8" y="83" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">schedule</text>
+<rect x="414.9" y="58" width="89.4" height="36" rx="6" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="459.7" y="83" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">judge</text>
+<rect x="555" y="58" width="89.4" height="36" rx="6" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="599.7" y="83" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">build</text>
+<rect x="695" y="58" width="75.6" height="36" rx="6" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="732.7" y="83" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">test</text>
+<rect x="821.1" y="58" width="103.3" height="36" rx="6" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="872.8" y="83" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">review</text>
+<rect x="975" y="58" width="214.4" height="36" rx="6" fill="#151b23" stroke="#3d444d" stroke-width="1.5"/>
+<text x="1082.2" y="83" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e6edf3" text-anchor="middle">save the patch</text>
+<text x="40" y="247" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f" font-weight="600" letter-spacing="1.6">ON DISK</text>
+<rect x="182.7" y="190" width="1057.3" height="100" rx="10" fill="#2a1f10" stroke="#e3a04f" stroke-width="1.5"/>
+<rect x="202.7" y="208" width="408.9" height="36" rx="6" fill="#0d1117"/>
+<text x="407.1" y="233" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#e3a04f" text-anchor="middle">tools/loop/sources/&lt;name&gt;.py</text>
+<text x="202.7" y="272" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">its name · its weekly time · what one cycle runs · what it sends · what is watched</text>
+<line x1="382.7" y1="188" x2="382.7" y2="105.2" stroke="#e3a04f" stroke-width="1.5"/>
+<path d="M382.7 98L387.2 107L378.2 107Z" fill="#e3a04f"/>
+<text x="394.7" y="150" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e3a04f">read by its name</text>
+</svg>

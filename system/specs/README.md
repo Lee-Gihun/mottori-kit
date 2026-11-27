@@ -1,5 +1,12 @@
 # system/specs/
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/specs-dark.svg">
+    <img src="../../.github/assets/specs-light.svg" width="100%" alt="A decision record says what was decided, why, what was measured, what was rejected and when to look again. Its evidence line names the tests that hold it, and a check fails when a named test is missing. Records are appended; a later one names the earlier one it changes.">
+  </picture>
+</p>
+
 Why the kit is built the way it is.
 
 - [`kit-decisions.md`](kit-decisions.md): the kit's design decisions, one record each: what was decided, what led

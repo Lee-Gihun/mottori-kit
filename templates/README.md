@@ -1,5 +1,12 @@
 # templates/
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../.github/assets/templates-dark.svg">
+    <img src="../.github/assets/templates-light.svg" width="100%" alt="Setup copies each blank form once: config.json, rules.md, rituals.md and decisions.md into instance/, and projects-README.md into projects/README.md. It never overwrites a file, and git pull never touches your copy.">
+  </picture>
+</p>
+
 Blank forms. Setup copies each one into your workspace once, most of them into `instance/`, and never overwrites
 a file that is already there. After that the copy is yours, and `git pull` does not touch it.
 

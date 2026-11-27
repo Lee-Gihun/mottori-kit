@@ -1,5 +1,12 @@
 # system/
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../.github/assets/system-dark.svg">
+    <img src="../.github/assets/system-light.svg" width="100%" alt="Four layers. Every session: AGENTS.md, the seven rules. At fixed moments: rituals.md. When a situation comes up: a skill. When you want the reason: the design records.">
+  </picture>
+</p>
+
 What the agent reads when a situation comes up. `AGENTS.md` at the root holds the seven rules that are always
 loaded, and each of its last lines names one of these pages and the moment to open it.
 

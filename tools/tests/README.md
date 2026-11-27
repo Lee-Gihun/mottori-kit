@@ -1,5 +1,12 @@
 # tools/tests/
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/tests-dark.svg">
+    <img src="../../.github/assets/tests-light.svg" width="100%" alt="run.py runs every test file a few side by side. With --full it adds the full mutation set, the installed-shape run and a fresh install in a temporary clone.">
+  </picture>
+</p>
+
 The regression suite. It needs only Python and Git.
 
 ```bash

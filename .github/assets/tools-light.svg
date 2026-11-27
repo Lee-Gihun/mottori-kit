@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 470" width="1280" height="470" role="img" aria-labelledby="t d">
+<title id="t">Which command runs when</title>
+<desc id="d">One session drawn as growing context, with the commands that run at each moment: now.py and tasks.py at session start, now.py log and recall.py while you work, gate.py and deliver.py at the end of a turn, gate.py at a commit and enforce.py at a push, and doctor.py whenever you want a check.</desc>
+<text x="40" y="124" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" font-weight="600" letter-spacing="1.6">A SESSION</text>
+<rect x="197" y="140" width="22.4" height="10" rx="2" fill="#a8b1bb" opacity="0.5"/>
+<rect x="225.4" y="137.6" width="22.4" height="12.4" rx="2" fill="#a8b1bb" opacity="0.5"/>
+<rect x="253.9" y="135.2" width="22.4" height="14.8" rx="2" fill="#a8b1bb" opacity="0.5"/>
+<rect x="282.3" y="132.8" width="22.4" height="17.2" rx="2" fill="#a8b1bb" opacity="0.5"/>
+<rect x="310.7" y="130.4" width="22.4" height="19.6" rx="2" fill="#a8b1bb" opacity="0.5"/>
+<rect x="339.1" y="128" width="22.4" height="22" rx="2" fill="#a8b1bb" opacity="0.6"/>
+<rect x="367.6" y="125.6" width="22.4" height="24.4" rx="2" fill="#a8b1bb" opacity="0.6"/>
+<rect x="396" y="123.2" width="22.4" height="26.8" rx="2" fill="#a8b1bb" opacity="0.6"/>
+<rect x="424.4" y="120.8" width="22.4" height="29.2" rx="2" fill="#a8b1bb" opacity="0.6"/>
+<rect x="452.8" y="118.4" width="22.4" height="31.6" rx="2" fill="#a8b1bb" opacity="0.6"/>
+<rect x="481.2" y="116" width="22.4" height="34" rx="2" fill="#a8b1bb" opacity="0.7"/>
+<rect x="509.7" y="113.6" width="22.4" height="36.4" rx="2" fill="#a8b1bb" opacity="0.7"/>
+<rect x="538.1" y="111.2" width="22.4" height="38.8" rx="2" fill="#a8b1bb" opacity="0.7"/>
+<rect x="566.5" y="108.8" width="22.4" height="41.2" rx="2" fill="#a8b1bb" opacity="0.7"/>
+<rect x="594.9" y="106.4" width="22.4" height="43.6" rx="2" fill="#a8b1bb" opacity="0.8"/>
+<rect x="623.4" y="104" width="22.4" height="46" rx="2" fill="#a8b1bb" opacity="0.8"/>
+<rect x="651.8" y="101.6" width="22.4" height="48.4" rx="2" fill="#a8b1bb" opacity="0.8"/>
+<rect x="680.2" y="99.2" width="22.4" height="50.8" rx="2" fill="#a8b1bb" opacity="0.8"/>
+<rect x="708.6" y="96.8" width="22.4" height="53.2" rx="2" fill="#a8b1bb" opacity="0.8"/>
+<rect x="737" y="94.4" width="22.4" height="55.6" rx="2" fill="#a8b1bb" opacity="0.9"/>
+<rect x="765.5" y="92" width="22.4" height="58" rx="2" fill="#a8b1bb" opacity="0.9"/>
+<rect x="793.9" y="89.6" width="22.4" height="60.4" rx="2" fill="#a8b1bb" opacity="0.9"/>
+<rect x="822.3" y="87.2" width="22.4" height="62.8" rx="2" fill="#a8b1bb" opacity="0.9"/>
+<rect x="850.7" y="84.8" width="22.4" height="65.2" rx="2" fill="#a8b1bb" opacity="1"/>
+<rect x="879.2" y="82.4" width="22.4" height="67.6" rx="2" fill="#a8b1bb" opacity="1"/>
+<rect x="907.6" y="80" width="22.4" height="70" rx="2" fill="#a8b1bb" opacity="1"/>
+<text x="40" y="262" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" font-weight="600" letter-spacing="1.6">RUNS</text>
+<circle cx="208.2" cy="128" r="5" fill="#1f2328"/>
+<line x1="208.2" y1="198" x2="208.2" y2="222" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="208.2" y="186" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e">start</text>
+<rect x="208.2" y="232" width="103.3" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="259.9" y="257" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">now.py</text>
+<rect x="208.2" y="280" width="131.1" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="273.8" y="305" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">tasks.py</text>
+<circle cx="435.6" cy="108.8" r="5" fill="#1f2328"/>
+<line x1="435.6" y1="198" x2="435.6" y2="222" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="435.6" y="186" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" text-anchor="middle">while you work</text>
+<rect x="356.2" y="232" width="158.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="435.6" y="257" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">now.py log</text>
+<rect x="363.1" y="280" width="145" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="435.6" y="305" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">recall.py</text>
+<circle cx="663" cy="89.6" r="5" fill="#1f2328"/>
+<line x1="663" y1="198" x2="663" y2="222" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="663" y="186" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" text-anchor="middle">turn end</text>
+<rect x="604.4" y="232" width="117.2" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="663" y="257" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">gate.py</text>
+<rect x="583.5" y="280" width="158.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="663" y="305" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">deliver.py</text>
+<circle cx="918.8" cy="68" r="5" fill="#1f2328"/>
+<line x1="918.8" y1="198" x2="918.8" y2="222" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="918.8" y="186" font-size="19" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e" text-anchor="end">commit, push</text>
+<rect x="801.6" y="232" width="117.2" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="860.2" y="257" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">gate.py</text>
+<rect x="759.9" y="280" width="158.9" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="839.3" y="305" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">enforce.py</text>
+<rect x="990" y="60" width="250" height="300" rx="12" fill="none" stroke="#d1d9e0" stroke-width="1.5" stroke-dasharray="5 5"/>
+<text x="1008" y="96" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#1f2328" font-weight="600">any time</text>
+<rect x="1008" y="116" width="132.5" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="1074.2" y="140.3" font-size="18" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">doctor.py</text>
+<rect x="1008" y="168" width="145" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="1080.5" y="192.3" font-size="18" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">options.py</text>
+<rect x="1008" y="220" width="207.5" height="36" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+<text x="1111.7" y="244.3" font-size="18" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#1f2328" text-anchor="middle">fresh_worker.py</text>
+<text x="40" y="420" font-size="20" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#59636e">Most run from a hook. doctor.py is the one to run yourself when something seems off.</text>
+</svg>

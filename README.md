@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/hero-dark.svg">
-    <img src=".github/assets/hero-light.svg" width="100%" alt="One thread across a week. On Monday you tell the agent the plan and it logs one line. The conversation is compacted twice, and the line is put back each time. On Friday the agent still has the plan, and before it deletes anything it shows you the question it checked: what was the old pipeline preventing, and is that still needed?">
+    <img src=".github/assets/hero-light.svg" width="100%" alt="Over 21 days the conversation fills and is compacted four times. On day three a decision is logged to the journal on disk, and after every compaction the state is put back, so the agent still has it on day 21.">
   </picture>
 </p>
 

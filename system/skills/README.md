@@ -1,5 +1,12 @@
 # system/skills/
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../../.github/assets/skills-dark.svg">
+    <img src="../../.github/assets/skills-light.svg" width="100%" alt="Four skills for thinking and writing and five for state and memory. Each opens by itself when its moment comes, or when you name it.">
+  </picture>
+</p>
+
 Nine skills. A skill is a folder with a `SKILL.md`: two lines that say when to open it, and the body the agent
 reads when it does. Claude Code, Codex and Antigravity read the same format, and in Claude Code a skill is also
 the slash command of its name.

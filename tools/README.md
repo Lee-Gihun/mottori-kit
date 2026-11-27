@@ -1,5 +1,12 @@
 # tools/
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../.github/assets/tools-dark.svg">
+    <img src="../.github/assets/tools-light.svg" width="100%" alt="At session start the hooks run now.py and tasks.py. While you work the agent runs now.py log, recall.py and projects.py. At turn end gate.py checks links and state. Before a commit enforce.py checks what may leave. Any time: doctor.py, options.py, fresh_worker.py.">
+  </picture>
+</p>
+
 The commands you or your agent run. Each prints its usage with `--help` and reads and writes plain files. The
 Python commands need nothing beyond the standard library, and the three shell scripts need Bash. Tools an
 installation adds for itself are listed in a `README.local.md` beside this page, which `git pull` never touches.
