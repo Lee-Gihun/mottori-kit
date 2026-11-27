@@ -78,8 +78,11 @@ def test_store_reads_only_what_was_added_and_follows_the_files():
     base, root, home = fixture()
     try:
         first = "STORE early message about the harbour"
+        # The store notices a rewrite by the 256 bytes before where it stopped, so the reply after the
+        # first message is longer than that: the edit below must fall outside that window whatever
+        # the length of the temporary folder's path, which the records carry (short on Linux).
         path = transcript(home, root, [user(root, "u1", first, stamp(9, 0)),
-                                       assistant(root, "a1", "noted", stamp(9, 1))])
+                                       assistant(root, "a1", "noted " + "and more " * 40, stamp(9, 1))])
         out = recall(root, home, "find", "where is the harbour", "--role", "user").stdout
         assert len(hits(out)) == 1 and "harbour" in out, out
         assert "Searched: 1 messages the owner typed, 2026-09-17 to 2026-09-17 (claude)" in out, out
